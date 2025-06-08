@@ -8,6 +8,8 @@ on:
     branches:
       - master
 
+run-name: ${{ github.event.workflow_run.name }}
+
 jobs:
   build:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
