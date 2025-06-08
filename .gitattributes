@@ -1,0 +1,39 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# TypeScript/JavaScript files
+*.ts text
+*.js text
+*.tsx text
+*.jsx text
+*.json text
+
+# Terraform files
+*.tf text
+*.tfvars text
+*.tfvars.example text
+
+# Documentation
+*.md text diff=markdown
+*.txt text
+
+# Shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+
+# Config files
+.env.example text
+.gitattributes text
+.gitignore text
+.nvmrc text
+.editorconfig text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.tar.gz binary
+*.tgz binary 
