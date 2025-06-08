@@ -12,7 +12,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "@google-cloud/functions-framework": "^3.3.0",
+    "@google-cloud/functions-framework": "^4.0.0",
     "express": "^5.1.0"
   },
   "devDependencies": {
