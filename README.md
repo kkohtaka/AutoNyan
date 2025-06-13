@@ -58,7 +58,7 @@ chmod +x setup-backend.sh
 npm run terraform:init
 ```
 
-5. Create a `terraform.tfvars` file in the `terraform` directory with your project details:
+5. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and update the values:
 ```hcl
 project_id = "your-project-id"
 region     = "us-central1"
