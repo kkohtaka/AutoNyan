@@ -29,17 +29,17 @@ describe('helloWorld', () => {
       };
     });
 
-    it('should return "Hello, World!" when no name is provided', () => {
-      helloWorld(mockRequest as Request, mockResponse as Response);
+    it('should return "Hello, World!" when no name is provided', async () => {
+      await helloWorld(mockRequest as Request, mockResponse as Response);
 
       expect(responseStatus).toBe(200);
       expect(responseBody).toBe('Hello, World!');
     });
 
-    it('should return "Hello, John!" when name is provided', () => {
+    it('should return "Hello, John!" when name is provided', async () => {
       mockRequest.query = { name: 'John' };
 
-      helloWorld(mockRequest as Request, mockResponse as Response);
+      await helloWorld(mockRequest as Request, mockResponse as Response);
 
       expect(responseStatus).toBe(200);
       expect(responseBody).toBe('Hello, John!');
