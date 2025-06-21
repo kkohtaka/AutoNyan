@@ -1,0 +1,32 @@
+{
+  "name": "AutoNyan DevContainer",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.8.5"
+    }
+  },
+  "postCreateCommand": "bash -c 'export NVM_DIR=\"$HOME/.nvm\" && [ -s \"$NVM_DIR/nvm.sh\" ] && source \"$NVM_DIR/nvm.sh\" && nvm use && npm install'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-dev",
+        "ms-vscode.vscode-typescript-next",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-json",
+        "hashicorp.terraform",
+        "googlecloudtools.cloudcode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "typescript.preferences.importModuleSpecifier": "relative"
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}
