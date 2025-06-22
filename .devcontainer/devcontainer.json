@@ -7,7 +7,8 @@
   "features": {
     "ghcr.io/devcontainers/features/terraform:1": {
       "version": "1.8.5"
-    }
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "postCreateCommand": "bash -c 'export NVM_DIR=\"$HOME/.nvm\" && [ -s \"$NVM_DIR/nvm.sh\" ] && source \"$NVM_DIR/nvm.sh\" && nvm use && npm install'",
   "customizations": {
