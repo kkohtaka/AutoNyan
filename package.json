@@ -11,16 +11,12 @@
     "deploy": "npm run terraform:apply",
     "test": "jest"
   },
-  "dependencies": {
-    "@google-cloud/functions-framework": "^4.0.0",
-    "express": "^5.1.0"
-  },
+  "workspaces": [
+    "src/functions/*"
+  ],
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.0.3",
-    "typescript": "^5.3.3",
     "jest": "^30.0.2",
     "@types/jest": "^30.0.0",
     "ts-jest": "^29.4.0"
   }
-} 
+}

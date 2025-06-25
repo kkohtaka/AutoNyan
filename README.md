@@ -1,92 +1,129 @@
 # AutoNyan
 
-This project demonstrates how to create and deploy Google Cloud Functions using TypeScript and manage the infrastructure with Terraform.
+A Google Cloud Functions project built with TypeScript and managed with Terraform. This project demonstrates creating and deploying serverless functions to Google Cloud Platform with infrastructure as code.
+
+## Features
+
+- **Serverless Functions**: Google Cloud Functions v2 with Node.js 20 runtime
+- **TypeScript**: Full TypeScript support with Jest testing
+- **Infrastructure as Code**: Terraform for cloud resource management
+- **Dual Triggers**: Functions support both HTTP requests and CloudEvent triggers
+- **Document Scanner**: Automated Google Drive document scanning with PubSub integration
+- **Dev Container**: Pre-configured development environment
 
 ## Prerequisites
 
-- nvm (Node Version Manager)
-- Google Cloud SDK
-- Terraform
-- A Google Cloud project
+- Node.js (version specified in `.nvmrc`)
+- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
+- A Google Cloud project with billing enabled
+- [nvm](https://github.com/nvm-sh/nvm) (recommended for Node.js version management)
 
-## Setup
+## Quick Start
 
-1. Install and use the correct Node.js version using nvm:
-```bash
-# Install nvm using Homebrew
-brew install nvm
+### Option 1: Dev Container (Recommended)
 
-# Create nvm's working directory
-mkdir ~/.nvm
+1. Install [Docker](https://www.docker.com/) and [VS Code Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+2. Open this project in VS Code
+3. Reopen in dev container when prompted (or use `Dev Containers: Reopen in Container`)
+4. Authenticate with Google Cloud:
+   ```bash
+   gcloud auth application-default login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+5. Skip to [Configuration](#configuration)
 
-# Add the following to your ~/.zshrc:
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+### Option 2: Local Setup
 
-# Restart your terminal or run
-source ~/.zshrc
+1. **Install Node.js**:
+   ```bash
+   # Using nvm (recommended)
+   nvm install && nvm use
+   
+   # Or install Node.js version from .nvmrc manually
+   ```
 
-# Install and use the project's Node.js version
-nvm install
-nvm use
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Configure Google Cloud**:
+   ```bash
+   gcloud auth application-default login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+
+### Configuration
+
+1. **Set up Terraform backend**:
+   ```bash
+   # Optional: Configure custom bucket name and location
+   export TF_STATE_BUCKET="your-custom-bucket-name"
+   export TF_STATE_LOCATION="your-preferred-region"
+   
+   # Run the setup script
+   cd terraform
+   ./setup-backend.sh
+   
+   # Initialize Terraform
+   npm run terraform:init
+   ```
+
+2. **Configure project variables**:
+   ```bash
+   cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+   ```
+   
+   Edit `terraform/terraform.tfvars`:
+   ```hcl
+   project_id = "your-project-id"
+   region     = "us-central1"
+   drive_folder_id = "your-google-drive-folder-id"
+   ```
+
+### Finding Your Google Drive Folder ID
+
+To configure the `drive_folder_id` variable, you need to find the ID of the Google Drive folder you want to scan:
+
+**Method 1: From Google Drive Web Interface (Easiest)**
+1. Open Google Drive in your web browser (drive.google.com)
+2. Navigate to the folder you want to scan
+3. Look at the URL in your browser's address bar
+4. The folder ID is the long string after `/folders/`
+
+**Example URL:**
 ```
-
-2. Install dependencies:
-```bash
-npm install
+https://drive.google.com/drive/folders/1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS
 ```
+**Folder ID:** `1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS`
 
-3. Configure Google Cloud:
-```bash
-gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
-```
+**Method 2: Right-click Share Option**
+1. Right-click on the folder in Google Drive
+2. Select "Share" or "Get link"
+3. Copy the shareable link
+4. Extract the folder ID from the link (same format as above)
 
-4. Set up Terraform state storage:
-```bash
-# Optional: Configure custom bucket name and location
-export TF_STATE_BUCKET="your-custom-bucket-name"
-export TF_STATE_LOCATION="your-preferred-region"
-
-# Run the setup script
-cd terraform
-chmod +x setup-backend.sh
-./setup-backend.sh
-
-# Initialize Terraform (only needed once or when backend configuration changes)
-npm run terraform:init
-```
-
-5. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars` and update the values:
-```hcl
-project_id = "your-project-id"
-region     = "us-central1"
-```
+**Important Notes:**
+- Folder ID format: Always a long alphanumeric string (28+ characters)
+- Permissions: The service account needs access to the folder
+- Sharing: Make sure the folder is shared with your service account email or is publicly accessible
+- Root folder: Use `"root"` as the folder ID to scan the entire Drive
 
 ## Development
 
-1. Build the TypeScript code:
+**Build and test**:
 ```bash
-npm run build
+npm run build    # Compile TypeScript
+npm test         # Run Jest tests
 ```
 
-2. Test the functions locally:
+**Deploy to Google Cloud**:
 ```bash
-npm test
+npm run deploy   # Build + Terraform apply
 ```
 
-## Deployment
-
-1. Deploy the functions:
-```bash
-npm run deploy
-```
-
-This will:
-- Build the TypeScript code
-- Create a zip file of the function
-- Apply the Terraform configuration
+This will build the TypeScript code, create deployment packages, and apply the Terraform configuration.
 
 ## Available Scripts
 
@@ -98,50 +135,24 @@ This will:
 - `npm run terraform:destroy` - Destroy all Terraform-managed infrastructure
 - `npm run deploy` - Full deployment pipeline (build + terraform apply)
 
-## Development with Dev Container
-
-You can use a pre-configured development environment using [Dev Containers](https://containers.dev/) in VS Code or any compatible editor.
-
-1. Make sure you have [Docker](https://www.docker.com/) and [VS Code Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) installed.
-2. Open this project folder in VS Code.
-3. When prompted, reopen in the dev container, or use the command palette: `Dev Containers: Reopen in Container`.
-4. Once the container is built, authenticate with Google Cloud manually:
-   ```bash
-   gcloud auth application-default login
-   gcloud config set project YOUR_PROJECT_ID
-   ```
-5. Continue with development as described below (build, test, deploy, etc.).
-
-The devcontainer uses Node.js version specified in `.nvmrc` and includes Terraform and Google Cloud SDK.
 
 ## Project Structure
 
 ```
 .
-├── .devcontainer/
-│   ├── Dockerfile
-│   └── devcontainer.json
-├── src/
-│   └── functions/
-│       └── hello/
-│           ├── index.ts
-│           └── index.test.ts
-├── terraform/
-│   ├── main.tf
-│   ├── backend.tf
-│   ├── backend.hcl
-│   ├── variables.tf
-│   ├── terraform.tfvars.example
-│   └── setup-backend.sh
-├── scripts/
-│   └── build-function.sh
-├── dist/                    # Generated TypeScript build output
-├── package.json
-├── tsconfig.json
-├── jest.config.js
-├── .nvmrc
-├── CLAUDE.md               # Instructions for Claude Code
-└── README.md
+├── .devcontainer/           # Dev container configuration
+├── src/functions/           # Cloud Functions source code
+│   ├── hello/              # Sample HTTP/CloudEvent function
+│   └── drive-document-scanner/  # Drive scanning function
+├── terraform/              # Infrastructure as code
+│   ├── main.tf            # Main Terraform configuration
+│   ├── variables.tf       # Variable definitions
+│   ├── terraform.tfvars.example  # Example configuration
+│   └── setup-backend.sh   # Backend setup script
+├── scripts/               # Build and deployment scripts
+├── dist/                  # Compiled TypeScript output
+├── CLAUDE.md             # AI assistant instructions
+└── [config files]        # package.json, tsconfig.json, etc.
 ```
 
 ## Adding New Functions
@@ -162,3 +173,24 @@ The devcontainer uses Node.js version specified in `.nvmrc` and includes Terrafo
 5. Build and deploy using the commands above
 
 Functions support both HTTP requests and CloudEvent triggers, with tests covering both execution paths using Jest with ts-jest preset.
+
+## Functions
+
+### Hello Function
+A sample function demonstrating dual HTTP/CloudEvent support for testing and learning.
+
+### Drive Document Scanner
+Automated Google Drive document scanning with PubSub integration.
+
+**Features**:
+- Scheduled scanning (hourly via Cloud Scheduler)
+- Supports PDF, Word, Excel, PowerPoint, text files, and Google Docs
+- Publishes findings to PubSub topic for downstream processing
+- Comprehensive logging and error handling
+
+**Manual trigger**:
+```bash
+curl -X POST "https://YOUR_REGION-YOUR_PROJECT.cloudfunctions.net/drive-document-scanner" \
+  -H "Content-Type: application/json" \
+  -d '{"folderId": "your-folder-id", "topicName": "document-classification"}'
+```
