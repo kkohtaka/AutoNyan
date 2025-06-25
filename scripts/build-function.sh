@@ -7,11 +7,27 @@ set -e
 echo "Building TypeScript..."
 npm run build
 
-# Create function zip
-echo "Creating function zip..."
-cd dist/functions/hello
-rm -f ../hello.zip
-zip -r ../hello.zip . -x "*test.js"
-cd ../../..
+# Get list of function directories
+FUNCTIONS=($(ls -d src/functions/*/ | xargs -n 1 basename))
 
-echo "Build complete! Function zip created at dist/functions/hello.zip" 
+# Copy function-specific package.json files (Cloud Functions will install dependencies)
+echo "Preparing function packages..."
+for FUNCTION in "${FUNCTIONS[@]}"; do
+  echo "  - Preparing $FUNCTION function package..."
+  cp "src/functions/$FUNCTION/package.json" "dist/functions/$FUNCTION/"
+done
+
+# Create function zips (source code only)
+echo "Creating function zips..."
+for FUNCTION in "${FUNCTIONS[@]}"; do
+  echo "  - Creating $FUNCTION function zip..."
+  pushd "dist/functions/$FUNCTION" > /dev/null
+  rm -f "../$FUNCTION.zip"
+  zip -r "../$FUNCTION.zip" . -x "*test.js" "node_modules/*"
+  popd > /dev/null
+done
+
+echo "Build complete! Function zips created:"
+for FUNCTION in "${FUNCTIONS[@]}"; do
+  echo "  - dist/functions/$FUNCTION.zip"
+done 
