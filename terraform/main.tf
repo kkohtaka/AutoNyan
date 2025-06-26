@@ -184,6 +184,13 @@ resource "google_pubsub_subscription" "drive_scanner_trigger_sub" {
   ack_deadline_seconds = 300
 }
 
+# Allow Pub/Sub service account to sign tokens for the push subscription
+resource "google_service_account_iam_member" "pubsub_token_creator" {
+  service_account_id = google_service_account.drive_scanner_function_sa.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
 # IAM binding for Cloud Scheduler to publish to PubSub
 resource "google_project_iam_member" "scheduler_pubsub" {
   project = var.project_id
