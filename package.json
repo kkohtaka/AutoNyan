@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc",
     "build:function": "./scripts/build-function.sh",
-    "terraform:init": "terraform -chdir=terraform init -backend-config=backend.hcl",
+    "terraform:init": "terraform -chdir=terraform init -backend-config=backend.hcl -upgrade",
     "terraform:apply": "npm run build:function && terraform -chdir=terraform apply",
     "terraform:destroy": "terraform -chdir=terraform destroy",
     "deploy": "npm run terraform:apply",
