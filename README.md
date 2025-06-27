@@ -174,23 +174,83 @@ This will build the TypeScript code, create deployment packages, and apply the T
 
 Functions support both HTTP requests and CloudEvent triggers, with tests covering both execution paths using Jest with ts-jest preset.
 
+## Google Cloud Resources
+
+AutoNyan provisions the following Google Cloud resources via Terraform:
+
+### Compute Resources
+- **Cloud Functions v2**: Serverless Node.js 20 runtime functions
+  - `hello-world`: Demo function (256MB memory, 60s timeout, 0-100 instances)
+  - `folder-scanner`: Drive scanner (512MB memory, 300s timeout, 0-10 instances)
+
+### Storage Resources
+- **Cloud Storage Bucket**: Function source code storage (`{project-id}-function-source`)
+- **Storage Objects**: Zip archives containing built function code
+
+### Messaging & Scheduling
+- **PubSub Topics**:
+  - `document-classification`: Receives document metadata for processing
+  - `folder-scan-trigger`: Triggers scheduled drive scans
+- **Cloud Scheduler**: Automated folder scanning (configurable cron schedule)
+
+### Identity & Access
+- **Service Account**: `folder-scanner` with least-privilege permissions
+- **IAM Roles**: Storage viewer, service usage consumer, PubSub publisher
+- **Function IAM**: Public invoker access for hello-world function
+
+### Data Flow Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  Cloud Scheduler│    │  PubSub Topic    │    │ folder-scanner  │
+│  (Cron Job)     │───▶│ folder-scan-     │───▶│ Cloud Function  │
+│                 │    │ trigger          │    │                 │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                                         │
+                                                         ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  External       │    │  PubSub Topic    │    │ Google Drive    │
+│  Consumers      │◀───│ document-        │◀───│ API             │
+│                 │    │ classification   │    │                 │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+
+┌─────────────────┐    ┌──────────────────┐
+│  HTTP Clients   │    │ hello-world      │
+│                 │───▶│ Cloud Function   │
+│                 │    │ (Public Access)  │
+└─────────────────┘    └──────────────────┘
+
+┌─────────────────┐    ┌──────────────────┐
+│  Cloud Storage  │    │ Service Account  │
+│  Bucket         │    │ folder-scanner   │
+│  (Source Code)  │    │ (IAM Roles)      │
+└─────────────────┘    └──────────────────┘
+```
+
+**Flow Description**:
+1. **Scheduled Trigger**: Cloud Scheduler publishes messages to `folder-scan-trigger` topic
+2. **Drive Scanning**: `folder-scanner` function processes PubSub events, scans Google Drive
+3. **Document Processing**: Scanner publishes document metadata to `document-classification` topic
+4. **External Integration**: Downstream consumers process document classification messages
+5. **HTTP Access**: `hello-world` function provides public HTTP/CloudEvent endpoints
+
 ## Functions
 
 ### Hello Function
 A sample function demonstrating dual HTTP/CloudEvent support for testing and learning.
 
-### Drive Document Scanner
+### Folder Scanner
 Automated Google Drive document scanning with PubSub integration.
 
 **Features**:
-- Scheduled scanning (hourly via Cloud Scheduler)
+- Scheduled scanning via Cloud Scheduler (configurable cron schedule)
 - Supports PDF, Word, Excel, PowerPoint, text files, and Google Docs
 - Publishes findings to PubSub topic for downstream processing
 - Comprehensive logging and error handling
+- Event-driven architecture using PubSub triggers
 
 **Manual trigger**:
 ```bash
-curl -X POST "https://YOUR_REGION-YOUR_PROJECT.cloudfunctions.net/drive-document-scanner" \
-  -H "Content-Type: application/json" \
-  -d '{"folderId": "your-folder-id", "topicName": "document-classification"}'
+# Trigger via PubSub (recommended for production)
+gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"your-folder-id","topicName":"document-classification"}'
 ```

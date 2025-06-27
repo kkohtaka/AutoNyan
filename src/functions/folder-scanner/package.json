@@ -1,5 +1,5 @@
 {
-  "name": "drive-document-scanner-function",
+  "name": "folder-scanner-function",
   "version": "1.0.0",
   "description": "Google Drive document scanner Cloud Function",
   "main": "index.js",
