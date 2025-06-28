@@ -13,6 +13,15 @@ AutoNyan is a Google Cloud Functions project built with TypeScript and managed w
 - `npm test` - Run Jest tests for all functions
 - `npm run build:function` - Build and create a zip archive for deployment (runs TypeScript build + zip creation)
 
+### Linting and Formatting
+- `npm run lint` - Run all linters (TypeScript, YAML, Terraform)
+- `npm run lint:ts` - Run ESLint on TypeScript files with auto-fix
+- `npm run lint:yaml` - Run yamllint on GitHub workflows
+- `npm run lint:terraform` - Run terraform fmt check and TFLint
+- `npm run format` - Format all code (TypeScript and Terraform)
+- `npm run format:ts` - Format TypeScript files with Prettier
+- `npm run format:terraform` - Format Terraform files
+
 ### Terraform Operations
 - `npm run terraform:init` - Initialize Terraform backend (run once per project setup)
 - `npm run terraform:apply` - Apply Terraform configuration and deploy functions
@@ -73,4 +82,14 @@ export const functionName = async (req: Request | CloudEvent<DataType>, res?: Re
 
 ## Development Environment
 
-Project supports both local development and dev container environments. The dev container includes Node.js (version from `.nvmrc`), Terraform, and Google Cloud SDK pre-installed.
+Project supports both local development and dev container environments. The dev container includes Node.js (version from `.nvmrc`), Terraform, Google Cloud SDK, yamllint, and TFLint pre-installed.
+
+### IDE Configuration
+The devcontainer is configured with VS Code extensions and settings for automatic linting and formatting:
+- **ESLint**: Automatic TypeScript linting with auto-fix on save
+- **Prettier**: Code formatting on save for TypeScript, JavaScript, JSON
+- **YAML**: Validation and formatting for workflow files  
+- **Terraform**: Validation and formatting for infrastructure files
+- **Auto-cleanup**: Trim whitespace and ensure final newlines
+
+Use Ctrl+Shift+P → "Tasks: Run Task" to access lint and format commands.
