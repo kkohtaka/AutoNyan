@@ -142,7 +142,6 @@ This will build the TypeScript code, create deployment packages, and apply the T
 .
 ├── .devcontainer/           # Dev container configuration
 ├── src/functions/           # Cloud Functions source code
-│   ├── hello/              # Sample HTTP/CloudEvent function
 │   └── drive-document-scanner/  # Drive scanning function
 ├── terraform/              # Infrastructure as code
 │   ├── main.tf            # Main Terraform configuration
@@ -180,7 +179,6 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 
 ### Compute Resources
 - **Cloud Functions v2**: Serverless Node.js 20 runtime functions
-  - `hello-world`: Demo function (256MB memory, 60s timeout, 0-100 instances)
   - `folder-scanner`: Drive scanner (512MB memory, 300s timeout, 0-10 instances)
 
 ### Storage Resources
@@ -196,7 +194,6 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 ### Identity & Access
 - **Service Account**: `folder-scanner` with least-privilege permissions
 - **IAM Roles**: Storage viewer, service usage consumer, PubSub publisher
-- **Function IAM**: Public invoker access for hello-world function
 
 ### Data Flow Architecture
 
@@ -214,11 +211,6 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 │                 │    │ classification   │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 
-┌─────────────────┐    ┌──────────────────┐
-│  HTTP Clients   │    │ hello-world      │
-│                 │───▶│ Cloud Function   │
-│                 │    │ (Public Access)  │
-└─────────────────┘    └──────────────────┘
 
 ┌─────────────────┐    ┌──────────────────┐
 │  Cloud Storage  │    │ Service Account  │
@@ -232,12 +224,8 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 2. **Drive Scanning**: `folder-scanner` function processes PubSub events, scans Google Drive
 3. **Document Processing**: Scanner publishes document metadata to `document-classification` topic
 4. **External Integration**: Downstream consumers process document classification messages
-5. **HTTP Access**: `hello-world` function provides public HTTP/CloudEvent endpoints
 
 ## Functions
-
-### Hello Function
-A sample function demonstrating dual HTTP/CloudEvent support for testing and learning.
 
 ### Folder Scanner
 Automated Google Drive document scanning with PubSub integration.
