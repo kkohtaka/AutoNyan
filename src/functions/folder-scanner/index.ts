@@ -23,6 +23,14 @@ interface DocumentFile {
   webViewLink: string;
 }
 
+interface DocumentScanResult {
+  message: string;
+  filesFound: number;
+  files: DocumentFile[];
+  publishedMessages: number;
+  topicName: string;
+}
+
 const DOCUMENT_MIME_TYPES = [
   "application/pdf",
   "application/msword",
@@ -43,7 +51,7 @@ export const folderScanner = async (
     | [Request, Response]
     | [CloudEvent<MessagePublishedData>]
     | [CloudEvent<MessagePublishedData>, unknown]
-) => {
+): Promise<void | DocumentScanResult> => {
   const first = args[0];
   const second = args.length > 1 ? args[1] : undefined;
   const isHttp = second && isExpressResponse(second);
@@ -56,8 +64,8 @@ export const folderScanner = async (
     if (res) {
       // HTTP request
       const { folderId: reqFolderId, topicName: reqTopicName } = req.body || {};
-      folderId = reqFolderId || (req.query as any)?.folderId;
-      topicName = reqTopicName || (req.query as any)?.topicName;
+      folderId = reqFolderId || (req.query as Record<string, unknown>)?.folderId as string;
+      topicName = reqTopicName || (req.query as Record<string, unknown>)?.topicName as string;
 
       if (!folderId || !topicName) {
         res.status(400).json({
@@ -148,6 +156,8 @@ export const folderScanner = async (
     if (res) {
       res.status(200).json(result);
     } else {
+      // Log completion for CloudEvent processing
+      // eslint-disable-next-line no-console
       console.log(
         `Drive document scanner completed: ${JSON.stringify(result)}`
       );
@@ -156,6 +166,7 @@ export const folderScanner = async (
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error occurred";
+    // eslint-disable-next-line no-console
     console.error("Drive document scanner error:", error);
 
     if (res) {
