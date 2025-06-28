@@ -17,13 +17,19 @@
         "anthropic.claude-dev",
         "ms-vscode.vscode-typescript-next",
         "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
         "ms-vscode.vscode-json",
         "hashicorp.terraform",
-        "googlecloudtools.cloudcode"
+        "googlecloudtools.cloudcode",
+        "redhat.vscode-yaml"
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
         "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit",
+          "source.organizeImports": "explicit"
+        },
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "[typescript]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
