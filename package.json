@@ -9,7 +9,15 @@
     "terraform:apply": "npm run build:function && terraform -chdir=terraform apply",
     "terraform:destroy": "terraform -chdir=terraform destroy",
     "deploy": "npm run terraform:apply",
-    "test": "jest"
+    "test": "jest",
+    "lint": "npm run lint:ts && npm run lint:yaml && npm run lint:terraform",
+    "lint:ts": "eslint 'src/**/*.ts' --fix",
+    "lint:yaml": "yamllint .github/ -c .yamllint.yml",
+    "lint:terraform": "terraform fmt -check=true -recursive terraform/ && tflint --chdir=terraform/",
+    "format": "npm run format:ts && npm run format:yaml && npm run format:terraform",
+    "format:ts": "prettier --write 'src/**/*.ts'",
+    "format:yaml": "prettier --write '.github/**/*.{yml,yaml}'",
+    "format:terraform": "terraform fmt -recursive terraform/"
   },
   "workspaces": [
     "src/functions/*"
@@ -18,6 +26,12 @@
     "jest": "^30.0.2",
     "@types/jest": "^30.0.0",
     "ts-jest": "^29.4.0",
-    "@google/events": "^5.4.0"
+    "@google/events": "^5.4.0",
+    "@eslint/js": "^9.15.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.0"
   }
 }

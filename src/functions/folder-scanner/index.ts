@@ -12,9 +12,6 @@ const isExpressResponse = (obj: unknown): obj is Response => {
   );
 };
 
-const isExpressRequest = (obj: unknown): obj is Request => {
-  return !!obj && typeof (obj as Request).method === "string";
-};
 
 
 interface DocumentFile {
