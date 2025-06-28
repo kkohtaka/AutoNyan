@@ -1,18 +1,18 @@
-import { Request, Response } from "express";
-import { CloudEvent } from "@google-cloud/functions-framework";
-import { MessagePublishedData } from "@google/events/cloud/pubsub/v1/MessagePublishedData";
-import { folderScanner } from "./index";
-import { google } from "googleapis";
-import { PubSub } from "@google-cloud/pubsub";
+import { Request, Response } from 'express';
+import { CloudEvent } from '@google-cloud/functions-framework';
+import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
+import { folderScanner } from './index';
+import { google } from 'googleapis';
+import { PubSub } from '@google-cloud/pubsub';
 
 // Mock the Google APIs
-jest.mock("googleapis");
-jest.mock("@google-cloud/pubsub");
+jest.mock('googleapis');
+jest.mock('@google-cloud/pubsub');
 
 const mockGoogle = google as jest.Mocked<typeof google>;
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 
-describe("folderScanner", () => {
+describe('folderScanner', () => {
   let mockDriveList: jest.Mock;
   let mockPublishMessage: jest.Mock;
   let mockTopic: jest.Mock;
@@ -33,7 +33,7 @@ describe("folderScanner", () => {
       mockGoogle.auth.GoogleAuth as jest.MockedClass<
         typeof google.auth.GoogleAuth
       >
-    ).mockImplementation(() => ({} as any));
+    ).mockImplementation(() => ({}) as any);
 
     // Mock PubSub
     mockPublishMessage = jest.fn();
@@ -46,7 +46,7 @@ describe("folderScanner", () => {
     mockPubSub.mockImplementation(() => mockPubSubInstance);
   });
 
-  describe("HTTP request", () => {
+  describe('HTTP request', () => {
     let mockRequest: Partial<Request>;
     let mockResponse: Partial<Response>;
     let responseStatus: number;
@@ -73,52 +73,52 @@ describe("folderScanner", () => {
       };
     });
 
-    it("should return 400 when folderId is missing", async () => {
-      mockRequest.body = { topicName: "test-topic" };
+    it('should return 400 when folderId is missing', async () => {
+      mockRequest.body = { topicName: 'test-topic' };
 
       await folderScanner(mockRequest as Request, mockResponse as Response);
 
       expect(responseStatus).toBe(400);
       expect(responseBody).toEqual({
-        error: "Missing required parameters: folderId and topicName",
+        error: 'Missing required parameters: folderId and topicName',
       });
     });
 
-    it("should return 400 when topicName is missing", async () => {
-      mockRequest.body = { folderId: "test-folder-id" };
+    it('should return 400 when topicName is missing', async () => {
+      mockRequest.body = { folderId: 'test-folder-id' };
 
       await folderScanner(mockRequest as Request, mockResponse as Response);
 
       expect(responseStatus).toBe(400);
       expect(responseBody).toEqual({
-        error: "Missing required parameters: folderId and topicName",
+        error: 'Missing required parameters: folderId and topicName',
       });
     });
 
-    it("should successfully scan folder and publish documents", async () => {
+    it('should successfully scan folder and publish documents', async () => {
       const mockFiles = [
         {
-          id: "file1",
-          name: "document1.pdf",
-          mimeType: "application/pdf",
-          size: "1024",
-          modifiedTime: "2023-01-01T00:00:00.000Z",
-          webViewLink: "https://drive.google.com/file/d/file1/view",
+          id: 'file1',
+          name: 'document1.pdf',
+          mimeType: 'application/pdf',
+          size: '1024',
+          modifiedTime: '2023-01-01T00:00:00.000Z',
+          webViewLink: 'https://drive.google.com/file/d/file1/view',
         },
         {
-          id: "file2",
-          name: "document2.docx",
+          id: 'file2',
+          name: 'document2.docx',
           mimeType:
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          size: "2048",
-          modifiedTime: "2023-01-02T00:00:00.000Z",
-          webViewLink: "https://drive.google.com/file/d/file2/view",
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          size: '2048',
+          modifiedTime: '2023-01-02T00:00:00.000Z',
+          webViewLink: 'https://drive.google.com/file/d/file2/view',
         },
       ];
 
       mockRequest.body = {
-        folderId: "test-folder-id",
-        topicName: "test-topic",
+        folderId: 'test-folder-id',
+        topicName: 'test-topic',
       };
 
       mockDriveList.mockResolvedValue({
@@ -127,54 +127,54 @@ describe("folderScanner", () => {
         },
       });
 
-      mockPublishMessage.mockResolvedValue("message-id-1");
+      mockPublishMessage.mockResolvedValue('message-id-1');
 
       await folderScanner(mockRequest as Request, mockResponse as Response);
 
       expect(responseStatus).toBe(200);
       expect(responseBody.message).toContain(
-        "Successfully scanned folder test-folder-id and found 2 document files"
+        'Successfully scanned folder test-folder-id and found 2 document files'
       );
       expect(responseBody.filesFound).toBe(2);
       expect(responseBody.files).toHaveLength(2);
       expect(responseBody.publishedMessages).toBe(2);
-      expect(responseBody.topicName).toBe("test-topic");
+      expect(responseBody.topicName).toBe('test-topic');
 
       // Verify Drive API was called correctly
       expect(mockDriveList).toHaveBeenCalledWith({
         q: expect.stringContaining(
           "'test-folder-id' in parents and trashed=false"
         ),
-        fields: "files(id,name,mimeType,size,modifiedTime,webViewLink)",
+        fields: 'files(id,name,mimeType,size,modifiedTime,webViewLink)',
         pageSize: 100,
       });
 
       // Verify PubSub messages were published
       expect(mockPublishMessage).toHaveBeenCalledTimes(2);
-      expect(mockTopic).toHaveBeenCalledWith("test-topic");
+      expect(mockTopic).toHaveBeenCalledWith('test-topic');
     });
 
-    it("should handle Drive API errors", async () => {
+    it('should handle Drive API errors', async () => {
       mockRequest.body = {
-        folderId: "test-folder-id",
-        topicName: "test-topic",
+        folderId: 'test-folder-id',
+        topicName: 'test-topic',
       };
 
-      mockDriveList.mockRejectedValue(new Error("Drive API error"));
+      mockDriveList.mockRejectedValue(new Error('Drive API error'));
 
       await folderScanner(mockRequest as Request, mockResponse as Response);
 
       expect(responseStatus).toBe(500);
       expect(responseBody).toEqual({
-        error: "Drive document scanner failed",
-        details: "Drive API error",
+        error: 'Drive document scanner failed',
+        details: 'Drive API error',
       });
     });
 
-    it("should accept parameters from query string", async () => {
+    it('should accept parameters from query string', async () => {
       mockRequest.query = {
-        folderId: "query-folder-id",
-        topicName: "query-topic",
+        folderId: 'query-folder-id',
+        topicName: 'query-topic',
       };
 
       mockDriveList.mockResolvedValue({
@@ -187,53 +187,53 @@ describe("folderScanner", () => {
 
       expect(responseStatus).toBe(200);
       expect(responseBody.message).toContain(
-        "Successfully scanned folder query-folder-id and found 0 document files"
+        'Successfully scanned folder query-folder-id and found 0 document files'
       );
     });
   });
 
-  describe("CloudEvent request", () => {
+  describe('CloudEvent request', () => {
     const buildEvent = (payload: any): CloudEvent<MessagePublishedData> => {
       return {
-        id: "test-id",
+        id: 'test-id',
         data: {
           message: {
-            data: Buffer.from(JSON.stringify(payload)).toString("base64"),
+            data: Buffer.from(JSON.stringify(payload)).toString('base64'),
           },
         },
       } as CloudEvent<MessagePublishedData>;
     };
 
-    it("should throw error when folderId is missing", async () => {
-      const cloudEvent = buildEvent({ topicName: "test-topic" });
+    it('should throw error when folderId is missing', async () => {
+      const cloudEvent = buildEvent({ topicName: 'test-topic' });
 
       await expect(folderScanner(cloudEvent)).rejects.toThrow(
-        "Missing required parameters: folderId and topicName"
+        'Missing required parameters: folderId and topicName'
       );
     });
 
-    it("should throw error when topicName is missing", async () => {
-      const cloudEvent = buildEvent({ folderId: "test-folder-id" });
+    it('should throw error when topicName is missing', async () => {
+      const cloudEvent = buildEvent({ folderId: 'test-folder-id' });
 
       await expect(folderScanner(cloudEvent)).rejects.toThrow(
-        "Missing required parameters: folderId and topicName"
+        'Missing required parameters: folderId and topicName'
       );
     });
 
-    it("should successfully process CloudEvent and return result", async () => {
+    it('should successfully process CloudEvent and return result', async () => {
       const cloudEvent = buildEvent({
-        folderId: "test-folder-id",
-        topicName: "test-topic",
+        folderId: 'test-folder-id',
+        topicName: 'test-topic',
       });
 
       const mockFiles = [
         {
-          id: "file1",
-          name: "document1.pdf",
-          mimeType: "application/pdf",
-          size: "1024",
-          modifiedTime: "2023-01-01T00:00:00.000Z",
-          webViewLink: "https://drive.google.com/file/d/file1/view",
+          id: 'file1',
+          name: 'document1.pdf',
+          mimeType: 'application/pdf',
+          size: '1024',
+          modifiedTime: '2023-01-01T00:00:00.000Z',
+          webViewLink: 'https://drive.google.com/file/d/file1/view',
         },
       ];
 
@@ -243,40 +243,40 @@ describe("folderScanner", () => {
         },
       });
 
-      mockPublishMessage.mockResolvedValue("message-id-1");
+      mockPublishMessage.mockResolvedValue('message-id-1');
 
       const result = await folderScanner(cloudEvent);
 
       expect(result).toBeDefined();
       expect(result!.message).toContain(
-        "Successfully scanned folder test-folder-id and found 1 document files"
+        'Successfully scanned folder test-folder-id and found 1 document files'
       );
       expect(result!.filesFound).toBe(1);
       expect(result!.files).toHaveLength(1);
       expect(result!.publishedMessages).toBe(1);
-      expect(result!.topicName).toBe("test-topic");
+      expect(result!.topicName).toBe('test-topic');
     });
 
-    it("should handle errors in CloudEvent processing", async () => {
+    it('should handle errors in CloudEvent processing', async () => {
       const cloudEvent = buildEvent({
-        folderId: "test-folder-id",
-        topicName: "test-topic",
+        folderId: 'test-folder-id',
+        topicName: 'test-topic',
       });
 
-      mockDriveList.mockRejectedValue(new Error("Drive API error"));
+      mockDriveList.mockRejectedValue(new Error('Drive API error'));
 
       await expect(folderScanner(cloudEvent)).rejects.toThrow(
-        "Drive document scanner failed: Drive API error"
+        'Drive document scanner failed: Drive API error'
       );
     });
   });
 
-  describe("Document type filtering", () => {
-    it("should include all supported document MIME types in search query", async () => {
+  describe('Document type filtering', () => {
+    it('should include all supported document MIME types in search query', async () => {
       const mockRequest = {
         body: {
-          folderId: "test-folder-id",
-          topicName: "test-topic",
+          folderId: 'test-folder-id',
+          topicName: 'test-topic',
         },
       } as Request;
 
