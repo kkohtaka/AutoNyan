@@ -23,12 +23,13 @@ RUN NODE_VERSION=$(cat /tmp/.nvmrc | tr -d '\n\r') \
 ENV NVM_DIR="/home/vscode/.nvm"
 USER vscode
 
-# Install Google Cloud SDK (switch back to root for system packages)
+# Install Google Cloud SDK and development tools
 USER root
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
     && apt-get update \
-    && apt-get install --no-install-recommends --yes google-cloud-cli \
+    && apt-get install --no-install-recommends --yes google-cloud-cli yamllint \
+    && curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
