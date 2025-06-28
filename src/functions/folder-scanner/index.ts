@@ -1,12 +1,21 @@
 import { Request, Response } from "express";
 import { CloudEvent } from "@google-cloud/functions-framework";
+import { MessagePublishedData } from "@google/events/cloud/pubsub/v1/MessagePublishedData";
 import { google } from "googleapis";
 import { PubSub } from "@google-cloud/pubsub";
 
-interface CloudEventData {
-  folderId?: string;
-  topicName?: string;
-}
+const isExpressResponse = (obj: unknown): obj is Response => {
+  return (
+    !!obj &&
+    typeof (obj as Response).status === "function" &&
+    typeof (obj as Response).json === "function"
+  );
+};
+
+const isExpressRequest = (obj: unknown): obj is Request => {
+  return !!obj && typeof (obj as Request).method === "string";
+};
+
 
 interface DocumentFile {
   id: string;
@@ -33,9 +42,16 @@ const DOCUMENT_MIME_TYPES = [
 ];
 
 export const folderScanner = async (
-  req: Request | CloudEvent<CloudEventData>,
-  res?: Response
+  ...args:
+    | [Request, Response]
+    | [CloudEvent<MessagePublishedData>]
+    | [CloudEvent<MessagePublishedData>, unknown]
 ) => {
+  const first = args[0];
+  const second = args.length > 1 ? args[1] : undefined;
+  const isHttp = second && isExpressResponse(second);
+  const req = first;
+  const res = isHttp ? (second as Response) : undefined;
   try {
     let folderId: string;
     let topicName: string;
@@ -53,10 +69,14 @@ export const folderScanner = async (
         return;
       }
     } else {
-      // CloudEvent request
-      const cloudEvent = req as CloudEvent<CloudEventData>;
-      folderId = cloudEvent.data?.folderId || "";
-      topicName = cloudEvent.data?.topicName || "";
+      // CloudEvent from Pub/Sub
+      const cloudEvent = req as CloudEvent<MessagePublishedData>;
+      const messageData = cloudEvent.data?.message?.data;
+      const decoded = messageData
+        ? JSON.parse(Buffer.from(messageData, "base64").toString())
+        : {};
+      folderId = decoded.folderId || "";
+      topicName = decoded.topicName || "";
 
       if (!folderId || !topicName) {
         throw new Error("Missing required parameters: folderId and topicName");

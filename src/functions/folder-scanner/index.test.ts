@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { CloudEvent } from "@google-cloud/functions-framework";
+import { MessagePublishedData } from "@google/events/cloud/pubsub/v1/MessagePublishedData";
 import { folderScanner } from "./index";
 import { google } from "googleapis";
 import { PubSub } from "@google-cloud/pubsub";
@@ -192,13 +193,19 @@ describe("folderScanner", () => {
   });
 
   describe("CloudEvent request", () => {
-    it("should throw error when folderId is missing", async () => {
-      const cloudEvent = {
+    const buildEvent = (payload: any): CloudEvent<MessagePublishedData> => {
+      return {
         id: "test-id",
         data: {
-          topicName: "test-topic",
+          message: {
+            data: Buffer.from(JSON.stringify(payload)).toString("base64"),
+          },
         },
-      } as CloudEvent<{ folderId?: string; topicName?: string }>;
+      } as CloudEvent<MessagePublishedData>;
+    };
+
+    it("should throw error when folderId is missing", async () => {
+      const cloudEvent = buildEvent({ topicName: "test-topic" });
 
       await expect(folderScanner(cloudEvent)).rejects.toThrow(
         "Missing required parameters: folderId and topicName"
@@ -206,12 +213,7 @@ describe("folderScanner", () => {
     });
 
     it("should throw error when topicName is missing", async () => {
-      const cloudEvent = {
-        id: "test-id",
-        data: {
-          folderId: "test-folder-id",
-        },
-      } as CloudEvent<{ folderId?: string; topicName?: string }>;
+      const cloudEvent = buildEvent({ folderId: "test-folder-id" });
 
       await expect(folderScanner(cloudEvent)).rejects.toThrow(
         "Missing required parameters: folderId and topicName"
@@ -219,13 +221,10 @@ describe("folderScanner", () => {
     });
 
     it("should successfully process CloudEvent and return result", async () => {
-      const cloudEvent = {
-        id: "test-id",
-        data: {
-          folderId: "test-folder-id",
-          topicName: "test-topic",
-        },
-      } as CloudEvent<{ folderId?: string; topicName?: string }>;
+      const cloudEvent = buildEvent({
+        folderId: "test-folder-id",
+        topicName: "test-topic",
+      });
 
       const mockFiles = [
         {
@@ -259,13 +258,10 @@ describe("folderScanner", () => {
     });
 
     it("should handle errors in CloudEvent processing", async () => {
-      const cloudEvent = {
-        id: "test-id",
-        data: {
-          folderId: "test-folder-id",
-          topicName: "test-topic",
-        },
-      } as CloudEvent<{ folderId?: string; topicName?: string }>;
+      const cloudEvent = buildEvent({
+        folderId: "test-folder-id",
+        topicName: "test-topic",
+      });
 
       mockDriveList.mockRejectedValue(new Error("Drive API error"));
 
