@@ -49,10 +49,19 @@ jobs:
         uses: reviewdog/action-yamllint@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          yamllint_flags: '.github/ terraform/ -c .yamllint.yml'
+          yamllint_flags: '.github/ -c .yamllint.yml'
 
       - name: Run Terraform linter
         run: npm run lint:terraform
+
+      - name: Check code formatting
+        run: |
+          npm run format
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Code formatting issues found. Please run 'npm run format' locally."
+            git diff
+            exit 1
+          fi
 
   test:
     runs-on: ubuntu-latest
