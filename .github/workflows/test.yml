@@ -54,6 +54,9 @@ jobs:
       - name: Run Terraform linter
         run: npm run lint:terraform
 
+      - name: Run Terraform validation
+        run: npm run terraform:validate
+
       - name: Check code formatting
         run: |
           npm run format
