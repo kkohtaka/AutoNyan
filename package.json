@@ -8,6 +8,7 @@
     "terraform:init": "terraform -chdir=terraform init -backend-config=backend.hcl -upgrade",
     "terraform:apply": "npm run build:function && terraform -chdir=terraform apply",
     "terraform:destroy": "terraform -chdir=terraform destroy",
+    "terraform:validate": "npm run terraform:init && terraform -chdir=terraform validate",
     "deploy": "npm run terraform:apply",
     "test": "jest",
     "lint": "npm run lint:ts && npm run lint:yaml && npm run lint:terraform",
