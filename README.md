@@ -54,6 +54,11 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
    gcloud config set project YOUR_PROJECT_ID
    ```
 
+4. **Set up GitHub Actions authentication** (for CI/CD):
+   ```bash
+   npm run setup:github-actions
+   ```
+
 ### Configuration
 
 1. **Set up Terraform backend**:
@@ -127,13 +132,30 @@ This will build the TypeScript code, create deployment packages, and apply the T
 
 ## Available Scripts
 
+### Build and Test
 - `npm run build` - Compile TypeScript to JavaScript in the `dist/` directory
-- `npm run build:function` - Build and create a zip archive for deployment (runs TypeScript build + zip creation)
+- `npm run build:function` - Build and create a zip archive for deployment
 - `npm test` - Run Jest tests for all functions
-- `npm run terraform:init` - Initialize Terraform backend (run once per project setup)
+
+### Linting and Formatting
+- `npm run lint` - Run all linters (TypeScript, YAML, Terraform)
+- `npm run lint:ts` - Run ESLint on TypeScript files with auto-fix
+- `npm run lint:yaml` - Run yamllint on GitHub workflows
+- `npm run lint:terraform` - Run terraform fmt check and TFLint
+- `npm run format` - Format all code (TypeScript, YAML, and Terraform)
+- `npm run format:ts` - Format TypeScript files with Prettier
+- `npm run format:yaml` - Format YAML files with Prettier
+- `npm run format:terraform` - Format Terraform files
+
+### Terraform Operations
+- `npm run terraform:init` - Initialize Terraform backend
 - `npm run terraform:apply` - Apply Terraform configuration and deploy functions
+- `npm run terraform:validate` - Validate Terraform configuration
 - `npm run terraform:destroy` - Destroy all Terraform-managed infrastructure
 - `npm run deploy` - Full deployment pipeline (build + terraform apply)
+
+### Setup
+- `npm run setup:github-actions` - Configure GitHub Actions authentication
 
 
 ## Project Structure
