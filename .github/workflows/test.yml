@@ -61,6 +61,12 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
+      - name: Setup Terraform backend
+        run: npm run setup:terraform-backend
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
+
       - name: Run Terraform validation
         run: npm run terraform:validate
 
