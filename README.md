@@ -36,80 +36,112 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
 ### Option 2: Local Setup
 
 1. **Install Node.js**:
+
    ```bash
    # Using nvm (recommended)
    nvm install && nvm use
-   
+
    # Or install Node.js version from .nvmrc manually
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Configure Google Cloud**:
+
    ```bash
    gcloud auth application-default login
    gcloud config set project YOUR_PROJECT_ID
    ```
 
 4. **Set up GitHub Actions authentication** (for CI/CD):
+
    ```bash
    npm run setup:github-actions
    ```
 
+5. **Configure GitHub repository variables** (for CI/CD):
+   - Go to your GitHub repository Settings > Secrets and variables > Actions > Variables tab
+   - Add the following repository variables:
+     - `TF_STATE_BUCKET`: Your Terraform state bucket name (e.g., `my-project-terraform-state`)
+     - `TF_STATE_LOCATION`: Your preferred region (e.g., `us-central1`)
+   - These variables are used by the CI/CD pipeline for Terraform backend configuration
+
 ### Configuration
 
 1. **Set up Terraform backend**:
+
    ```bash
    # Optional: Configure custom bucket name and location
    export TF_STATE_BUCKET="your-custom-bucket-name"
    export TF_STATE_LOCATION="your-preferred-region"
-   
+
    # Run the setup script
-   cd terraform
-   ./setup-backend.sh
-   
+   npm run setup:terraform-backend
+
    # Initialize Terraform
    npm run terraform:init
    ```
 
 2. **Configure project variables**:
+
    ```bash
    cp terraform/terraform.tfvars.example terraform/terraform.tfvars
    ```
-   
+
    Edit `terraform/terraform.tfvars`:
+
    ```hcl
    project_id = "your-project-id"
    region     = "us-central1"
    drive_folder_id = "your-google-drive-folder-id"
    ```
 
+3. **Configure GitHub Actions CI/CD** (if using GitHub repository):
+
+   For the CI/CD pipeline to work properly, you need to configure GitHub repository variables and secrets:
+
+   **Repository Variables** (Settings > Secrets and variables > Actions > Variables):
+   - `TF_STATE_BUCKET`: Terraform state storage bucket name
+   - `TF_STATE_LOCATION`: Cloud Storage bucket region/location
+
+   **Repository Secrets** (Settings > Secrets and variables > Actions > Secrets):
+   - `WIF_PROVIDER`: Workload Identity Federation provider (set up via `npm run setup:github-actions`)
+   - `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions authentication
+
+   These are used by the test workflow to validate Terraform configuration in CI/CD.
+
 ### Finding Your Google Drive Folder ID
 
 To configure the `drive_folder_id` variable, you need to find the ID of the Google Drive folder you want to scan:
 
 **Method 1: From Google Drive Web Interface (Easiest)**
+
 1. Open Google Drive in your web browser (drive.google.com)
 2. Navigate to the folder you want to scan
 3. Look at the URL in your browser's address bar
 4. The folder ID is the long string after `/folders/`
 
 **Example URL:**
+
 ```
 https://drive.google.com/drive/folders/1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS
 ```
+
 **Folder ID:** `1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS`
 
 **Method 2: Right-click Share Option**
+
 1. Right-click on the folder in Google Drive
 2. Select "Share" or "Get link"
 3. Copy the shareable link
 4. Extract the folder ID from the link (same format as above)
 
 **Important Notes:**
+
 - Folder ID format: Always a long alphanumeric string (28+ characters)
 - Permissions: The service account needs access to the folder
 - Sharing: Make sure the folder is shared with your service account email or is publicly accessible
@@ -118,12 +150,14 @@ https://drive.google.com/drive/folders/1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS
 ## Development
 
 **Build and test**:
+
 ```bash
 npm run build    # Compile TypeScript
 npm test         # Run Jest tests
 ```
 
 **Deploy to Google Cloud**:
+
 ```bash
 npm run deploy   # Build + Terraform apply
 ```
@@ -133,11 +167,13 @@ This will build the TypeScript code, create deployment packages, and apply the T
 ## Available Scripts
 
 ### Build and Test
+
 - `npm run build` - Compile TypeScript to JavaScript in the `dist/` directory
 - `npm run build:function` - Build and create a zip archive for deployment
 - `npm test` - Run Jest tests for all functions
 
 ### Linting and Formatting
+
 - `npm run lint` - Run all linters (TypeScript, YAML, Terraform)
 - `npm run lint:ts` - Run ESLint on TypeScript files with auto-fix
 - `npm run lint:yaml` - Run yamllint on GitHub workflows
@@ -148,6 +184,7 @@ This will build the TypeScript code, create deployment packages, and apply the T
 - `npm run format:terraform` - Format Terraform files
 
 ### Terraform Operations
+
 - `npm run terraform:init` - Initialize Terraform backend
 - `npm run terraform:apply` - Apply Terraform configuration and deploy functions
 - `npm run terraform:validate` - Validate Terraform configuration
@@ -155,8 +192,8 @@ This will build the TypeScript code, create deployment packages, and apply the T
 - `npm run deploy` - Full deployment pipeline (build + terraform apply)
 
 ### Setup
-- `npm run setup:github-actions` - Configure GitHub Actions authentication
 
+- `npm run setup:github-actions` - Configure GitHub Actions authentication
 
 ## Project Structure
 
@@ -168,8 +205,7 @@ This will build the TypeScript code, create deployment packages, and apply the T
 ├── terraform/              # Infrastructure as code
 │   ├── main.tf            # Main Terraform configuration
 │   ├── variables.tf       # Variable definitions
-│   ├── terraform.tfvars.example  # Example configuration
-│   └── setup-backend.sh   # Backend setup script
+│   └── terraform.tfvars.example  # Example configuration
 ├── scripts/               # Build and deployment scripts
 ├── dist/                  # Compiled TypeScript output
 ├── CLAUDE.md             # AI assistant instructions
@@ -181,7 +217,10 @@ This will build the TypeScript code, create deployment packages, and apply the T
 1. Create a new directory: `src/functions/{function-name}/`
 2. Implement function in `index.ts` following the dual HTTP/CloudEvent pattern:
    ```typescript
-   export const functionName = async (req: Request | CloudEvent<DataType>, res?: Response) => {
+   export const functionName = async (
+     req: Request | CloudEvent<DataType>,
+     res?: Response
+   ) => {
      if (res) {
        // HTTP request handling
      } else {
@@ -200,20 +239,24 @@ Functions support both HTTP requests and CloudEvent triggers, with tests coverin
 AutoNyan provisions the following Google Cloud resources via Terraform:
 
 ### Compute Resources
+
 - **Cloud Functions v2**: Serverless Node.js 20 runtime functions
   - `folder-scanner`: Drive scanner (512MB memory, 300s timeout, 0-10 instances)
 
 ### Storage Resources
+
 - **Cloud Storage Bucket**: Function source code storage (`{project-id}-function-source`)
 - **Storage Objects**: Zip archives containing built function code
 
 ### Messaging & Scheduling
+
 - **PubSub Topics**:
   - `document-classification`: Receives document metadata for processing
   - `folder-scan-trigger`: Triggers scheduled drive scans
 - **Cloud Scheduler**: Automated folder scanning (configurable cron schedule)
 
 ### Identity & Access
+
 - **Service Account**: `folder-scanner` with least-privilege permissions
 - **IAM Roles**: Storage viewer, service usage consumer, PubSub publisher
 
@@ -242,6 +285,7 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 ```
 
 **Flow Description**:
+
 1. **Scheduled Trigger**: Cloud Scheduler publishes messages to `folder-scan-trigger` topic
 2. **Drive Scanning**: `folder-scanner` function processes PubSub events, scans Google Drive
 3. **Document Processing**: Scanner publishes document metadata to `document-classification` topic
@@ -250,9 +294,11 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 ## Functions
 
 ### Folder Scanner
+
 Automated Google Drive document scanning with PubSub integration.
 
 **Features**:
+
 - Scheduled scanning via Cloud Scheduler (configurable cron schedule)
 - Supports PDF, Word, Excel, PowerPoint, text files, and Google Docs
 - Publishes findings to PubSub topic for downstream processing
@@ -260,6 +306,7 @@ Automated Google Drive document scanning with PubSub integration.
 - Event-driven architecture using PubSub triggers
 
 **Manual trigger**:
+
 ```bash
 # Trigger via PubSub (recommended for production)
 gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"your-folder-id","topicName":"document-classification"}'

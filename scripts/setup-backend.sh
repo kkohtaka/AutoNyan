@@ -55,7 +55,7 @@ gcloud storage buckets update gs://${BUCKET_NAME} \
 
 # Create or update backend configuration file
 echo "Creating backend configuration..."
-cat > backend.hcl << EOF
+cat > terraform/backend.hcl << EOF
 bucket = "${BUCKET_NAME}"
 prefix = "terraform/state"
 EOF
@@ -66,6 +66,6 @@ rm -f lifecycle-policy.json
 echo "Terraform state bucket setup complete!"
 echo "Bucket: gs://${BUCKET_NAME}"
 echo "Location: ${LOCATION}"
-echo "Backend configuration created in backend.hcl"
+echo "Backend configuration created in terraform/backend.hcl"
 echo "To initialize Terraform with this backend, run:"
 echo "terraform init -backend-config=backend.hcl" 
