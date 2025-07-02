@@ -12,6 +12,7 @@ permissions:
   checks: write
   contents: read
   pull-requests: read
+  id-token: write
 
 jobs:
   lint:
@@ -53,6 +54,12 @@ jobs:
 
       - name: Run Terraform linter
         run: npm run lint:terraform
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Run Terraform validation
         run: npm run terraform:validate
