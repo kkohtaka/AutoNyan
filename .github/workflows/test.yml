@@ -75,6 +75,7 @@ jobs:
           npm run format
           if [ -n "$(git status --porcelain)" ]; then
             echo "Code formatting issues found. Please run 'npm run format' locally."
+            git status --porcelain
             git diff
             exit 1
           fi
