@@ -26,6 +26,9 @@ terraform.rc
 .terraform.lock.hcl
 backend.hcl
 
+# GitHub Actions auth credentials
+gha-creds-*.json
+
 # IDE
 .idea/
 .vscode/
