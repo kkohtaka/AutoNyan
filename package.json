@@ -12,14 +12,16 @@
     "terraform:validate": "npm run terraform:init && terraform -chdir=terraform validate",
     "deploy": "npm run terraform:apply",
     "test": "jest",
-    "lint": "npm run lint:ts && npm run lint:yaml && npm run lint:terraform && npm run lint:sh",
+    "lint": "npm run lint:ts && npm run lint:yaml && npm run lint:json && npm run lint:terraform && npm run lint:sh",
     "lint:ts": "eslint 'src/**/*.ts' --fix",
     "lint:yaml": "yamllint .github/ -c .yamllint.yml",
+    "lint:json": "eslint '**/*.json' --fix",
     "lint:terraform": "terraform fmt -check=true -recursive terraform/ && tflint --chdir=terraform/",
     "lint:sh": "shellcheck scripts/*.sh",
-    "format": "npm run format:ts && npm run format:yaml && npm run format:terraform && npm run format:sh",
+    "format": "npm run format:ts && npm run format:yaml && npm run format:json && npm run format:terraform && npm run format:sh",
     "format:ts": "prettier --write 'src/**/*.ts'",
     "format:yaml": "prettier --write '.github/**/*.{yml,yaml}'",
+    "format:json": "prettier --write '**/*.json'",
     "format:terraform": "terraform fmt -recursive terraform/",
     "format:sh": "shfmt -w scripts/*.sh",
     "setup:terraform-backend": "./scripts/setup-backend.sh",
@@ -39,6 +41,7 @@
     "@typescript-eslint/parser": "^8.15.0",
     "eslint": "^9.15.0",
     "eslint-config-prettier": "^10.1.5",
-    "prettier": "^3.3.0"
+    "prettier": "^3.3.0",
+    "eslint-plugin-jsonc": "^2.8.0"
   }
 }
