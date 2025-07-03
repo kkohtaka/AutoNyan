@@ -1,10 +1,12 @@
 const js = require('@eslint/js');
 const tsPlugin = require('@typescript-eslint/eslint-plugin');
 const tsParser = require('@typescript-eslint/parser');
+const jsoncPlugin = require('eslint-plugin-jsonc');
 const prettierConfig = require('eslint-config-prettier');
 
 module.exports = [
   js.configs.recommended,
+  ...jsoncPlugin.configs['flat/recommended-with-jsonc'],
   {
     files: ['src/**/*.ts'],
     languageOptions: {
