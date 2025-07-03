@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install shellcheck and shfmt
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y shellcheck shfmt
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -51,6 +54,16 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           yamllint_flags: '.github/ -c .yamllint.yml'
+
+      - name: Run ShellCheck with reviewdog
+        uses: reviewdog/action-shellcheck@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run shfmt with reviewdog
+        uses: reviewdog/action-shfmt@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Terraform linter
         run: npm run lint:terraform

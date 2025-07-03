@@ -21,7 +21,9 @@
         "ms-vscode.vscode-json",
         "hashicorp.terraform",
         "googlecloudtools.cloudcode",
-        "redhat.vscode-yaml"
+        "redhat.vscode-yaml",
+        "timonwong.shellcheck",
+        "foxundermoon.shell-format"
       ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "bash",
@@ -45,6 +47,9 @@
         },
         "[hcl]": {
           "editor.defaultFormatter": "hashicorp.terraform"
+        },
+        "[shellscript]": {
+          "editor.defaultFormatter": "foxundermoon.shell-format"
         },
         "eslint.validate": [
           "javascript",
