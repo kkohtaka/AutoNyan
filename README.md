@@ -187,6 +187,7 @@ This will build the TypeScript code, create deployment packages, and apply the T
 
 - `npm run terraform:init` - Initialize Terraform backend
 - `npm run terraform:apply` - Apply Terraform configuration and deploy functions
+- `npm run terraform:plan` - Generate execution plan for Terraform changes
 - `npm run terraform:validate` - Validate Terraform configuration
 - `npm run terraform:destroy` - Destroy all Terraform-managed infrastructure
 - `npm run deploy` - Full deployment pipeline (build + terraform apply)
