@@ -1,3 +1,7 @@
-# project_id = "your-project-id"
-# region     = "us-central1"
-# drive_folder_id = "your-google-drive-folder-id"
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to version control - it contains sensitive data
+
+project_id = "your-project-id"
+region = "us-central1"
+drive_folder_id = "your-google-drive-folder-id"
+drive_scanner_schedule = "0 * * * *"
