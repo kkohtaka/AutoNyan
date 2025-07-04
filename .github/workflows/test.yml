@@ -108,6 +108,7 @@ jobs:
           TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
 
       - name: Run Terraform plan
+        timeout-minutes: 10
         run: |
           npm run build
           npm run terraform:init
