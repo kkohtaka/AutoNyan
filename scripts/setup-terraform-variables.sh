@@ -11,30 +11,30 @@ echo "Setting up terraform.tfvars for GitHub Actions..."
 # Get project ID from gcloud CLI
 PROJECT_ID=$(gcloud config get-value project)
 if [ -z "$PROJECT_ID" ]; then
-    echo "Error: No Google Cloud project configured"
-    echo "Please run: gcloud config set project YOUR_PROJECT_ID"
-    exit 1
+	echo "Error: No Google Cloud project configured"
+	echo "Please run: gcloud config set project YOUR_PROJECT_ID"
+	exit 1
 fi
 
 # Validate required environment variables
 if [ -z "$GCP_REGION" ]; then
-    echo "Error: GCP_REGION variable is not set"
-    exit 1
+	echo "Error: GCP_REGION variable is not set"
+	exit 1
 fi
 
 if [ -z "$DRIVE_FOLDER_ID" ]; then
-    echo "Error: DRIVE_FOLDER_ID secret is not set"
-    exit 1
+	echo "Error: DRIVE_FOLDER_ID secret is not set"
+	exit 1
 fi
 
 if [ -z "$DRIVE_SCANNER_SCHEDULE" ]; then
-    echo "Error: DRIVE_SCANNER_SCHEDULE variable is not set"
-    exit 1
+	echo "Error: DRIVE_SCANNER_SCHEDULE variable is not set"
+	exit 1
 fi
 
 # Generate terraform.tfvars from GitHub Actions variables/secrets
 echo "Generating terraform.tfvars from GitHub Actions variables/secrets..."
-cat > "$TFVARS_FILE" << EOF
+cat >"$TFVARS_FILE" <<EOF
 project_id = "$PROJECT_ID"
 region = "$GCP_REGION"
 drive_folder_id = "$DRIVE_FOLDER_ID"

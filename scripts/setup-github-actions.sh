@@ -14,43 +14,43 @@ LOCATION="global"
 
 # Helper functions
 log() {
-    echo "$1"
+	echo "$1"
 }
 
 error_exit() {
-    echo "Error: $1" >&2
-    exit 1
+	echo "Error: $1" >&2
+	exit 1
 }
 
 check_resource_state() {
-    local resource_type="$1"
-    local resource_name="$2"
-    local describe_cmd="$3"
+	local resource_type="$1"
+	local resource_name="$2"
+	local describe_cmd="$3"
 
-    log "Checking $resource_type state..." >&2
-    if state=$(eval "$describe_cmd" 2>/dev/null); then
-        if [ -n "$state" ]; then
-            log "$resource_type '$resource_name' found with state: $state" >&2
-            echo "$state"
-        else
-            log "$resource_type exists but state is empty" >&2
-            echo "UNKNOWN"
-        fi
-    else
-        log "$resource_type not found" >&2
-        echo "NOT_FOUND"
-    fi
+	log "Checking $resource_type state..." >&2
+	if state=$(eval "$describe_cmd" 2>/dev/null); then
+		if [ -n "$state" ]; then
+			log "$resource_type '$resource_name' found with state: $state" >&2
+			echo "$state"
+		else
+			log "$resource_type exists but state is empty" >&2
+			echo "UNKNOWN"
+		fi
+	else
+		log "$resource_type not found" >&2
+		echo "NOT_FOUND"
+	fi
 }
 
 handle_deleted_resource() {
-    local resource_type="$1"
-    local undelete_cmd="$2"
+	local resource_type="$1"
+	local undelete_cmd="$2"
 
-    log "$resource_type is in DELETED state. Undeleting it..."
-    if ! eval "$undelete_cmd"; then
-        error_exit "Failed to undelete $resource_type"
-    fi
-    log "$resource_type has been undeleted"
+	log "$resource_type is in DELETED state. Undeleting it..."
+	if ! eval "$undelete_cmd"; then
+		error_exit "Failed to undelete $resource_type"
+	fi
+	log "$resource_type has been undeleted"
 }
 
 # Get configuration from current environment
@@ -64,12 +64,12 @@ echo "GitHub repo: $GITHUB_REPO"
 
 # Validate PROJECT_ID
 if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "(unset)" ]; then
-    error_exit "No Google Cloud project configured. Please run: gcloud config set project YOUR_PROJECT_ID"
+	error_exit "No Google Cloud project configured. Please run: gcloud config set project YOUR_PROJECT_ID"
 fi
 
 # Validate GITHUB_REPO
 if [ -z "$GITHUB_REPO" ]; then
-    error_exit "Could not determine GitHub repository. Please run this script from within a GitHub repository directory and ensure you're authenticated with GitHub CLI: gh auth login"
+	error_exit "Could not determine GitHub repository. Please run this script from within a GitHub repository directory and ensure you're authenticated with GitHub CLI: gh auth login"
 fi
 
 log "Setting up GitHub Actions authentication for project: $PROJECT_ID"
@@ -90,117 +90,117 @@ SERVICE_ACCOUNT_EMAIL="$SERVICE_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com
 
 # Handle workload identity pool
 POOL_STATE=$(check_resource_state "workload identity pool" "$POOL_NAME" \
-    "gcloud iam workload-identity-pools describe $POOL_NAME $GCLOUD_COMMON --format='value(state)'")
+	"gcloud iam workload-identity-pools describe $POOL_NAME $GCLOUD_COMMON --format='value(state)'")
 
 case "$POOL_STATE" in
-    "DELETED")
-        handle_deleted_resource "Pool" \
-            "gcloud iam workload-identity-pools undelete $POOL_NAME $GCLOUD_COMMON"
-        ;;
-    "ACTIVE")
-        log "Pool is active, skipping creation"
-        ;;
-    "NOT_FOUND")
-        log "Creating new workload identity pool..."
-        if ! gcloud iam workload-identity-pools create "$POOL_NAME" \
-            $GCLOUD_COMMON \
-            --display-name="GitHub Actions Pool"; then
-            error_exit "Failed to create workload identity pool"
-        fi
-        log "Created workload identity pool"
-        ;;
-    *)
-        log "Pool state: $POOL_STATE - proceeding with provider setup..."
-        ;;
+"DELETED")
+	handle_deleted_resource "Pool" \
+		"gcloud iam workload-identity-pools undelete $POOL_NAME $GCLOUD_COMMON"
+	;;
+"ACTIVE")
+	log "Pool is active, skipping creation"
+	;;
+"NOT_FOUND")
+	log "Creating new workload identity pool..."
+	if ! gcloud iam workload-identity-pools create "$POOL_NAME" \
+		$GCLOUD_COMMON \
+		--display-name="GitHub Actions Pool"; then
+		error_exit "Failed to create workload identity pool"
+	fi
+	log "Created workload identity pool"
+	;;
+*)
+	log "Pool state: $POOL_STATE - proceeding with provider setup..."
+	;;
 esac
 
 # Handle workload identity provider
 PROVIDER_STATE=$(check_resource_state "workload identity provider" "$PROVIDER_NAME" \
-    "gcloud iam workload-identity-pools providers describe $PROVIDER_NAME $GCLOUD_COMMON --workload-identity-pool=$POOL_NAME --format='value(state)'")
+	"gcloud iam workload-identity-pools providers describe $PROVIDER_NAME $GCLOUD_COMMON --workload-identity-pool=$POOL_NAME --format='value(state)'")
 
 SKIP_PROVIDER_CREATION=false
 case "$PROVIDER_STATE" in
-    "DELETED")
-        handle_deleted_resource "Provider" \
-            "gcloud iam workload-identity-pools providers undelete $PROVIDER_NAME $GCLOUD_COMMON --workload-identity-pool=$POOL_NAME"
-        SKIP_PROVIDER_CREATION=true
-        ;;
-    "ACTIVE")
-        log "Provider is active, skipping creation"
-        SKIP_PROVIDER_CREATION=true
-        ;;
-    "NOT_FOUND")
-        log "Will create new provider..."
-        ;;
-    *)
-        log "Provider in unexpected state: $PROVIDER_STATE - deleting and recreating..."
-        gcloud iam workload-identity-pools providers delete "$PROVIDER_NAME" \
-            $GCLOUD_COMMON \
-            --workload-identity-pool="$POOL_NAME" \
-            --quiet
+"DELETED")
+	handle_deleted_resource "Provider" \
+		"gcloud iam workload-identity-pools providers undelete $PROVIDER_NAME $GCLOUD_COMMON --workload-identity-pool=$POOL_NAME"
+	SKIP_PROVIDER_CREATION=true
+	;;
+"ACTIVE")
+	log "Provider is active, skipping creation"
+	SKIP_PROVIDER_CREATION=true
+	;;
+"NOT_FOUND")
+	log "Will create new provider..."
+	;;
+*)
+	log "Provider in unexpected state: $PROVIDER_STATE - deleting and recreating..."
+	gcloud iam workload-identity-pools providers delete "$PROVIDER_NAME" \
+		$GCLOUD_COMMON \
+		--workload-identity-pool="$POOL_NAME" \
+		--quiet
 
-        log "Waiting for provider deletion to complete..."
-        while gcloud iam workload-identity-pools providers describe "$PROVIDER_NAME" \
-            $GCLOUD_COMMON --workload-identity-pool="$POOL_NAME" >/dev/null 2>&1; do
-            log "Still waiting for provider deletion..."
-            sleep 3
-        done
-        ;;
+	log "Waiting for provider deletion to complete..."
+	while gcloud iam workload-identity-pools providers describe "$PROVIDER_NAME" \
+		$GCLOUD_COMMON --workload-identity-pool="$POOL_NAME" >/dev/null 2>&1; do
+		log "Still waiting for provider deletion..."
+		sleep 3
+	done
+	;;
 esac
 
 if [ "$SKIP_PROVIDER_CREATION" = false ]; then
-    log "Creating workload identity provider..."
-    if ! gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_NAME" \
-        $GCLOUD_COMMON \
-        --workload-identity-pool="$POOL_NAME" \
-        --display-name="GitHub Provider" \
-        --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
-        --attribute-condition="assertion.repository_owner == '$REPO_OWNER'" \
-        --issuer-uri="https://token.actions.githubusercontent.com"; then
-        error_exit "Failed to create workload identity provider"
-    fi
-    log "Created workload identity provider"
+	log "Creating workload identity provider..."
+	if ! gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_NAME" \
+		$GCLOUD_COMMON \
+		--workload-identity-pool="$POOL_NAME" \
+		--display-name="GitHub Provider" \
+		--attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+		--attribute-condition="assertion.repository_owner == '$REPO_OWNER'" \
+		--issuer-uri="https://token.actions.githubusercontent.com"; then
+		error_exit "Failed to create workload identity provider"
+	fi
+	log "Created workload identity provider"
 fi
 
 # Create service account
 log "Creating service account for GitHub Actions..."
 if gcloud iam service-accounts describe "$SERVICE_ACCOUNT_EMAIL" >/dev/null 2>&1; then
-    log "Service account '$SERVICE_ACCOUNT_NAME' already exists"
+	log "Service account '$SERVICE_ACCOUNT_NAME' already exists"
 else
-    gcloud iam service-accounts create "$SERVICE_ACCOUNT_NAME" \
-        --project="$PROJECT_ID" \
-        --display-name="GitHub Actions Terraform"
-    log "Created service account"
+	gcloud iam service-accounts create "$SERVICE_ACCOUNT_NAME" \
+		--project="$PROJECT_ID" \
+		--display-name="GitHub Actions Terraform"
+	log "Created service account"
 fi
 
 # Allow GitHub repo to impersonate service account
 log "Setting up workload identity binding..."
 WIF_MEMBER="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/$LOCATION/workloadIdentityPools/$POOL_NAME/attribute.repository/$GITHUB_REPO"
 gcloud iam service-accounts add-iam-policy-binding \
-    "$SERVICE_ACCOUNT_EMAIL" \
-    --project="$PROJECT_ID" \
-    --role="roles/iam.workloadIdentityUser" \
-    --member="$WIF_MEMBER"
+	"$SERVICE_ACCOUNT_EMAIL" \
+	--project="$PROJECT_ID" \
+	--role="roles/iam.workloadIdentityUser" \
+	--member="$WIF_MEMBER"
 
 # Grant permissions for Terraform operations
 log "Granting IAM permissions for Terraform operations..."
 
 # Core Terraform permissions
 ROLES=(
-    "roles/compute.networkAdmin"
-    "roles/compute.securityAdmin"
-    "roles/compute.instanceAdmin.v1"
-    "roles/iam.serviceAccountUser"
-    "roles/storage.admin"
-    "roles/resourcemanager.projectIamAdmin"
-    "roles/cloudfunctions.admin"
+	"roles/compute.networkAdmin"
+	"roles/compute.securityAdmin"
+	"roles/compute.instanceAdmin.v1"
+	"roles/iam.serviceAccountUser"
+	"roles/storage.admin"
+	"roles/resourcemanager.projectIamAdmin"
+	"roles/cloudfunctions.admin"
 )
 SERVICE_ACCOUNT_MEMBER="serviceAccount:$SERVICE_ACCOUNT_EMAIL"
 for ROLE in "${ROLES[@]}"; do
-    gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-        --member="$SERVICE_ACCOUNT_MEMBER" \
-        --role="$ROLE" \
-        --condition=None
+	gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+		--member="$SERVICE_ACCOUNT_MEMBER" \
+		--role="$ROLE" \
+		--condition=None
 done
 
 # Set GitHub repository secrets
