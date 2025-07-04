@@ -21,6 +21,7 @@
     "format:yaml": "prettier --write '.github/**/*.{yml,yaml}'",
     "format:terraform": "terraform fmt -recursive terraform/",
     "setup:terraform-backend": "./scripts/setup-backend.sh",
+    "setup:terraform-variables": "./scripts/setup-tfvars.sh",
     "setup:github-actions": "./scripts/setup-github-actions.sh"
   },
   "workspaces": [
