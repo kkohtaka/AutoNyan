@@ -102,6 +102,7 @@ case "$POOL_STATE" in
 	;;
 "NOT_FOUND")
 	log "Creating new workload identity pool..."
+	# shellcheck disable=SC2086
 	if ! gcloud iam workload-identity-pools create "$POOL_NAME" \
 		$GCLOUD_COMMON \
 		--display-name="GitHub Actions Pool"; then
@@ -134,12 +135,14 @@ case "$PROVIDER_STATE" in
 	;;
 *)
 	log "Provider in unexpected state: $PROVIDER_STATE - deleting and recreating..."
+	# shellcheck disable=SC2086
 	gcloud iam workload-identity-pools providers delete "$PROVIDER_NAME" \
 		$GCLOUD_COMMON \
 		--workload-identity-pool="$POOL_NAME" \
 		--quiet
 
 	log "Waiting for provider deletion to complete..."
+	# shellcheck disable=SC2086
 	while gcloud iam workload-identity-pools providers describe "$PROVIDER_NAME" \
 		$GCLOUD_COMMON --workload-identity-pool="$POOL_NAME" >/dev/null 2>&1; do
 		log "Still waiting for provider deletion..."
@@ -150,6 +153,7 @@ esac
 
 if [ "$SKIP_PROVIDER_CREATION" = false ]; then
 	log "Creating workload identity provider..."
+	# shellcheck disable=SC2086
 	if ! gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_NAME" \
 		$GCLOUD_COMMON \
 		--workload-identity-pool="$POOL_NAME" \
