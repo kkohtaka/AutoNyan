@@ -16,19 +16,19 @@ if [ -z "$PROJECT_ID" ]; then
 fi
 
 # Check if bucket exists
-if gcloud storage buckets describe gs://${BUCKET_NAME} >/dev/null 2>&1; then
+if gcloud storage buckets describe "gs://${BUCKET_NAME}" >/dev/null 2>&1; then
 	echo "Bucket gs://${BUCKET_NAME} already exists"
 else
 	echo "Creating GCS bucket for Terraform state..."
-	gcloud storage buckets create gs://${BUCKET_NAME} \
-		--project=${PROJECT_ID} \
-		--location=${LOCATION} \
+	gcloud storage buckets create "gs://${BUCKET_NAME}" \
+		--project="${PROJECT_ID}" \
+		--location="${LOCATION}" \
 		--uniform-bucket-level-access
 fi
 
 # Enable versioning (idempotent operation)
 echo "Ensuring versioning is enabled..."
-gcloud storage buckets update gs://${BUCKET_NAME} \
+gcloud storage buckets update "gs://${BUCKET_NAME}" \
 	--versioning
 
 # Set lifecycle policy
@@ -50,7 +50,7 @@ cat >lifecycle-policy.json <<EOF
 EOF
 
 # Apply lifecycle policy (idempotent operation)
-gcloud storage buckets update gs://${BUCKET_NAME} \
+gcloud storage buckets update "gs://${BUCKET_NAME}" \
 	--lifecycle-file=lifecycle-policy.json
 
 # Create or update backend configuration file

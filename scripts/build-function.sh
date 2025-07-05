@@ -8,7 +8,7 @@ echo "Building TypeScript..."
 npm run build
 
 # Get list of function directories
-FUNCTIONS=($(ls -d src/functions/*/ | xargs -n 1 basename))
+mapfile -t FUNCTIONS < <(find src/functions -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
 
 # Copy function-specific package.json files (Cloud Functions will install dependencies)
 echo "Preparing function packages..."
