@@ -1,16 +1,7 @@
-import { Request, Response } from 'express';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { google } from 'googleapis';
 import { PubSub } from '@google-cloud/pubsub';
-
-const isExpressResponse = (obj: unknown): obj is Response => {
-  return (
-    !!obj &&
-    typeof (obj as Response).status === 'function' &&
-    typeof (obj as Response).json === 'function'
-  );
-};
 
 interface DocumentFile {
   id: string;
@@ -45,49 +36,19 @@ const DOCUMENT_MIME_TYPES = [
 ];
 
 export const folderScanner = async (
-  ...args:
-    | [Request, Response]
-    | [CloudEvent<MessagePublishedData>]
-    | [CloudEvent<MessagePublishedData>, unknown]
-): Promise<void | DocumentScanResult> => {
-  const first = args[0];
-  const second = args.length > 1 ? args[1] : undefined;
-  const isHttp = second && isExpressResponse(second);
-  const req = first;
-  const res = isHttp ? (second as Response) : undefined;
+  cloudEvent: CloudEvent<MessagePublishedData>
+): Promise<DocumentScanResult> => {
   try {
-    let folderId: string;
-    let topicName: string;
+    // CloudEvent from Pub/Sub
+    const messageData = cloudEvent.data?.message?.data;
+    const decoded = messageData
+      ? JSON.parse(Buffer.from(messageData, 'base64').toString())
+      : {};
+    const folderId = decoded.folderId || '';
+    const topicName = decoded.topicName || '';
 
-    if (res) {
-      // HTTP request
-      const { folderId: reqFolderId, topicName: reqTopicName } = req.body || {};
-      folderId =
-        reqFolderId ||
-        ((req.query as Record<string, unknown>)?.folderId as string);
-      topicName =
-        reqTopicName ||
-        ((req.query as Record<string, unknown>)?.topicName as string);
-
-      if (!folderId || !topicName) {
-        res.status(400).json({
-          error: 'Missing required parameters: folderId and topicName',
-        });
-        return;
-      }
-    } else {
-      // CloudEvent from Pub/Sub
-      const cloudEvent = req as CloudEvent<MessagePublishedData>;
-      const messageData = cloudEvent.data?.message?.data;
-      const decoded = messageData
-        ? JSON.parse(Buffer.from(messageData, 'base64').toString())
-        : {};
-      folderId = decoded.folderId || '';
-      topicName = decoded.topicName || '';
-
-      if (!folderId || !topicName) {
-        throw new Error('Missing required parameters: folderId and topicName');
-      }
+    if (!folderId || !topicName) {
+      throw new Error('Missing required parameters: folderId and topicName');
     }
 
     // Initialize Google Drive API with default credentials
@@ -155,29 +116,18 @@ export const folderScanner = async (
       topicName: topicName,
     };
 
-    if (res) {
-      res.status(200).json(result);
-    } else {
-      // Log completion for CloudEvent processing
-      // eslint-disable-next-line no-console
-      console.log(
-        `Drive document scanner completed: ${JSON.stringify(result)}`
-      );
-      return result;
-    }
+    // Log completion for CloudEvent processing
+    // eslint-disable-next-line no-console
+    console.log(
+      `Drive document scanner completed: ${JSON.stringify(result)}`
+    );
+    return result;
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error occurred';
     // eslint-disable-next-line no-console
     console.error('Drive document scanner error:', error);
 
-    if (res) {
-      res.status(500).json({
-        error: 'Drive document scanner failed',
-        details: errorMessage,
-      });
-    } else {
-      throw new Error(`Drive document scanner failed: ${errorMessage}`);
-    }
+    throw new Error(`Drive document scanner failed: ${errorMessage}`);
   }
 };
