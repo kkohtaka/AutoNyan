@@ -51,11 +51,7 @@
         "[shellscript]": {
           "editor.defaultFormatter": "foxundermoon.shell-format"
         },
-        "eslint.validate": [
-          "javascript",
-          "typescript",
-          "json"
-        ],
+        "eslint.validate": ["javascript", "typescript", "json"],
         "eslint.format.enable": true,
         "eslint.lintTask.enable": true,
         "typescript.preferences.importModuleSpecifier": "relative",
