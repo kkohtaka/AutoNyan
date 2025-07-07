@@ -13,6 +13,7 @@ const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 
 describe('folderScanner', () => {
   let mockDriveList: jest.Mock;
+  let mockDriveGet: jest.Mock;
   let mockPublishMessage: jest.Mock;
   let mockTopic: jest.Mock;
   let mockPubSubInstance: jest.Mocked<PubSub>;
@@ -20,11 +21,10 @@ describe('folderScanner', () => {
   const buildEvent = (payload: any): CloudEvent<MessagePublishedData> => {
     return {
       id: 'test-id',
-      data: {
-        message: {
-          data: Buffer.from(JSON.stringify(payload)).toString('base64'),
-        },
-      },
+      specversion: '1.0',
+      source: 'test-source',
+      type: 'test-type',
+      data: Buffer.from(JSON.stringify(payload)).toString('base64'),
     } as CloudEvent<MessagePublishedData>;
   };
 
@@ -33,9 +33,11 @@ describe('folderScanner', () => {
 
     // Mock Drive API
     mockDriveList = jest.fn();
+    mockDriveGet = jest.fn();
     mockGoogle.drive.mockReturnValue({
       files: {
         list: mockDriveList,
+        get: mockDriveGet,
       },
     } as any);
 
@@ -56,9 +58,7 @@ describe('folderScanner', () => {
     mockPubSub.mockImplementation(() => mockPubSubInstance);
   });
 
-
   describe('CloudEvent request', () => {
-
     it('should throw error when folderId is missing', async () => {
       const cloudEvent = buildEvent({ topicName: 'test-topic' });
 
@@ -92,9 +92,18 @@ describe('folderScanner', () => {
         },
       ];
 
+      mockDriveGet.mockResolvedValue({
+        data: {
+          id: 'test-folder-id',
+          name: 'Test Folder',
+          mimeType: 'application/vnd.google-apps.folder',
+        },
+      });
+
       mockDriveList.mockResolvedValue({
         data: {
           files: mockFiles,
+          nextPageToken: undefined,
         },
       });
 
@@ -111,13 +120,21 @@ describe('folderScanner', () => {
       expect(result.publishedMessages).toBe(1);
       expect(result.topicName).toBe('test-topic');
 
-      // Verify Drive API was called correctly
+      // Verify folder get was called
+      expect(mockDriveGet).toHaveBeenCalledWith({
+        fileId: 'test-folder-id',
+        fields: 'id,name,mimeType',
+      });
+
+      // Verify Drive API was called correctly with pagination fields
       expect(mockDriveList).toHaveBeenCalledWith({
         q: expect.stringContaining(
           "'test-folder-id' in parents and trashed=false"
         ),
-        fields: 'files(id,name,mimeType,size,modifiedTime,webViewLink)',
+        fields:
+          'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
         pageSize: 100,
+        pageToken: undefined,
       });
 
       // Verify PubSub messages were published
@@ -150,7 +167,7 @@ describe('folderScanner', () => {
         topicName: 'test-topic',
       });
 
-      mockDriveList.mockRejectedValue(new Error('Drive API error'));
+      mockDriveGet.mockRejectedValue(new Error('Drive API error'));
 
       await expect(folderScanner(cloudEvent)).rejects.toThrow(
         'Drive document scanner failed: Drive API error'
@@ -165,9 +182,18 @@ describe('folderScanner', () => {
         topicName: 'test-topic',
       });
 
+      mockDriveGet.mockResolvedValue({
+        data: {
+          id: 'test-folder-id',
+          name: 'Test Folder',
+          mimeType: 'application/vnd.google-apps.folder',
+        },
+      });
+
       mockDriveList.mockResolvedValue({
         data: {
           files: [],
+          nextPageToken: undefined,
         },
       });
 
@@ -201,6 +227,83 @@ describe('folderScanner', () => {
       expect(query).toContain(
         "mimeType='application/vnd.google-apps.presentation'"
       );
+    });
+
+    it('should handle pagination when folder has more than 100 files', async () => {
+      const cloudEvent = buildEvent({
+        folderId: 'test-folder-id',
+        topicName: 'test-topic',
+      });
+
+      mockDriveGet.mockResolvedValue({
+        data: {
+          id: 'test-folder-id',
+          name: 'Test Folder',
+          mimeType: 'application/vnd.google-apps.folder',
+        },
+      });
+
+      // Mock two pages of results
+      mockDriveList
+        .mockResolvedValueOnce({
+          data: {
+            files: Array(100)
+              .fill(null)
+              .map((_, i) => ({
+                id: `file${i + 1}`,
+                name: `document${i + 1}.pdf`,
+                mimeType: 'application/pdf',
+                size: '1024',
+                modifiedTime: '2023-01-01T00:00:00.000Z',
+                webViewLink: `https://drive.google.com/file/d/file${i + 1}/view`,
+              })),
+            nextPageToken: 'next-page-token',
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            files: Array(50)
+              .fill(null)
+              .map((_, i) => ({
+                id: `file${i + 101}`,
+                name: `document${i + 101}.pdf`,
+                mimeType: 'application/pdf',
+                size: '1024',
+                modifiedTime: '2023-01-01T00:00:00.000Z',
+                webViewLink: `https://drive.google.com/file/d/file${i + 101}/view`,
+              })),
+            nextPageToken: undefined,
+          },
+        });
+
+      mockPublishMessage.mockResolvedValue('message-id');
+
+      const result = await folderScanner(cloudEvent);
+
+      expect(result.filesFound).toBe(150);
+      expect(result.files).toHaveLength(150);
+      expect(result.publishedMessages).toBe(150);
+
+      // Verify pagination calls
+      expect(mockDriveList).toHaveBeenCalledTimes(2);
+      expect(mockDriveList).toHaveBeenNthCalledWith(1, {
+        q: expect.stringContaining(
+          "'test-folder-id' in parents and trashed=false"
+        ),
+        fields:
+          'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
+        pageSize: 100,
+        pageToken: undefined,
+      });
+      expect(mockDriveList).toHaveBeenNthCalledWith(2, {
+        q: expect.stringContaining(
+          "'test-folder-id' in parents and trashed=false"
+        ),
+        fields:
+          'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
+        pageSize: 100,
+        pageToken: 'next-page-token',
+      });
     });
   });
 });

@@ -5,11 +5,12 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
 ## Features
 
 - **Serverless Functions**: Google Cloud Functions v2 with Node.js 20 runtime
-- **TypeScript**: Full TypeScript support with Jest testing
+- **TypeScript**: Full TypeScript support with strict typing and Jest testing
 - **Infrastructure as Code**: Terraform for cloud resource management
-- **Dual Triggers**: Functions support both HTTP requests and CloudEvent triggers
+- **Google Drive Integration**: Advanced Drive API operations with pagination support
 - **Document Scanner**: Automated Google Drive document scanning with PubSub integration
-- **Dev Container**: Pre-configured development environment
+- **Type Safety**: Comprehensive TypeScript types for Google Drive API operations
+- **Dev Container**: Pre-configured development environment with linting and formatting
 
 ## Prerequisites
 
@@ -97,7 +98,7 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
    ```hcl
    project_id = "your-project-id"
    region     = "us-central1"
-   drive_folder_id = "your-google-drive-folder-id"
+   drive_folder_id = "your-google-drive-folder-id"  # See Google Drive Setup section below
    ```
 
 3. **Configure GitHub Actions CI/CD** (if using GitHub repository):
@@ -113,6 +114,8 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
    - `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions authentication
 
    These are used by the test workflow to validate Terraform configuration in CI/CD.
+
+## Google Drive Setup
 
 ### Finding Your Google Drive Folder ID
 
@@ -140,12 +143,52 @@ https://drive.google.com/drive/folders/1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS
 3. Copy the shareable link
 4. Extract the folder ID from the link (same format as above)
 
-**Important Notes:**
+### Granting Drive Access to Service Account
 
-- Folder ID format: Always a long alphanumeric string (28+ characters)
-- Permissions: The service account needs access to the folder
-- Sharing: Make sure the folder is shared with your service account email or is publicly accessible
-- Root folder: Use `"root"` as the folder ID to scan the entire Drive
+**IMPORTANT**: Google Drive access requires manual folder sharing, as Drive API roles cannot be assigned at the project level.
+
+1. **Deploy the infrastructure first**:
+   ```bash
+   npm run deploy
+   ```
+
+2. **Get the service account email**:
+   ```bash
+   terraform output service_account_email
+   ```
+
+3. **Share your Drive folders**:
+   - Open Google Drive (https://drive.google.com)
+   - Right-click "My Drive" (for full access) or specific folders
+   - Select "Share" 
+   - Add the service account email as an "Editor"
+   - Click "Send"
+
+4. **Test the setup**:
+   ```bash
+   # Trigger a manual scan
+   gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"your-folder-id","topicName":"document-classification"}'
+   ```
+
+**Folder ID Options:**
+
+- **Specific folder**: Use the folder ID from the URL (28+ character alphanumeric string)
+- **Entire Drive**: Use `"root"` as the folder ID to scan all accessible content
+- **Multiple folders**: Share multiple folders individually with the service account
+
+**Permissions Summary:**
+
+✅ **Allowed Operations** (once shared):
+- List files and folders (in shared areas only)
+- Create new folders (in shared areas only) 
+- Move files between folders (within shared areas)
+- Copy files (within shared areas)
+- Read file metadata
+
+❌ **Restricted Operations**:
+- Access unshared folders
+- Delete files or folders
+- Manage sharing permissions
 
 ## Development
 
@@ -296,19 +339,37 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 
 ### Folder Scanner
 
-Automated Google Drive document scanning with PubSub integration.
+Automated Google Drive document scanning with PubSub integration and advanced file management capabilities.
 
 **Features**:
 
-- Scheduled scanning via Cloud Scheduler (configurable cron schedule)
-- Supports PDF, Word, Excel, PowerPoint, text files, and Google Docs
-- Publishes findings to PubSub topic for downstream processing
-- Comprehensive logging and error handling
-- Event-driven architecture using PubSub triggers
+- **Pagination Support**: Handles folders with unlimited number of files (100+ files)
+- **Type Safety**: Full TypeScript typing with Google Drive API v3 schemas
+- **File Operations**: List, create, move, copy, and search operations
+- **Document Types**: Supports PDF, Word, Excel, PowerPoint, text files, and Google Docs
+- **Scheduling**: Configurable cron-based scanning via Cloud Scheduler
+- **Integration**: Publishes findings to PubSub topic for downstream processing
+- **Security**: Manual folder sharing model for precise access control
+- **Logging**: Comprehensive error handling and operation tracking
+
+**Available Drive Operations** (via `driveOperations` export):
+
+- `listFiles()` - List files with pagination support
+- `createFolder()` - Create new folders in shared areas
+- `moveFile()` - Move files between accessible folders  
+- `copyFile()` - Copy files within shared areas
+- `getFolderInfo()` - Get detailed folder metadata
+- `searchFiles()` - Search files by name with pagination
+- `listAllFiles()` - List all accessible files across Drive
+- `listFolderContents()` - Enhanced folder listing with MIME type filtering
 
 **Manual trigger**:
 
 ```bash
 # Trigger via PubSub (recommended for production)
 gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"your-folder-id","topicName":"document-classification"}'
+
+# Examples with different folder targets
+gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"root","topicName":"document-classification"}'  # Scan entire Drive
+gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS","topicName":"document-classification"}'  # Specific folder
 ```

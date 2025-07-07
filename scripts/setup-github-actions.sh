@@ -189,7 +189,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 # Grant permissions for Terraform operations
 log "Granting IAM permissions for Terraform operations..."
 
-# Core Terraform permissions
+# Core Terraform permissions for AutoNyan project
 ROLES=(
 	"roles/compute.networkAdmin"
 	"roles/compute.securityAdmin"
@@ -198,6 +198,9 @@ ROLES=(
 	"roles/storage.admin"
 	"roles/resourcemanager.projectIamAdmin"
 	"roles/cloudfunctions.admin"
+	"roles/pubsub.admin"
+	"roles/cloudscheduler.admin"
+	"roles/serviceusage.serviceUsageAdmin"
 )
 SERVICE_ACCOUNT_MEMBER="serviceAccount:$SERVICE_ACCOUNT_EMAIL"
 for ROLE in "${ROLES[@]}"; do

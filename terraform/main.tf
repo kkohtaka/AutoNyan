@@ -15,6 +15,25 @@ provider "google" {
   region  = var.region
 }
 
+# Enable required Google Cloud APIs
+resource "google_project_service" "drive_api" {
+  service = "drive.googleapis.com"
+
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "pubsub_api" {
+  service = "pubsub.googleapis.com"
+
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "cloudfunctions_api" {
+  service = "cloudfunctions.googleapis.com"
+
+  disable_on_destroy = false
+}
+
 
 # Google Cloud Storage bucket for function source code archives
 # Stores zip files containing built function code for deployment
@@ -73,8 +92,9 @@ resource "google_cloudfunctions2_function" "folder_scanner" {
     entry_point = "folderScanner"
     source {
       storage_source {
-        bucket = google_storage_bucket.function_bucket.name
-        object = google_storage_bucket_object.folder_scanner_zip.name
+        bucket     = google_storage_bucket.function_bucket.name
+        object     = google_storage_bucket_object.folder_scanner_zip.name
+        generation = google_storage_bucket_object.folder_scanner_zip.generation
       }
     }
   }
@@ -99,24 +119,28 @@ resource "google_cloudfunctions2_function" "folder_scanner" {
 }
 
 # Dedicated service account for the drive scanner function
-# Provides secure, least-privilege access to required Google Cloud services
-# Includes permissions for Drive API access and PubSub publishing
+# Accesses Google Drive through manual folder sharing (not project-level IAM)
+# Includes permissions for API access and PubSub publishing
 resource "google_service_account" "folder_scanner_sa" {
   account_id   = "folder-scanner"
-  display_name = "Drive Document Scanner Service Account"
-  description  = "Service account with permissions for Google Drive access and PubSub publishing"
+  display_name = "Drive File Manager Service Account"
+  description  = "Service account for Google Drive access via folder sharing and PubSub publishing"
 
   create_ignore_already_exists = true
 }
 
 # IAM binding for Google Cloud Storage access
 # Grants read access to storage objects for the scanner service account
-# Note: Additional Drive API permissions may be configured outside Terraform
-resource "google_project_iam_member" "drive_access" {
+resource "google_project_iam_member" "storage_access" {
   project = var.project_id
   role    = "roles/storage.objectViewer"
   member  = "serviceAccount:${google_service_account.folder_scanner_sa.email}"
 }
+
+# Note: Google Drive permissions are granted through manual sharing
+# Drive API roles (roles/drive.file, roles/drive.readonly, etc.) are not supported 
+# for project-level IAM bindings. Access is granted by sharing folders directly 
+# with the service account email address.
 
 # IAM binding for Google API service usage
 # Allows the service account to consume Google Cloud APIs
@@ -143,4 +167,48 @@ resource "google_storage_bucket_object" "folder_scanner_zip" {
   name   = "folder-scanner.zip"
   bucket = google_storage_bucket.function_bucket.name
   source = "../dist/functions/folder-scanner.zip"
+}
+
+# Output values for manual configuration
+output "service_account_email" {
+  description = "Email of the service account that needs Drive folder access"
+  value       = google_service_account.folder_scanner_sa.email
+}
+
+output "drive_folder_setup_instructions" {
+  description = "Instructions for granting Google Drive access through manual sharing"
+  value       = <<-EOT
+    IMPORTANT: Google Drive access is granted through MANUAL SHARING only.
+    Drive API roles cannot be assigned at the project level.
+    
+    Required Setup Steps:
+    
+    STEP 1 - Share Your Drive/Folders:
+    1. Open Google Drive (https://drive.google.com)
+    2. To grant access to entire Drive:
+       - Right-click "My Drive" and select "Share"
+    3. To grant access to specific folders:
+       - Right-click the folder(s) and select "Share"  
+    4. Add this email as an editor: ${google_service_account.folder_scanner_sa.email}
+    5. Set permission level to "Editor"
+    6. Click "Send"
+    
+    STEP 2 - Configure Folder ID:
+    Set drive_folder_id in terraform.tfvars:
+    - For entire Drive: drive_folder_id = "root"
+    - For specific folder: drive_folder_id = "FOLDER_ID_FROM_URL"
+    
+    Permissions: Once shared, the service account can:
+    ✅ List files and folders (in shared areas only)
+    ✅ Create new folders (in shared areas only)
+    ✅ Move files between folders (within shared areas)
+    ✅ Copy files (within shared areas)
+    ✅ Read file metadata
+    ❌ Access unshared folders
+    ❌ Delete files or folders
+    ❌ Manage sharing permissions
+    
+    Get folder ID from URLs like:
+    https://drive.google.com/drive/folders/FOLDER_ID_HERE
+  EOT
 }
