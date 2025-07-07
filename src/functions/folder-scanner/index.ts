@@ -1,7 +1,7 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { google } from 'googleapis';
 import { PubSub } from '@google-cloud/pubsub';
+import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
+import { google, drive_v3 } from 'googleapis';
 
 interface DocumentFile {
   id: string;
@@ -19,6 +19,143 @@ interface DocumentScanResult {
   publishedMessages: number;
   topicName: string;
 }
+
+// Helper functions for Drive operations (for future use)
+export const driveOperations = {
+  // List files in a folder with full metadata
+  async listFiles(
+    drive: drive_v3.Drive,
+    folderId: string,
+    pageToken?: string
+  ): Promise<drive_v3.Schema$FileList> {
+    const response = await drive.files.list({
+      q: `'${folderId}' in parents and trashed=false`,
+      fields:
+        'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,parents)',
+      pageSize: 100,
+      pageToken: pageToken,
+    });
+    return response.data;
+  },
+
+  // Create a new folder
+  async createFolder(
+    drive: drive_v3.Drive,
+    name: string,
+    parentId: string
+  ): Promise<drive_v3.Schema$File> {
+    const response = await drive.files.create({
+      requestBody: {
+        name: name,
+        parents: [parentId],
+        mimeType: 'application/vnd.google-apps.folder',
+      },
+      fields: 'id,name,parents',
+    });
+    return response.data;
+  },
+
+  // Move a file to a different folder
+  async moveFile(
+    drive: drive_v3.Drive,
+    fileId: string,
+    newParentId: string,
+    currentParentId: string
+  ): Promise<drive_v3.Schema$File> {
+    const response = await drive.files.update({
+      fileId: fileId,
+      addParents: newParentId,
+      removeParents: currentParentId,
+      fields: 'id,name,parents',
+    });
+    return response.data;
+  },
+
+  // Copy a file to a different folder
+  async copyFile(
+    drive: drive_v3.Drive,
+    fileId: string,
+    newParentId: string,
+    newName?: string
+  ): Promise<drive_v3.Schema$File> {
+    const response = await drive.files.copy({
+      fileId: fileId,
+      requestBody: {
+        parents: [newParentId],
+        name: newName,
+      },
+      fields: 'id,name,parents',
+    });
+    return response.data;
+  },
+
+  // Get folder metadata
+  async getFolderInfo(
+    drive: drive_v3.Drive,
+    folderId: string
+  ): Promise<drive_v3.Schema$File> {
+    const response = await drive.files.get({
+      fileId: folderId,
+      fields: 'id,name,mimeType,parents,createdTime,modifiedTime',
+    });
+    return response.data;
+  },
+
+  // Additional file operations (requires roles/drive.file)
+
+  // List all files in Drive (not just in a folder)
+  async listAllFiles(
+    drive: drive_v3.Drive,
+    pageToken?: string
+  ): Promise<drive_v3.Schema$FileList> {
+    const response = await drive.files.list({
+      q: 'trashed=false',
+      fields:
+        'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,parents)',
+      pageSize: 100,
+      pageToken: pageToken,
+    });
+    return response.data;
+  },
+
+  // Search files by name or content
+  async searchFiles(
+    drive: drive_v3.Drive,
+    query: string,
+    pageToken?: string
+  ): Promise<drive_v3.Schema$FileList> {
+    const response = await drive.files.list({
+      q: `name contains '${query}' and trashed=false`,
+      fields:
+        'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,parents)',
+      pageSize: 100,
+      pageToken: pageToken,
+    });
+    return response.data;
+  },
+
+  // List contents of a specific folder with enhanced filtering
+  async listFolderContents(
+    drive: drive_v3.Drive,
+    folderId: string,
+    mimeTypeFilter?: string,
+    pageToken?: string
+  ): Promise<drive_v3.Schema$FileList> {
+    let query = `'${folderId}' in parents and trashed=false`;
+    if (mimeTypeFilter) {
+      query += ` and mimeType='${mimeTypeFilter}'`;
+    }
+
+    const response = await drive.files.list({
+      q: query,
+      fields:
+        'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,parents)',
+      pageSize: 100,
+      pageToken: pageToken,
+    });
+    return response.data;
+  },
+};
 
 const DOCUMENT_MIME_TYPES = [
   'application/pdf',
@@ -39,11 +176,15 @@ export const folderScanner = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<DocumentScanResult> => {
   try {
-    // CloudEvent from Pub/Sub
-    const messageData = cloudEvent.data?.message?.data;
-    const decoded = messageData
-      ? JSON.parse(Buffer.from(messageData, 'base64').toString())
-      : {};
+    // CloudEvent from Cloud Scheduler contains base64 encoded data directly
+    // Note: TypeScript types expect MessagePublishedData but Cloud Scheduler sends string data
+    const eventData = cloudEvent.data as unknown as string;
+
+    if (!eventData || typeof eventData !== 'string') {
+      throw new Error('No message data found in CloudEvent');
+    }
+
+    const decoded = JSON.parse(Buffer.from(eventData, 'base64').toString());
     const folderId = decoded.folderId || '';
     const topicName = decoded.topicName || '';
 
@@ -53,7 +194,7 @@ export const folderScanner = async (
 
     // Initialize Google Drive API with default credentials
     const auth = new google.auth.GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+      scopes: ['https://www.googleapis.com/auth/drive'],
     });
     const drive = google.drive({ version: 'v3', auth });
 
@@ -61,18 +202,47 @@ export const folderScanner = async (
     const pubsub = new PubSub();
     const topic = pubsub.topic(topicName);
 
-    // Search for document files in the specified folder
+    // Fetch the folder metadata to ensure it exists
+    const folderResponse = await drive.files.get({
+      fileId: folderId,
+      fields: 'id,name,mimeType',
+    });
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `Scanning folder: ${folderResponse.data.name} (${folderResponse.data.id})`
+    );
+
+    // Search for document files in the specified folder with pagination
     const query = `'${folderId}' in parents and trashed=false and (${DOCUMENT_MIME_TYPES.map(
       (type) => `mimeType='${type}'`
     ).join(' or ')})`;
 
-    const response = await drive.files.list({
-      q: query,
-      fields: 'files(id,name,mimeType,size,modifiedTime,webViewLink)',
-      pageSize: 100,
-    });
+    const allFiles: Array<{
+      id?: string | null;
+      name?: string | null;
+      mimeType?: string | null;
+      size?: string | null;
+      modifiedTime?: string | null;
+      webViewLink?: string | null;
+    }> = [];
+    let nextPageToken: string | undefined;
 
-    const files = response.data.files || [];
+    do {
+      const response = await drive.files.list({
+        q: query,
+        fields:
+          'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
+        pageSize: 100,
+        pageToken: nextPageToken,
+      });
+
+      const files = response.data.files || [];
+      allFiles.push(...files);
+      nextPageToken = response.data.nextPageToken || undefined;
+    } while (nextPageToken);
+
+    const files = allFiles;
     const documentFiles: DocumentFile[] = files.map((file) => ({
       id: file.id!,
       name: file.name!,
@@ -118,9 +288,7 @@ export const folderScanner = async (
 
     // Log completion for CloudEvent processing
     // eslint-disable-next-line no-console
-    console.log(
-      `Drive document scanner completed: ${JSON.stringify(result)}`
-    );
+    console.log(`Drive document scanner completed: ${JSON.stringify(result)}`);
     return result;
   } catch (error) {
     const errorMessage =
