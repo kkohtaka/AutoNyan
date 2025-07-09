@@ -31,6 +31,9 @@
   "workspaces": [
     "src/functions/*"
   ],
+  "dependencies": {
+    "@google-cloud/storage": "^7.0.0"
+  },
   "devDependencies": {
     "jest": "^30.0.2",
     "@types/jest": "^30.0.0",
@@ -42,6 +45,7 @@
     "eslint": "^9.15.0",
     "eslint-config-prettier": "^10.1.5",
     "prettier": "^3.3.0",
-    "eslint-plugin-jsonc": "^2.8.0"
+    "eslint-plugin-jsonc": "^2.8.0",
+    "typescript": "^5.0.0"
   }
 }

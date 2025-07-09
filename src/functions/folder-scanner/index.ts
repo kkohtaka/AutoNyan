@@ -1,24 +1,7 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { google, drive_v3 } from 'googleapis';
-
-interface DocumentFile {
-  id: string;
-  name: string;
-  mimeType: string;
-  size?: string;
-  modifiedTime: string;
-  webViewLink: string;
-}
-
-interface DocumentScanResult {
-  message: string;
-  filesFound: number;
-  files: DocumentFile[];
-  publishedMessages: number;
-  topicName: string;
-}
+import { drive_v3, google } from 'googleapis';
 
 // Helper functions for Drive operations (for future use)
 export const driveOperations = {
@@ -172,9 +155,23 @@ const DOCUMENT_MIME_TYPES = [
   'application/vnd.google-apps.presentation',
 ];
 
+interface FolderScanMessage {
+  folderId: string;
+  topicName: string;
+  metadata?: Record<string, unknown>;
+}
+
+interface FolderScanResult {
+  message: string;
+  filesFound: number;
+  files: drive_v3.Schema$File[];
+  publishedMessages: number;
+  topicName: string;
+}
+
 export const folderScanner = async (
   cloudEvent: CloudEvent<MessagePublishedData>
-): Promise<DocumentScanResult> => {
+): Promise<FolderScanResult> => {
   try {
     // CloudEvent from Cloud Scheduler contains base64 encoded data directly
     // Note: TypeScript types expect MessagePublishedData but Cloud Scheduler sends string data
@@ -184,9 +181,11 @@ export const folderScanner = async (
       throw new Error('No message data found in CloudEvent');
     }
 
-    const decoded = JSON.parse(Buffer.from(eventData, 'base64').toString());
-    const folderId = decoded.folderId || '';
-    const topicName = decoded.topicName || '';
+    const messageData: FolderScanMessage = JSON.parse(
+      Buffer.from(eventData, 'base64').toString()
+    );
+
+    const { folderId, topicName } = messageData;
 
     if (!folderId || !topicName) {
       throw new Error('Missing required parameters: folderId and topicName');
@@ -198,9 +197,6 @@ export const folderScanner = async (
     });
     const drive = google.drive({ version: 'v3', auth });
 
-    // Initialize PubSub client
-    const pubsub = new PubSub();
-    const topic = pubsub.topic(topicName);
 
     // Fetch the folder metadata to ensure it exists
     const folderResponse = await drive.files.get({
@@ -218,14 +214,7 @@ export const folderScanner = async (
       (type) => `mimeType='${type}'`
     ).join(' or ')})`;
 
-    const allFiles: Array<{
-      id?: string | null;
-      name?: string | null;
-      mimeType?: string | null;
-      size?: string | null;
-      modifiedTime?: string | null;
-      webViewLink?: string | null;
-    }> = [];
+    const allFiles: drive_v3.Schema$File[] = [];
     let nextPageToken: string | undefined;
 
     do {
@@ -242,25 +231,18 @@ export const folderScanner = async (
       nextPageToken = response.data.nextPageToken || undefined;
     } while (nextPageToken);
 
-    const files = allFiles;
-    const documentFiles: DocumentFile[] = files.map((file) => ({
-      id: file.id!,
-      name: file.name!,
-      mimeType: file.mimeType!,
-      size: file.size || undefined,
-      modifiedTime: file.modifiedTime!,
-      webViewLink: file.webViewLink!,
-    }));
+    // Publish each document file to PubSub for document scan preparation
+    const pubsub = new PubSub();
+    const topic = pubsub.topic(topicName);
 
-    // Publish each document file to PubSub for classification
-    const publishPromises = documentFiles.map(async (doc) => {
+    const publishPromises = allFiles.map(async (file) => {
       const messageData = {
-        fileId: doc.id,
-        fileName: doc.name,
-        mimeType: doc.mimeType,
-        size: doc.size,
-        modifiedTime: doc.modifiedTime,
-        webViewLink: doc.webViewLink,
+        fileId: file.id,
+        fileName: file.name,
+        mimeType: file.mimeType,
+        size: file.size,
+        modifiedTime: file.modifiedTime,
+        webViewLink: file.webViewLink,
         folderId: folderId,
         scanTimestamp: new Date().toISOString(),
       };
@@ -269,8 +251,8 @@ export const folderScanner = async (
       return topic.publishMessage({
         data: dataBuffer,
         attributes: {
-          fileId: doc.id,
-          mimeType: doc.mimeType,
+          fileId: file.id,
+          mimeType: file.mimeType,
           operation: 'document-classification',
         },
       });
@@ -279,9 +261,9 @@ export const folderScanner = async (
     const messageIds = await Promise.all(publishPromises);
 
     const result = {
-      message: `Successfully scanned folder ${folderId} and found ${documentFiles.length} document files`,
-      filesFound: documentFiles.length,
-      files: documentFiles,
+      message: `Successfully scanned folder ${folderId} and found ${allFiles.length} document files`,
+      filesFound: allFiles.length,
+      files: allFiles,
       publishedMessages: messageIds.length,
       topicName: topicName,
     };
@@ -289,6 +271,7 @@ export const folderScanner = async (
     // Log completion for CloudEvent processing
     // eslint-disable-next-line no-console
     console.log(`Drive document scanner completed: ${JSON.stringify(result)}`);
+
     return result;
   } catch (error) {
     const errorMessage =
