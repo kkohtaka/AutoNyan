@@ -1,0 +1,19 @@
+{
+  "name": "document-scan-preparation",
+  "version": "1.0.0",
+  "description": "Cloud Function for preparing documents for scanning by copying Google Drive files to Cloud Storage",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.0",
+    "@google-cloud/storage": "^7.0.0",
+    "@google/events": "^5.4.0",
+    "googleapis": "^140.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
