@@ -30,8 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install shellcheck and shfmt
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y shellcheck shfmt
+      - name: Install shellcheck, shfmt and yamllint
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y shellcheck shfmt yamllint
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -43,37 +43,22 @@ jobs:
         with:
           tflint_version: v0.50.3
 
-      - name: Run TypeScript linter with reviewdog
-        uses: reviewdog/action-eslint@v1
+      - name: Run TypeScript linter
+        run: npx eslint 'src/**/*.ts'
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          eslint_flags: 'src/**/*.ts'
-          workdir: '.'
 
-      - name: Run YAML linter with reviewdog
-        uses: reviewdog/action-yamllint@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          yamllint_flags: '.github/ -c .yamllint.yml'
+      - name: Run YAML linter
+        run: yamllint .github/ -c .yamllint.yml
 
-      - name: Run JSON linter with reviewdog
-        uses: reviewdog/action-eslint@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          eslint_flags: '**/*.json'
-          workdir: '.'
+      - name: Run JSON linter
+        run: npx eslint '**/*.json'
 
-      - name: Run ShellCheck with reviewdog
-        uses: reviewdog/action-shellcheck@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run ShellCheck
+        run: shellcheck scripts/*.sh
 
-      - name: Run shfmt with reviewdog
-        uses: reviewdog/action-shfmt@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run shfmt
+        run: shfmt -d scripts/*.sh
 
       - name: Run Terraform linter
         run: npm run lint:terraform
