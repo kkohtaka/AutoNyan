@@ -197,7 +197,6 @@ export const folderScanner = async (
     });
     const drive = google.drive({ version: 'v3', auth });
 
-
     // Fetch the folder metadata to ensure it exists
     const folderResponse = await drive.files.get({
       fileId: folderId,

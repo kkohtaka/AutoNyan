@@ -19,7 +19,6 @@ const mockStorage = {
   }),
 };
 
-
 jest.mock('@google-cloud/storage', () => ({
   Storage: jest.fn().mockImplementation(() => mockStorage),
 }));
@@ -67,7 +66,9 @@ describe('documentScanPreparation', () => {
           on: jest.fn().mockImplementation((event, callback) => {
             if (event === 'data') {
               // Call the callback immediately with test data
-              process.nextTick(() => callback(Buffer.from('test file content')));
+              process.nextTick(() =>
+                callback(Buffer.from('test file content'))
+              );
             } else if (event === 'end') {
               // Call the callback immediately to end the stream
               process.nextTick(() => callback());
