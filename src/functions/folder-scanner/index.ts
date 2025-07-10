@@ -250,8 +250,8 @@ export const folderScanner = async (
       return topic.publishMessage({
         data: dataBuffer,
         attributes: {
-          fileId: file.id,
-          mimeType: file.mimeType,
+          fileId: file.id || '',
+          mimeType: file.mimeType || '',
           operation: 'document-classification',
         },
       });

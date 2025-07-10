@@ -24,13 +24,13 @@ export const documentScanPreparation = async (
 ): Promise<DocumentScanResult> => {
   try {
     // Parse the PubSub message data
-    const eventData = cloudEvent.data as unknown as string;
-    if (!eventData || typeof eventData !== 'string') {
+    const pubsubMessage = cloudEvent.data?.message;
+    if (!pubsubMessage || !pubsubMessage.data) {
       throw new Error('No message data found in CloudEvent');
     }
 
     const messageData: DocumentScanPreparationMessage = JSON.parse(
-      Buffer.from(eventData, 'base64').toString()
+      Buffer.from(pubsubMessage.data, 'base64').toString()
     );
 
     const { fileId } = messageData;
