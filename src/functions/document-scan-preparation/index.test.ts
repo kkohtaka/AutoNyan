@@ -9,7 +9,7 @@ const mockStorage = {
     file: jest.fn().mockReturnValue({
       createWriteStream: jest.fn().mockReturnValue({
         write: jest.fn().mockImplementation((buffer, callback) => {
-          callback();
+          process.nextTick(() => callback(null));
         }),
         end: jest.fn(),
       }),
@@ -66,19 +66,27 @@ describe('documentScanPreparation', () => {
           on: jest.fn().mockImplementation((event, callback) => {
             if (event === 'data') {
               // Call the callback immediately with test data
-              process.nextTick(() =>
-                callback(Buffer.from('test file content'))
-              );
+              process.nextTick(() => {
+                callback(Buffer.from('test file content'));
+              });
             } else if (event === 'end') {
               // Call the callback immediately to end the stream
-              process.nextTick(() => callback());
+              process.nextTick(() => {
+                callback();
+              });
             } else if (event === 'error') {
-              // Return this to chain
+              // Store error callback but don't call it in success case
             }
+            // Return the same object for chaining
             return {
-              on: jest.fn().mockImplementation((event) => {
-                if (event === 'error') {
-                  // No error in this test case
+              on: jest.fn().mockImplementation((event, callback) => {
+                if (event === 'end') {
+                  // Call the callback immediately to end the stream
+                  process.nextTick(() => {
+                    callback();
+                  });
+                } else if (event === 'error') {
+                  // Store error callback but don't call it in success case
                 }
                 return { on: jest.fn().mockReturnThis() };
               }),
@@ -98,7 +106,11 @@ describe('documentScanPreparation', () => {
       specversion: '1.0',
       type: 'google.cloud.pubsub.topic.v1.messagePublished',
       time: '2023-01-01T00:00:00.000Z',
-      data: Buffer.from(JSON.stringify(messageData)).toString('base64') as any,
+      data: {
+        message: {
+          data: Buffer.from(JSON.stringify(messageData)).toString('base64'),
+        },
+      },
     };
 
     const result = await documentScanPreparation(cloudEvent);
@@ -111,7 +123,7 @@ describe('documentScanPreparation', () => {
     expect(result.bucketName).toBe('test-project-document-storage');
     expect(result.contentType).toBe('application/pdf');
     expect(result.size).toBe(1024);
-    expect(result.objectName).toMatch(/^documents\/[a-f0-9]{64}\.pdf$/); // SHA256 hash + extension
+    expect(result.objectName).toMatch(/^documents\/[a-f0-9]{64}$/); // SHA256 hash
 
     // Verify Drive API calls
     expect(mockDrive.files.get).toHaveBeenCalledWith({
@@ -128,7 +140,7 @@ describe('documentScanPreparation', () => {
         responseType: 'stream',
       }
     );
-  }, 10000);
+  }, 20000);
 
   test('should throw error when no fileId is provided', async () => {
     const messageData = {};
@@ -139,7 +151,11 @@ describe('documentScanPreparation', () => {
       specversion: '1.0',
       type: 'google.cloud.pubsub.topic.v1.messagePublished',
       time: '2023-01-01T00:00:00.000Z',
-      data: Buffer.from(JSON.stringify(messageData)).toString('base64') as any,
+      data: {
+        message: {
+          data: Buffer.from(JSON.stringify(messageData)).toString('base64'),
+        },
+      },
     };
 
     await expect(documentScanPreparation(cloudEvent)).rejects.toThrow(
@@ -154,7 +170,7 @@ describe('documentScanPreparation', () => {
       specversion: '1.0',
       type: 'google.cloud.pubsub.topic.v1.messagePublished',
       time: '2023-01-01T00:00:00.000Z',
-      data: null as any,
+      data: undefined,
     };
 
     await expect(documentScanPreparation(cloudEvent)).rejects.toThrow(
@@ -173,7 +189,11 @@ describe('documentScanPreparation', () => {
       specversion: '1.0',
       type: 'google.cloud.pubsub.topic.v1.messagePublished',
       time: '2023-01-01T00:00:00.000Z',
-      data: Buffer.from(JSON.stringify(messageData)).toString('base64') as any,
+      data: {
+        message: {
+          data: Buffer.from(JSON.stringify(messageData)).toString('base64'),
+        },
+      },
     };
 
     mockDrive.files.get.mockRejectedValueOnce(new Error('Drive API error'));

@@ -107,7 +107,9 @@ describe('folderScanner', () => {
         },
       });
 
-      mockPublishMessage.mockResolvedValue('message-id-1');
+      mockPublishMessage.mockImplementation(() =>
+        Promise.resolve('message-id-1')
+      );
 
       const result = await folderScanner(cloudEvent);
 
@@ -276,7 +278,9 @@ describe('folderScanner', () => {
           },
         });
 
-      mockPublishMessage.mockResolvedValue('message-id');
+      mockPublishMessage.mockImplementation(() =>
+        Promise.resolve('message-id')
+      );
 
       const result = await folderScanner(cloudEvent);
 
