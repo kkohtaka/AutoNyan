@@ -1,7 +1,7 @@
 {
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "../../../dist/functions/document-scanner",
+    "outDir": "../../../dist/functions/document-scan-preparation",
     "rootDir": "."
   },
   "include": ["*.ts", "*.test.ts"]
