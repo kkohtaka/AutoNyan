@@ -8,7 +8,8 @@ module.exports = [
   js.configs.recommended,
   ...jsoncPlugin.configs['flat/recommended-with-jsonc'],
   {
-    files: ['src/**/*.ts'],
+    files: ['**/*.ts'],
+    ignores: ['**/*.test.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -37,7 +38,7 @@ module.exports = [
     }
   },
   {
-    files: ['src/**/*.test.ts'],
+    files: ['**/*.test.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

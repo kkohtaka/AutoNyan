@@ -20,6 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+    strategy:
+      matrix:
+        function: [document-scan-preparation, folder-scanner]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -45,8 +49,8 @@ jobs:
         with:
           tflint_version: v0.50.3
 
-      - name: Run TypeScript linter
-        run: npx eslint 'src/**/*.ts'
+      - name: Run TypeScript linter for ${{ matrix.function }}
+        run: npm run lint --workspace=src/functions/${{ matrix.function }}
 
       - name: Run YAML linter
         run: yamllint .github/ -c .yamllint.yml
@@ -84,6 +88,9 @@ jobs:
     needs: lint
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+    strategy:
+      matrix:
+        function: [document-scan-preparation, folder-scanner]
 
     steps:
       - uses: actions/checkout@v4
@@ -97,8 +104,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests for ${{ matrix.function }}
+        run: npm test --workspace=src/functions/${{ matrix.function }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

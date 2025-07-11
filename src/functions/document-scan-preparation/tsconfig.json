@@ -4,6 +4,5 @@
     "outDir": "../../../dist/functions/document-scanner",
     "rootDir": "."
   },
-  "include": ["*.ts"],
-  "exclude": ["*.test.ts"]
+  "include": ["*.ts", "*.test.ts"]
 }

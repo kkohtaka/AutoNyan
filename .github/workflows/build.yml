@@ -16,6 +16,10 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        function: [document-scan-preparation, folder-scanner]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -28,8 +32,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Run build for ${{ matrix.function }}
+        run: npm run build --workspace=src/functions/${{ matrix.function }}
 
       - name: Build function
         run: npm run build:function
