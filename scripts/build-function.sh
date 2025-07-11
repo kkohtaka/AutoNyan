@@ -14,6 +14,7 @@ mapfile -t FUNCTIONS < <(find src/functions -maxdepth 1 -mindepth 1 -type d -exe
 echo "Preparing function packages..."
 for FUNCTION in "${FUNCTIONS[@]}"; do
 	echo "  - Preparing $FUNCTION function package..."
+	mkdir -p "dist/functions/$FUNCTION"
 	cp "src/functions/$FUNCTION/package.json" "dist/functions/$FUNCTION/"
 done
 
