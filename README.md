@@ -108,12 +108,30 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
    **Repository Variables** (Settings > Secrets and variables > Actions > Variables):
    - `TF_STATE_BUCKET`: Terraform state storage bucket name
    - `TF_STATE_LOCATION`: Cloud Storage bucket region/location
+   - `DRIVE_FOLDER_ID`: Google Drive folder ID for scanning
+   - `DRIVE_SCANNER_SCHEDULE`: Cron schedule for automatic scanning (e.g., "0 9 * * 1")
 
    **Repository Secrets** (Settings > Secrets and variables > Actions > Secrets):
    - `WIF_PROVIDER`: Workload Identity Federation provider (set up via `npm run setup:github-actions`)
    - `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions authentication
+   - `DRIVE_FOLDER_ID`: Google Drive folder ID (if sensitive)
 
-   These are used by the test workflow to validate Terraform configuration in CI/CD.
+   ### GitHub Actions Workflow Pipeline
+
+   The project uses a secure, multi-stage CI/CD pipeline:
+
+   **For Repository Owner PRs:**
+   1. **Test Workflow**: Runs linting and tests on all code changes
+   2. **Terraform Plan Workflow**: Validates infrastructure changes (auto-triggered after Test success)
+   3. **Build Workflow**: Builds deployment packages (auto-triggered after Terraform Plan success)
+
+   **For Dependabot PRs:**
+   - Only runs Test workflow (secure by default, no infrastructure access)
+   - Manual infrastructure validation via `/terraform plan` comment (repository owners only)
+
+   **Manual Triggers:**
+   - Comment `/terraform plan` on any PR to manually run Terraform validation
+   - Only repository owners, members, and collaborators can trigger manual validation
 
 ## Google Drive Setup
 
@@ -206,6 +224,17 @@ npm run deploy   # Build + Terraform apply
 ```
 
 This will build the TypeScript code, create deployment packages, and apply the Terraform configuration.
+
+### CI/CD Workflow Security
+
+The project implements a security-first approach to CI/CD:
+
+- **Dependabot PRs**: Automatically limited to testing only, no access to Google Cloud credentials
+- **Repository Owner PRs**: Full pipeline access with automatic Terraform validation after tests pass
+- **Manual Override**: Use `/terraform plan` comment to manually validate infrastructure on any PR
+- **Staged Pipeline**: Each workflow stage must succeed before proceeding to the next
+
+This ensures that automated dependency updates are secure while maintaining full validation capabilities for code changes.
 
 ## Available Scripts
 

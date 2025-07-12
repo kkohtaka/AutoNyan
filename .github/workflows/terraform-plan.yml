@@ -1,0 +1,145 @@
+---
+name: Terraform Plan
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows: ['Test']
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  terraform-plan:
+    if: |
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/terraform plan') &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR')) ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.pull_requests[0] &&
+       (github.repository_owner == github.event.workflow_run.pull_requests[0].head.repo.owner.login ||
+        github.event.workflow_run.head_repository.owner.login == github.repository_owner))
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - name: Get PR details
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName === 'issue_comment') {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number
+              });
+              return {
+                ref: pr.head.ref,
+                sha: pr.head.sha,
+                repo: pr.head.repo.full_name,
+                number: context.issue.number
+              };
+            } else if (context.eventName === 'workflow_run') {
+              const pr = context.payload.workflow_run.pull_requests[0];
+              return {
+                ref: pr.head.ref,
+                sha: pr.head.sha,
+                repo: pr.head.repo.full_name,
+                number: pr.number
+              };
+            }
+
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ fromJson(steps.pr.outputs.result).sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.5.0'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Setup Terraform backend
+        run: npm run setup:terraform-backend
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
+
+      - name: Generate terraform.tfvars
+        run: npm run setup:terraform-variables
+        env:
+          GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+          DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
+
+      - name: Run Terraform plan
+        id: plan
+        run: |
+          npm run build
+          npm run terraform:init
+          npm run terraform:plan 2>&1 | tee plan_output.txt
+          echo "plan_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Comment PR with plan results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.readFileSync('plan_output.txt', 'utf8');
+            const exitCode = '${{ steps.plan.outputs.plan_exit_code }}';
+            
+            const success = exitCode === '0';
+            const emoji = success ? '✅' : '❌';
+            const status = success ? 'SUCCESS' : 'FAILED';
+            
+            const triggerInfo = context.eventName === 'issue_comment' 
+              ? `*Triggered by comment from @${{ github.event.comment.user.login }}*`
+              : `*Auto-triggered after Test workflow success*`;
+            
+            const prDetails = ${{ steps.pr.outputs.result }};
+            const issueNumber = prDetails.number;
+            
+            const body = `## ${emoji} Terraform Plan ${status}
+            
+            <details>
+            <summary>Click to expand plan output</summary>
+            
+            \`\`\`
+            ${planOutput}
+            \`\`\`
+            </details>
+            
+            ${triggerInfo}`;
+            
+            github.rest.issues.createComment({
+              issue_number: issueNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

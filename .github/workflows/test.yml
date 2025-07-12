@@ -147,28 +147,3 @@ jobs:
         with:
           terraform_version: '1.5.0'
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - name: Setup Terraform backend
-        run: npm run setup:terraform-backend
-        env:
-          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-          TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
-
-      - name: Generate terraform.tfvars
-        run: npm run setup:terraform-variables
-        env:
-          GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
-          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
-          DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
-
-      - name: Run Terraform plan
-        timeout-minutes: 10
-        run: |
-          npm run build
-          npm run terraform:init
-          npm run terraform:plan
