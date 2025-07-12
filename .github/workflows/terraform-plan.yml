@@ -68,12 +68,16 @@ jobs:
           script: |
             const prDetails = ${{ steps.pr.outputs.result }};
             const issueNumber = prDetails.number;
-            
+
             await github.rest.issues.createComment({
               issue_number: issueNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 **Terraform Plan Started**\n\nTriggered by @${{ github.event.comment.user.login }} with command: \`/terraform plan\`\n\nPlan execution is now running... Check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for progress.`
+              body: `🚀 **Terraform Plan Started**\n\n` +
+                    `Triggered by @${{ github.event.comment.user.login }} with command: \`/terraform plan\`\n\n` +
+                    `Plan execution is now running... Check the ` +
+                    `[workflow run](${{ github.server_url }}/${{ github.repository }}/` +
+                    `actions/runs/${{ github.run_id }}) for progress.`
             });
 
       - name: Set status to pending
@@ -88,7 +92,8 @@ jobs:
               state: 'pending',
               context: 'terraform/plan',
               description: 'Terraform plan is running...',
-              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              target_url: `${context.serverUrl}/${context.repo.owner}/` +
+                          `${context.repo.repo}/actions/runs/${context.runId}`
             });
 
       - name: Checkout PR code
@@ -183,12 +188,12 @@ jobs:
             const prDetails = ${{ steps.pr.outputs.result }};
             const exitCode = '${{ steps.plan.outputs.plan_exit_code }}';
             const success = exitCode === '0';
-            
+
             const state = success ? 'success' : 'failure';
-            const description = success 
+            const description = success
               ? 'Terraform plan completed successfully'
               : 'Terraform plan failed';
-            
+
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -196,5 +201,6 @@ jobs:
               state: state,
               context: 'terraform/plan',
               description: description,
-              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              target_url: `${context.serverUrl}/${context.repo.owner}/` +
+                          `${context.repo.repo}/actions/runs/${context.runId}`
             });
