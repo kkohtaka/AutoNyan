@@ -113,30 +113,30 @@ jobs:
             const fs = require('fs');
             const planOutput = fs.readFileSync('plan_output.txt', 'utf8');
             const exitCode = '${{ steps.plan.outputs.plan_exit_code }}';
-            
+
             const success = exitCode === '0';
             const emoji = success ? '✅' : '❌';
             const status = success ? 'SUCCESS' : 'FAILED';
-            
-            const triggerInfo = context.eventName === 'issue_comment' 
+
+            const triggerInfo = context.eventName === 'issue_comment'
               ? `*Triggered by comment from @${{ github.event.comment.user.login }}*`
               : `*Auto-triggered after Test workflow success*`;
-            
+
             const prDetails = ${{ steps.pr.outputs.result }};
             const issueNumber = prDetails.number;
-            
+
             const body = `## ${emoji} Terraform Plan ${status}
-            
+
             <details>
             <summary>Click to expand plan output</summary>
-            
+
             \`\`\`
             ${planOutput}
             \`\`\`
             </details>
-            
+
             ${triggerInfo}`;
-            
+
             github.rest.issues.createComment({
               issue_number: issueNumber,
               owner: context.repo.owner,
