@@ -10,6 +10,10 @@ yarn-error.log*
 dist/
 build/
 
+# Compiled JavaScript in function directories
+src/functions/**/*.js
+src/functions/**/*.js.map
+
 # Environment variables
 .env
 .env.local

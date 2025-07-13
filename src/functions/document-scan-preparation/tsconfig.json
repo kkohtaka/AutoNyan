@@ -1,8 +1,15 @@
 {
-  "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "../../../dist/functions/document-scan-preparation",
-    "rootDir": "."
+    "target": "es2020",
+    "module": "commonjs",
+    "outDir": ".",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
   },
-  "include": ["*.ts", "*.test.ts"]
+  "include": ["index.ts"],
+  "exclude": []
 }

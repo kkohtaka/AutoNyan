@@ -42,6 +42,7 @@ resource "google_storage_bucket" "function_bucket" {
   name                        = "${var.project_id}-function-source"
   location                    = var.region
   uniform_bucket_level_access = true
+  force_destroy               = true
 }
 
 # Google Cloud Storage bucket for document data storage
@@ -51,6 +52,7 @@ resource "google_storage_bucket" "document_storage" {
   name                        = "${var.project_id}-document-storage"
   location                    = var.region
   uniform_bucket_level_access = true
+  force_destroy               = true
 }
 
 
@@ -180,8 +182,6 @@ resource "google_service_account" "document_scan_preparation_sa" {
   account_id   = "document-scan-preparation"
   display_name = "Document Scan Preparation Service Account"
   description  = "Service account for Google Drive access and Cloud Storage operations"
-
-  create_ignore_already_exists = true
 }
 
 # Dedicated service account for the drive scanner function
@@ -191,8 +191,6 @@ resource "google_service_account" "folder_scanner_sa" {
   account_id   = "folder-scanner"
   display_name = "Drive File Manager Service Account"
   description  = "Service account for Google Drive access via folder sharing and PubSub publishing"
-
-  create_ignore_already_exists = true
 }
 
 # IAM binding for Google Cloud Storage access - Document Scan Preparation
