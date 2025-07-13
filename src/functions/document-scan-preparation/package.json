@@ -13,9 +13,7 @@
     "@google-cloud/functions-framework": "^3.4.0",
     "@google-cloud/storage": "^7.0.0",
     "@google/events": "^5.4.0",
-    "googleapis": "^140.0.0"
-  },
-  "devDependencies": {
+    "googleapis": "^140.0.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
   }
