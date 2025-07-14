@@ -17,7 +17,7 @@
     "@google-cloud/pubsub": "^5.1.0",
     "googleapis": "^150.0.1",
     "@google/events": "^5.4.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.0.13",
     "typescript": "^5.0.0"
   }
 }
