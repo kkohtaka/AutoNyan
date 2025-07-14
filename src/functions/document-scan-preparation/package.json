@@ -14,7 +14,7 @@
     "@google-cloud/storage": "^7.0.0",
     "@google/events": "^5.4.0",
     "googleapis": "^140.0.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^24.0.13",
     "typescript": "^5.0.0"
   }
 }
