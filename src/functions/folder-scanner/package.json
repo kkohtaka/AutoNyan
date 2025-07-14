@@ -15,7 +15,7 @@
   "dependencies": {
     "@google-cloud/functions-framework": "^4.0.0",
     "@google-cloud/pubsub": "^5.1.0",
-    "googleapis": "^150.0.1",
+    "googleapis": "^152.0.0",
     "@google/events": "^5.4.0",
     "@types/node": "^24.0.13",
     "typescript": "^5.0.0"
