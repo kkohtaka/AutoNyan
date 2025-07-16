@@ -99,5 +99,5 @@ jobs:
               console.log('✅ Deployment to production completed successfully');
             } else {
               console.log('❌ Deployment to production failed');
-              process.exit(1);
+              core.setFailed('Deployment to production failed');
             }
