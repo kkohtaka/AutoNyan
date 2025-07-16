@@ -154,7 +154,12 @@ jobs:
           echo "plan_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
 
       - name: Comment PR with plan results
-        if: fromJson(steps.pr.outputs.result).number
+        if: |
+          try {
+            fromJson(steps.pr.outputs.result)?.number != null
+          } catch (error) {
+            false
+          }
         uses: actions/github-script@v7
         with:
           script: |
