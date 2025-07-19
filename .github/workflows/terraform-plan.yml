@@ -232,17 +232,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const prDetails = ${{ steps.pr.outputs.result }};
-            const ref = prDetails ? prDetails.sha : context.sha;
-
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'deploy.yml',
-              ref: 'master',
+              ref: context.sha,
               inputs: {
-                deploy_ref: ref
+                deploy_ref: context.sha
               }
             });
 
-            console.log(`Triggered Deploy workflow for ref ${ref}`);
+            console.log(`Triggered Deploy workflow for ref ${context.sha}`);

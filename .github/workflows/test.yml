@@ -146,18 +146,20 @@ jobs:
           script: |
             const isPR = context.eventName === 'pull_request';
             const inputs = {};
+            let targetRef = 'master';
 
             if (isPR) {
-              inputs.pr_number = context.payload.pull_request.number;
+              inputs.pr_number = context.payload.pull_request.number.toString();
               inputs.pr_ref = context.payload.pull_request.head.ref;
               inputs.pr_sha = context.payload.pull_request.head.sha;
+              targetRef = context.payload.pull_request.head.ref;
             }
 
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'terraform-plan.yml',
-              ref: 'master',
+              ref: targetRef,
               inputs: inputs
             });
 
