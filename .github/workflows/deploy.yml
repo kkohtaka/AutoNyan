@@ -8,14 +8,6 @@ on:
         description: 'Git ref to deploy'
         required: true
         type: string
-      triggered_by:
-        description: 'How the deployment was triggered'
-        required: false
-        type: choice
-        options:
-          - manual
-          - auto
-        default: manual
 
 permissions:
   contents: read
@@ -84,7 +76,6 @@ jobs:
           if [ "$EXIT_CODE" = "0" ]; then
             echo "✅ Deployment to production completed successfully"
             echo "Deployed ref: ${{ inputs.deploy_ref }}"
-            echo "Triggered by: ${{ inputs.triggered_by }}"
           else
             echo "❌ Deployment to production failed"
             echo "Deploy ref: ${{ inputs.deploy_ref }}"

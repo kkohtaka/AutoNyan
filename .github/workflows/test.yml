@@ -151,9 +151,6 @@ jobs:
               inputs.pr_number = context.payload.pull_request.number;
               inputs.pr_ref = context.payload.pull_request.head.ref;
               inputs.pr_sha = context.payload.pull_request.head.sha;
-              inputs.triggered_by = 'auto';
-            } else {
-              inputs.triggered_by = 'auto';
             }
 
             await github.rest.actions.createWorkflowDispatch({

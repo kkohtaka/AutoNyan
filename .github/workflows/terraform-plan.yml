@@ -18,14 +18,6 @@ on:
         description: 'Git SHA from PR (for auto-triggered runs)'
         required: false
         type: string
-      triggered_by:
-        description: 'How the plan was triggered'
-        required: false
-        type: choice
-        options:
-          - manual
-          - auto
-        default: manual
 
 permissions:
   contents: read
@@ -234,13 +226,9 @@ jobs:
 
       - name: Trigger Deploy workflow (master branch only)
         if: |
-          always() &&
           steps.plan.outputs.plan_exit_code == '0' &&
-          ((github.event_name == 'workflow_dispatch' &&
-            fromJson(steps.pr.outputs.result).ref == 'master') ||
-           (github.event_name == 'issue_comment' &&
-            github.event.issue.pull_request &&
-            steps.pr.outputs.result && fromJson(steps.pr.outputs.result).ref == 'master'))
+          github.event_name == 'workflow_dispatch' &&
+          fromJson(steps.pr.outputs.result).ref == 'master'
         uses: actions/github-script@v7
         with:
           script: |
@@ -253,8 +241,7 @@ jobs:
               workflow_id: 'deploy.yml',
               ref: 'master',
               inputs: {
-                deploy_ref: ref,
-                triggered_by: context.eventName === 'issue_comment' ? 'manual' : 'auto'
+                deploy_ref: ref
               }
             });
 
