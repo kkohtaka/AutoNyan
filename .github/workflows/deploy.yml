@@ -2,37 +2,40 @@
 name: Deploy
 
 on:
-  deployment:
+  workflow_dispatch:
+    inputs:
+      deploy_ref:
+        description: 'Git ref to deploy'
+        required: true
+        type: string
+      triggered_by:
+        description: 'How the deployment was triggered'
+        required: false
+        type: choice
+        options:
+          - manual
+          - auto
+        default: manual
 
 permissions:
   contents: read
   id-token: write
-  deployments: write
 
 jobs:
   deploy:
-    if: github.event.deployment.environment == 'production'
     runs-on: ubuntu-latest
+    environment:
+      name: production
+    concurrency:
+      group: production
     env:
       NODE_OPTIONS: --max-old-space-size=4096
 
     steps:
-      - name: Update deployment status to in_progress
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: context.payload.deployment.id,
-              state: 'in_progress',
-              description: 'Deployment is in progress'
-            });
-
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.deployment.ref }}
+          ref: ${{ inputs.deploy_ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -74,30 +77,16 @@ jobs:
           npm run terraform:apply 2>&1 | tee deploy_output.txt
           echo "deploy_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
 
-      - name: Update deployment status
+      - name: Report deployment status
         if: always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const exitCode = '${{ steps.deploy.outputs.deploy_exit_code }}';
-            const success = exitCode === '0';
-
-            const state = success ? 'success' : 'failure';
-            const description = success
-              ? 'Deployment completed successfully'
-              : 'Deployment failed';
-
-            await github.rest.repos.createDeploymentStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              deployment_id: context.payload.deployment.id,
-              state: state,
-              description: description
-            });
-
-            if (success) {
-              console.log('✅ Deployment to production completed successfully');
-            } else {
-              console.log('❌ Deployment to production failed');
-              core.setFailed('Deployment to production failed');
-            }
+        run: |
+          EXIT_CODE="${{ steps.deploy.outputs.deploy_exit_code }}"
+          if [ "$EXIT_CODE" = "0" ]; then
+            echo "✅ Deployment to production completed successfully"
+            echo "Deployed ref: ${{ inputs.deploy_ref }}"
+            echo "Triggered by: ${{ inputs.triggered_by }}"
+          else
+            echo "❌ Deployment to production failed"
+            echo "Deploy ref: ${{ inputs.deploy_ref }}"
+            exit 1
+          fi
