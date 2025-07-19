@@ -1,6 +1,15 @@
 ---
 name: Test
 
+run-name: |
+  ${{
+    github.event_name == 'pull_request' &&
+    format('Test - PR #{0} ({1})', github.event.pull_request.number, github.event.pull_request.head.ref) ||
+    github.event_name == 'push' &&
+    format('Test - {0} ({1})', github.ref_name, github.sha) ||
+    'Test'
+  }}
+
 on:
   push:
     branches:

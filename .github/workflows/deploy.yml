@@ -1,6 +1,8 @@
 ---
 name: Deploy
 
+run-name: Deploy to Production (${{ inputs.deploy_ref }})
+
 on:
   workflow_dispatch:
     inputs:
