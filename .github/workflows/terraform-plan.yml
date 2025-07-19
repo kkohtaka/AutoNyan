@@ -1,6 +1,17 @@
 ---
 name: Terraform Plan
 
+run-name: |
+  ${{
+    github.event_name == 'issue_comment' &&
+    format('Manual Plan - PR #{0} ({1})', github.event.issue.number, github.event.comment.user.login) ||
+    github.event_name == 'workflow_dispatch' && inputs.pr_number &&
+    format('Auto Plan - PR #{0} ({1})', inputs.pr_number, inputs.pr_ref) ||
+    github.event_name == 'workflow_dispatch' &&
+    format('Auto Plan - {0} ({1})', github.ref_name, github.sha) ||
+    'Terraform Plan'
+  }}
+
 on:
   issue_comment:
     types: [created]
