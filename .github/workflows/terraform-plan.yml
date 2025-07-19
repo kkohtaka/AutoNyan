@@ -158,7 +158,9 @@ jobs:
           npm run build
           npm run terraform:init
           npm run terraform:plan 2>&1 | tee plan_output.txt
-          echo "plan_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          PLAN_EXIT_CODE=${PIPESTATUS[0]}
+          echo "plan_exit_code=${PLAN_EXIT_CODE}" >> $GITHUB_OUTPUT
+          exit ${PLAN_EXIT_CODE}
 
       - name: Comment PR with plan results
         if: steps.pr.outputs.result && fromJson(steps.pr.outputs.result).number != null
@@ -223,6 +225,10 @@ jobs:
               target_url: `${context.serverUrl}/${context.repo.owner}/` +
                           `${context.repo.repo}/actions/runs/${context.runId}`
             });
+
+            if (!success) {
+              core.setFailed('Terraform plan failed');
+            }
 
       - name: Trigger Deploy workflow (master branch only)
         if: |
