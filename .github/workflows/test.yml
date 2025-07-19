@@ -14,6 +14,7 @@ permissions:
   contents: read
   pull-requests: read
   id-token: write
+  actions: write
 
 jobs:
   lint-functions:
@@ -127,22 +128,40 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: [test-functions]
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
-
     steps:
-      - uses: actions/checkout@v4
+      - name: All tests passed
+        run: echo "✅ All tests completed successfully"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+  trigger-terraform-plan:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: |
+      (github.event_name == 'pull_request' &&
+       github.repository_owner == github.event.pull_request.user.login) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    steps:
+      - name: Trigger Terraform Plan workflow
+        uses: actions/github-script@v7
         with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
+          script: |
+            const isPR = context.eventName === 'pull_request';
+            const inputs = {};
 
-      - name: Install dependencies
-        run: npm ci
+            if (isPR) {
+              inputs.pr_number = context.payload.pull_request.number;
+              inputs.pr_ref = context.payload.pull_request.head.ref;
+              inputs.pr_sha = context.payload.pull_request.head.sha;
+              inputs.triggered_by = 'auto';
+            } else {
+              inputs.triggered_by = 'auto';
+            }
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.5.0'
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'terraform-plan.yml',
+              ref: 'master',
+              inputs: inputs
+            });
+
+            console.log(`Triggered Terraform Plan workflow for ${isPR ? 'PR #' + inputs.pr_number : 'master push'}`);
