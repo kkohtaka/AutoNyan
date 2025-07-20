@@ -134,12 +134,24 @@ jobs:
       - name: Run tests for ${{ matrix.function }}
         run: npm test --workspace=src/functions/${{ matrix.function }}
 
+      - name: Run coverage for ${{ matrix.function }}
+        run: npm run test:coverage --workspace=src/functions/${{ matrix.function }}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/lcov.info
+          flags: ${{ matrix.function }}
+          name: codecov-${{ matrix.function }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
   test:
     runs-on: ubuntu-latest
     needs: [test-functions]
     steps:
-      - name: All tests passed
-        run: echo "✅ All tests completed successfully"
+      - name: All tests and coverage checks passed
+        run: echo "✅ All tests and coverage checks completed successfully"
 
   trigger-terraform-plan:
     runs-on: ubuntu-latest
