@@ -135,16 +135,23 @@ jobs:
         run: npm test --workspace=src/functions/${{ matrix.function }}
 
       - name: Run coverage for ${{ matrix.function }}
+        id: coverage
         run: npm run test:coverage --workspace=src/functions/${{ matrix.function }}
+        continue-on-error: true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
+        if: always()
         with:
           file: ./coverage/lcov.info
           flags: ${{ matrix.function }}
           name: codecov-${{ matrix.function }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
+
+      - name: Fail if coverage thresholds not met
+        if: steps.coverage.outcome == 'failure'
+        run: exit 1
 
   test:
     runs-on: ubuntu-latest
