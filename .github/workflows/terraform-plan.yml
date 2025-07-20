@@ -253,10 +253,10 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'deploy.yml',
-              ref: context.sha,
+              ref: context.ref,
               inputs: {
-                deploy_ref: context.sha
+                deploy_ref: context.ref
               }
             });
 
-            console.log(`Triggered Deploy workflow for ref ${context.sha}`);
+            console.log(`Triggered Deploy workflow for ref ${context.ref}`);
