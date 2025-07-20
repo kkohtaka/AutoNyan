@@ -60,7 +60,7 @@ resource "google_storage_bucket" "document_storage" {
 # Receives messages containing document metadata for processing
 # Used by the drive scanner to queue documents for classification
 resource "google_pubsub_topic" "document_classification" {
-  name = "document-classification"
+  name = "doc-classify-trigger"
 }
 
 
@@ -76,28 +76,28 @@ resource "google_cloud_scheduler_job" "folder_scan_schedule" {
   region      = var.region
 
   pubsub_target {
-    topic_name = module.folder_scanner.topic_id
+    topic_name = module.drive_scanner.topic_id
     data = base64encode(jsonencode({
       folderId = var.drive_folder_id
     }))
   }
 }
 
-# Folder Scanner Module
+# Drive Scanner Module
 # Handles Google Drive folder scanning functionality
-module "folder_scanner" {
-  source = "./modules/folder-scanner"
+module "drive_scanner" {
+  source = "./modules/drive-scanner"
 
-  project_id                           = var.project_id
-  region                               = var.region
-  function_bucket_name                 = google_storage_bucket.function_bucket.name
-  document_scan_preparation_topic_name = module.document_scan_preparation.topic_name
+  project_id                     = var.project_id
+  region                         = var.region
+  function_bucket_name           = google_storage_bucket.function_bucket.name
+  doc_process_trigger_topic_name = module.doc_processor.topic_name
 }
 
-# Document Scan Preparation Module
+# Document Processor Module
 # Handles document preparation and Cloud Storage operations
-module "document_scan_preparation" {
-  source = "./modules/document-scan-preparation"
+module "doc_processor" {
+  source = "./modules/doc-processor"
 
   project_id           = var.project_id
   region               = var.region
@@ -110,17 +110,17 @@ module "document_scan_preparation" {
 # Output values for manual configuration
 output "service_account_email" {
   description = "Email of the service account that needs Drive folder access"
-  value       = module.folder_scanner.service_account_email
+  value       = module.drive_scanner.service_account_email
 }
 
-output "document_scan_preparation_service_account_email" {
-  description = "Email of the document scan preparation service account that needs Drive folder access"
-  value       = module.document_scan_preparation.service_account_email
+output "doc_processor_service_account_email" {
+  description = "Email of the document processor service account that needs Drive folder access"
+  value       = module.doc_processor.service_account_email
 }
 
-output "document_scan_preparation_topic" {
-  description = "PubSub topic for document scanning preparation"
-  value       = module.document_scan_preparation.topic_name
+output "doc_process_trigger_topic" {
+  description = "PubSub topic for document processing trigger"
+  value       = module.doc_processor.topic_name
 }
 
 output "document_storage_bucket" {
@@ -143,8 +143,8 @@ output "drive_folder_setup_instructions" {
     3. To grant access to specific folders:
        - Right-click the folder(s) and select "Share"
     4. Add these emails as editors:
-       - Folder Scanner: ${module.folder_scanner.service_account_email}
-       - Document Scan Preparation: ${module.document_scan_preparation.service_account_email}
+       - Drive Scanner: ${module.drive_scanner.service_account_email}
+       - Document Processor: ${module.doc_processor.service_account_email}
     5. Set permission level to "Editor"
     6. Click "Send"
 

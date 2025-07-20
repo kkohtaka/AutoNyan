@@ -14,7 +14,7 @@ variable "function_bucket_name" {
 }
 
 
-variable "document_scan_preparation_topic_name" {
-  description = "Name of the PubSub topic for document scan preparation"
+variable "doc_process_trigger_topic_name" {
+  description = "Name of the PubSub topic for document processing trigger"
   type        = string
 }
