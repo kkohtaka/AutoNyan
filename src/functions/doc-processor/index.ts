@@ -1,15 +1,15 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { Storage, GetFileMetadataResponse } from '@google-cloud/storage';
+import { GetFileMetadataResponse, Storage } from '@google-cloud/storage';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { createHash } from 'crypto';
 import { google } from 'googleapis';
 
-interface DocumentScanPreparationMessage {
+interface Message {
   fileId: string;
   metadata?: Record<string, unknown>;
 }
 
-interface DocumentScanResult {
+interface Result {
   message: string;
   fileId: string;
   fileName: string;
@@ -19,9 +19,9 @@ interface DocumentScanResult {
   size: number;
 }
 
-export const documentScanPreparation = async (
+export const docProcessor = async (
   cloudEvent: CloudEvent<MessagePublishedData>
-): Promise<DocumentScanResult> => {
+): Promise<Result> => {
   try {
     // Parse the PubSub message data
     const pubsubMessage = cloudEvent.data?.message;
@@ -29,7 +29,7 @@ export const documentScanPreparation = async (
       throw new Error('No message data found in CloudEvent');
     }
 
-    const messageData: DocumentScanPreparationMessage = JSON.parse(
+    const messageData: Message = JSON.parse(
       Buffer.from(pubsubMessage.data, 'base64').toString()
     );
 

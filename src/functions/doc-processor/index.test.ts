@@ -1,7 +1,7 @@
-import { documentScanPreparation } from './index';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { google } from 'googleapis';
+import { docProcessor } from './index';
 
 // Mock dependencies
 const mockStorage = {
@@ -36,7 +36,7 @@ jest.mock('googleapis', () => ({
   },
 }));
 
-describe('documentScanPreparation', () => {
+describe('docProcessor', () => {
   let mockDrive: any;
 
   beforeEach(() => {
@@ -113,7 +113,7 @@ describe('documentScanPreparation', () => {
       },
     };
 
-    const result = await documentScanPreparation(cloudEvent);
+    const result = await docProcessor(cloudEvent);
 
     expect(result.message).toContain(
       'Successfully copied file test-document.pdf'
@@ -158,7 +158,7 @@ describe('documentScanPreparation', () => {
       },
     };
 
-    await expect(documentScanPreparation(cloudEvent)).rejects.toThrow(
+    await expect(docProcessor(cloudEvent)).rejects.toThrow(
       'Missing required parameter: fileId'
     );
   });
@@ -173,7 +173,7 @@ describe('documentScanPreparation', () => {
       data: undefined,
     };
 
-    await expect(documentScanPreparation(cloudEvent)).rejects.toThrow(
+    await expect(docProcessor(cloudEvent)).rejects.toThrow(
       'No message data found in CloudEvent'
     );
   });
@@ -198,7 +198,7 @@ describe('documentScanPreparation', () => {
 
     mockDrive.files.get.mockRejectedValueOnce(new Error('Drive API error'));
 
-    await expect(documentScanPreparation(cloudEvent)).rejects.toThrow(
+    await expect(docProcessor(cloudEvent)).rejects.toThrow(
       'Document scan preparation failed: Drive API error'
     );
   });

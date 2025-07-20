@@ -2,7 +2,7 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { google } from 'googleapis';
-import { folderScanner } from './index';
+import { driveScanner } from './index';
 
 // Mock the Google APIs
 jest.mock('googleapis');
@@ -11,7 +11,7 @@ jest.mock('@google-cloud/pubsub');
 const mockGoogle = google as jest.Mocked<typeof google>;
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 
-describe('folderScanner', () => {
+describe('driveScanner', () => {
   let mockDriveList: jest.Mock;
   let mockDriveGet: jest.Mock;
   let mockPublishMessage: jest.Mock;
@@ -62,7 +62,7 @@ describe('folderScanner', () => {
     it('should throw error when folderId is missing', async () => {
       const cloudEvent = buildEvent({ topicName: 'test-topic' });
 
-      await expect(folderScanner(cloudEvent)).rejects.toThrow(
+      await expect(driveScanner(cloudEvent)).rejects.toThrow(
         'Missing required parameters: folderId and topicName'
       );
     });
@@ -70,7 +70,7 @@ describe('folderScanner', () => {
     it('should throw error when topicName is missing', async () => {
       const cloudEvent = buildEvent({ folderId: 'test-folder-id' });
 
-      await expect(folderScanner(cloudEvent)).rejects.toThrow(
+      await expect(driveScanner(cloudEvent)).rejects.toThrow(
         'Missing required parameters: folderId and topicName'
       );
     });
@@ -111,7 +111,7 @@ describe('folderScanner', () => {
         Promise.resolve('message-id-1')
       );
 
-      const result = await folderScanner(cloudEvent);
+      const result = await driveScanner(cloudEvent);
 
       expect(result).toBeDefined();
       expect(result.message).toContain(
@@ -171,7 +171,7 @@ describe('folderScanner', () => {
 
       mockDriveGet.mockRejectedValue(new Error('Drive API error'));
 
-      await expect(folderScanner(cloudEvent)).rejects.toThrow(
+      await expect(driveScanner(cloudEvent)).rejects.toThrow(
         'Drive document scanner failed: Drive API error'
       );
     });
@@ -199,7 +199,7 @@ describe('folderScanner', () => {
         },
       });
 
-      await folderScanner(cloudEvent);
+      await driveScanner(cloudEvent);
 
       const callArgs = mockDriveList.mock.calls[0][0];
       const query = callArgs.q;
@@ -282,7 +282,7 @@ describe('folderScanner', () => {
         Promise.resolve('message-id')
       );
 
-      const result = await folderScanner(cloudEvent);
+      const result = await driveScanner(cloudEvent);
 
       expect(result.filesFound).toBe(150);
 
