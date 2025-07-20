@@ -1,7 +1,7 @@
 {
-  "name": "folder-scanner-function",
+  "name": "doc-processor-function",
   "version": "1.0.0",
-  "description": "Google Drive document scanner Cloud Function",
+  "description": "Cloud Function for preparing documents for scanning by copying Google Drive files to Cloud Storage",
   "main": "index.js",
   "scripts": {
     "build": "tsc",
@@ -9,14 +9,11 @@
     "lint": "eslint --config=../../../eslint.config.js --fix",
     "format": "prettier --write '**/*.ts'"
   },
-  "engines": {
-    "node": "20"
-  },
   "dependencies": {
     "@google-cloud/functions-framework": "^4.0.0",
-    "@google-cloud/pubsub": "^5.1.0",
-    "googleapis": "^152.0.0",
+    "@google-cloud/storage": "^7.0.0",
     "@google/events": "^5.4.0",
+    "googleapis": "^152.0.0",
     "@types/node": "^24.0.13",
     "typescript": "^5.0.0"
   }
