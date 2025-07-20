@@ -185,7 +185,7 @@ https://drive.google.com/drive/folders/1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS
 4. **Test the setup**:
    ```bash
    # Trigger a manual scan
-   gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"your-folder-id","topicName":"document-classification"}'
+   gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"your-folder-id","topicName":"doc-classify-trigger"}'
    ```
 
 **Folder ID Options:**
@@ -274,7 +274,7 @@ This ensures that automated dependency updates are secure while maintaining full
 .
 ├── .devcontainer/           # Dev container configuration
 ├── src/functions/           # Cloud Functions source code
-│   └── drive-document-scanner/  # Drive scanning function
+│   └── drive-scanner/           # Drive scanning function
 ├── terraform/              # Infrastructure as code
 │   ├── main.tf            # Main Terraform configuration
 │   ├── variables.tf       # Variable definitions
@@ -314,7 +314,8 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 ### Compute Resources
 
 - **Cloud Functions v2**: Serverless Node.js 20 runtime functions
-  - `folder-scanner`: Drive scanner (512MB memory, 300s timeout, 0-10 instances)
+  - `drive-scanner`: Drive scanner (512MB memory, 300s timeout, 0-10 instances)
+  - `doc-processor`: Document processor (512MB memory, 540s timeout, 0-100 instances)
 
 ### Storage Resources
 
@@ -324,51 +325,57 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 ### Messaging & Scheduling
 
 - **PubSub Topics**:
-  - `document-classification`: Receives document metadata for processing
-  - `folder-scan-trigger`: Triggers scheduled drive scans
+  - `drive-scan-trigger`: Triggers scheduled drive scans
+  - `doc-process-trigger`: Triggers document processing
+  - `doc-classify-trigger`: Receives document metadata for processing
 - **Cloud Scheduler**: Automated folder scanning (configurable cron schedule)
 
 ### Identity & Access
 
-- **Service Account**: `folder-scanner` with least-privilege permissions
+- **Service Accounts**: 
+  - `drive-scanner-sa`: Drive scanning with least-privilege permissions
+  - `doc-processor-sa`: Document processing with Cloud Storage access
 - **IAM Roles**: Storage viewer, service usage consumer, PubSub publisher
 
 ### Data Flow Architecture
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Cloud Scheduler│    │  PubSub Topic    │    │ folder-scanner  │
-│  (Cron Job)     │───▶│ folder-scan-     │───▶│ Cloud Function  │
+│  Cloud Scheduler│    │  PubSub Topic    │    │ drive-scanner   │
+│  (Cron Job)     │───▶│ drive-scan-      │───▶│ Cloud Function  │
 │                 │    │ trigger          │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                                          │
                                                          ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │  External       │    │  PubSub Topic    │    │ Google Drive    │
-│  Consumers      │◀───│ document-        │◀───│ API             │
-│                 │    │ classification   │    │                 │
+│  Consumers      │◀───│ doc-classify-    │◀───│ API             │
+│                 │    │ trigger          │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 
 
 ┌─────────────────┐    ┌──────────────────┐
 │  Cloud Storage  │    │ Service Account  │
-│  Bucket         │    │ folder-scanner   │
+│  Bucket         │    │ drive-scanner    │
 │  (Source Code)  │    │ (IAM Roles)      │
 └─────────────────┘    └──────────────────┘
 ```
 
 **Flow Description**:
 
-1. **Scheduled Trigger**: Cloud Scheduler publishes messages to `folder-scan-trigger` topic
-2. **Drive Scanning**: `folder-scanner` function processes PubSub events, scans Google Drive
-3. **Document Processing**: Scanner publishes document metadata to `document-classification` topic
+1. **Scheduled Trigger**: Cloud Scheduler publishes messages to `drive-scan-trigger` topic
+2. **Drive Scanning**: `drive-scanner` function processes PubSub events, scans Google Drive
+3. **Document Processing**: Scanner publishes document metadata to `doc-classify-trigger` topic
 4. **External Integration**: Downstream consumers process document classification messages
 
 ## Functions
 
-### Folder Scanner
+### Drive Scanner
 
 Automated Google Drive document scanning with PubSub integration and advanced file management capabilities.
+
+**Function Name**: `drive-scanner`  
+**Entry Point**: `folderScanner`
 
 **Features**:
 
@@ -396,9 +403,32 @@ Automated Google Drive document scanning with PubSub integration and advanced fi
 
 ```bash
 # Trigger via PubSub (recommended for production)
-gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"your-folder-id","topicName":"document-classification"}'
+gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"your-folder-id","topicName":"doc-classify-trigger"}'
 
 # Examples with different folder targets
-gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"root","topicName":"document-classification"}'  # Scan entire Drive
-gcloud pubsub topics publish folder-scan-trigger --message='{"folderId":"1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS","topicName":"document-classification"}'  # Specific folder
+gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"root","topicName":"doc-classify-trigger"}'  # Scan entire Drive
+gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS","topicName":"doc-classify-trigger"}'  # Specific folder
+```
+
+### Document Processor
+
+Processes Google Drive files by copying them to Cloud Storage for further analysis and processing.
+
+**Function Name**: `doc-processor`  
+**Entry Point**: `documentScanPreparation`
+
+**Features**:
+
+- **File Download**: Downloads files from Google Drive to Cloud Storage
+- **Multiple Formats**: Supports various document types and formats
+- **Cloud Storage**: Efficient file management with Cloud Storage integration
+- **Event-Driven**: Triggered by PubSub messages containing file metadata
+- **Scalable**: Auto-scaling from 0-100 instances based on workload
+- **Security**: Dedicated service account with Cloud Storage admin permissions
+
+**Manual trigger**:
+
+```bash
+# Trigger document processing via PubSub
+gcloud pubsub topics publish doc-process-trigger --message='{"fileId":"your-file-id","fileName":"document.pdf"}'
 ```
