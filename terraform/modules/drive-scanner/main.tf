@@ -60,7 +60,7 @@ resource "google_cloudfunctions2_function" "drive_scanner" {
 
   build_config {
     runtime     = "nodejs20"
-    entry_point = "folderScanner"
+    entry_point = "driveScanner"
     source {
       storage_source {
         bucket     = var.function_bucket_name

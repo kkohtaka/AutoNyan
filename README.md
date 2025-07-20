@@ -375,7 +375,7 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 Automated Google Drive document scanning with PubSub integration and advanced file management capabilities.
 
 **Function Name**: `drive-scanner`  
-**Entry Point**: `folderScanner`
+**Entry Point**: `driveScanner`
 
 **Features**:
 
@@ -388,16 +388,6 @@ Automated Google Drive document scanning with PubSub integration and advanced fi
 - **Security**: Manual folder sharing model for precise access control
 - **Logging**: Comprehensive error handling and operation tracking
 
-**Available Drive Operations** (via `driveOperations` export):
-
-- `listFiles()` - List files with pagination support
-- `createFolder()` - Create new folders in shared areas
-- `moveFile()` - Move files between accessible folders  
-- `copyFile()` - Copy files within shared areas
-- `getFolderInfo()` - Get detailed folder metadata
-- `searchFiles()` - Search files by name with pagination
-- `listAllFiles()` - List all accessible files across Drive
-- `listFolderContents()` - Enhanced folder listing with MIME type filtering
 
 **Manual trigger**:
 
@@ -415,7 +405,7 @@ gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"1BxiMVs0
 Processes Google Drive files by copying them to Cloud Storage for further analysis and processing.
 
 **Function Name**: `doc-processor`  
-**Entry Point**: `documentScanPreparation`
+**Entry Point**: `docProcessor`
 
 **Features**:
 

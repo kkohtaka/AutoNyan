@@ -50,7 +50,7 @@ resource "google_cloudfunctions2_function" "doc_processor" {
 
   build_config {
     runtime     = "nodejs20"
-    entry_point = "documentScanPreparation"
+    entry_point = "docProcessor"
     source {
       storage_source {
         bucket     = var.function_bucket_name
