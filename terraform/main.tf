@@ -34,6 +34,18 @@ resource "google_project_service" "cloudfunctions_api" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "vision_api" {
+  service = "vision.googleapis.com"
+
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "firestore_api" {
+  service = "firestore.googleapis.com"
+
+  disable_on_destroy = false
+}
+
 
 # Google Cloud Storage bucket for function source code archives
 # Stores zip files containing built function code for deployment
@@ -50,6 +62,16 @@ resource "google_storage_bucket" "function_bucket" {
 # Used by the document scanner function for data persistence
 resource "google_storage_bucket" "document_storage" {
   name                        = "${var.project_id}-document-storage"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  force_destroy               = true
+}
+
+# Google Cloud Storage bucket for Vision API results
+# Stores JSON output from Vision API text extraction processing
+# Used by text-firebase-writer function to parse and store extracted text
+resource "google_storage_bucket" "vision_results" {
+  name                        = "${var.project_id}-vision-results"
   location                    = var.region
   uniform_bucket_level_access = true
   force_destroy               = true
@@ -104,6 +126,30 @@ module "doc_processor" {
   function_bucket_name = google_storage_bucket.function_bucket.name
 }
 
+# Text Vision Processor Module
+# Processes documents with Vision API for text extraction
+module "text_vision_processor" {
+  source = "./modules/text-vision-processor"
+
+  project_id                   = var.project_id
+  region                       = var.region
+  function_bucket_name         = google_storage_bucket.function_bucket.name
+  document_storage_bucket_name = google_storage_bucket.document_storage.name
+  vision_results_bucket_name   = google_storage_bucket.vision_results.name
+}
+
+# Text Firebase Writer Module
+# Stores Vision API text extraction results to Firestore
+module "text_firebase_writer" {
+  source = "./modules/text-firebase-writer"
+
+  project_id                   = var.project_id
+  region                       = var.region
+  function_bucket_name         = google_storage_bucket.function_bucket.name
+  vision_results_bucket_name   = google_storage_bucket.vision_results.name
+  document_storage_bucket_name = google_storage_bucket.document_storage.name
+}
+
 # Note: Service accounts, IAM bindings, and storage bucket objects
 # are now managed within their respective function modules
 
@@ -126,6 +172,21 @@ output "doc_process_trigger_topic" {
 output "document_storage_bucket" {
   description = "Cloud Storage bucket for document data"
   value       = google_storage_bucket.document_storage.name
+}
+
+output "vision_results_bucket" {
+  description = "Cloud Storage bucket for Vision API results"
+  value       = google_storage_bucket.vision_results.name
+}
+
+output "text_vision_processor_service_account_email" {
+  description = "Email of the text vision processor service account"
+  value       = module.text_vision_processor.service_account_email
+}
+
+output "text_firebase_writer_service_account_email" {
+  description = "Email of the text firebase writer service account"
+  value       = module.text_firebase_writer.service_account_email
 }
 
 output "drive_folder_setup_instructions" {

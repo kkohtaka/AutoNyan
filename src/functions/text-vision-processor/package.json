@@ -1,0 +1,35 @@
+{
+  "name": "text-vision-processor",
+  "version": "1.0.0",
+  "description": "Cloud Function for calling Vision API on Cloud Storage documents",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --config=../../../jest.config.js",
+    "test:coverage": "jest --config=../../../jest.config.js --coverage",
+    "lint": "eslint --config=../../../eslint.config.js --fix",
+    "format": "prettier --write '**/*.ts'"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.0.0",
+    "@google-cloud/vision": "^4.0.0",
+    "@google-cloud/storage": "^7.0.0",
+    "@google/events": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^30.0.4",
+    "@types/jest": "^30.0.0",
+    "ts-jest": "^29.4.0",
+    "@eslint/js": "^9.15.0",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
+    "eslint": "^9.31.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

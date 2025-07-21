@@ -33,7 +33,9 @@
     "src/functions/*"
   ],
   "dependencies": {
-    "@google-cloud/storage": "^7.0.0"
+    "@google-cloud/storage": "^7.0.0",
+    "@google-cloud/vision": "^4.0.0",
+    "@google-cloud/firestore": "^7.0.0"
   },
   "devDependencies": {
     "jest": "^30.0.4",
