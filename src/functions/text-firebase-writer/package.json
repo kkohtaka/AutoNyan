@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
+    "clean": "rm -f *.js *.js.map *.d.ts && rm -rf dist/",
     "test": "jest --config=../../../jest.config.js",
     "test:coverage": "jest --config=../../../jest.config.js --coverage",
     "lint": "eslint --config=../../../eslint.config.js --fix",

@@ -5,6 +5,7 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "build:function": "./scripts/build-function.sh",
+    "clean": "rm -rf dist/ && npm run clean --workspaces",
     "terraform:init": "terraform -chdir=terraform init -backend-config=backend.hcl -upgrade",
     "terraform:apply": "npm run build:function && terraform -chdir=terraform apply -auto-approve",
     "terraform:plan": "npm run build:function && terraform -chdir=terraform plan",
