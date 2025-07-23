@@ -32,7 +32,13 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=4096
     strategy:
       matrix:
-        function: [doc-processor, drive-scanner]
+        function:
+          [
+            doc-processor,
+            drive-scanner,
+            text-firebase-writer,
+            text-vision-processor,
+          ]
 
     steps:
       - uses: actions/checkout@v4
@@ -117,7 +123,13 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=4096
     strategy:
       matrix:
-        function: [doc-processor, drive-scanner]
+        function:
+          [
+            doc-processor,
+            drive-scanner,
+            text-firebase-writer,
+            text-vision-processor,
+          ]
 
     steps:
       - uses: actions/checkout@v4
