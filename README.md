@@ -8,8 +8,10 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
 - **TypeScript**: Full TypeScript support with strict typing and Jest testing
 - **Infrastructure as Code**: Terraform for cloud resource management
 - **Google Drive Integration**: Advanced Drive API operations with pagination support
-- **Document Scanner**: Automated Google Drive document scanning with PubSub integration
-- **Type Safety**: Comprehensive TypeScript types for Google Drive API operations
+- **Document Processing**: Automated Google Drive document scanning and processing
+- **Text Extraction**: Vision API integration for OCR and text extraction from documents
+- **Data Storage**: Firestore integration for storing extracted text and metadata
+- **Type Safety**: Comprehensive TypeScript types for all API operations
 - **Dev Container**: Pre-configured development environment with linting and formatting
 
 ## Prerequisites
@@ -22,8 +24,6 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
 
 ## Quick Start
 
-### Option 1: Dev Container (Recommended)
-
 1. Install [Docker](https://www.docker.com/) and [VS Code Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 2. Open this project in VS Code
 3. Reopen in dev container when prompted (or use `Dev Containers: Reopen in Container`)
@@ -32,44 +32,6 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
    gcloud auth application-default login
    gcloud config set project YOUR_PROJECT_ID
    ```
-5. Skip to [Configuration](#configuration)
-
-### Option 2: Local Setup
-
-1. **Install Node.js**:
-
-   ```bash
-   # Using nvm (recommended)
-   nvm install && nvm use
-
-   # Or install Node.js version from .nvmrc manually
-   ```
-
-2. **Install dependencies**:
-
-   ```bash
-   npm install
-   ```
-
-3. **Configure Google Cloud**:
-
-   ```bash
-   gcloud auth application-default login
-   gcloud config set project YOUR_PROJECT_ID
-   ```
-
-4. **Set up GitHub Actions authentication** (for CI/CD):
-
-   ```bash
-   npm run setup:github-actions
-   ```
-
-5. **Configure GitHub repository variables** (for CI/CD):
-   - Go to your GitHub repository Settings > Secrets and variables > Actions > Variables tab
-   - Add the following repository variables:
-     - `TF_STATE_BUCKET`: Your Terraform state bucket name (e.g., `my-project-terraform-state`)
-     - `TF_STATE_LOCATION`: Your preferred region (e.g., `us-central1`)
-   - These variables are used by the CI/CD pipeline for Terraform backend configuration
 
 ### Configuration
 
@@ -315,11 +277,16 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 
 - **Cloud Functions v2**: Serverless Node.js 20 runtime functions
   - `drive-scanner`: Drive scanner (512MB memory, 300s timeout, 0-10 instances)
-  - `doc-processor`: Document processor (512MB memory, 540s timeout, 0-100 instances)
+  - `doc-processor`: Document processor (512MB memory, 300s timeout, 0-10 instances)
+  - `text-vision-processor`: Vision API text extraction (1GB memory, 540s timeout, 0-10 instances)
+  - `text-firebase-writer`: Firestore data writer (512MB memory, 300s timeout, 0-10 instances)
 
 ### Storage Resources
 
-- **Cloud Storage Bucket**: Function source code storage (`{project-id}-function-source`)
+- **Cloud Storage Buckets**: 
+  - `{project-id}-function-source`: Function source code storage
+  - `{project-id}-document-storage`: Document file storage for processing
+  - `{project-id}-vision-results`: Vision API results storage
 - **Storage Objects**: Zip archives containing built function code
 
 ### Messaging & Scheduling
@@ -335,90 +302,6 @@ AutoNyan provisions the following Google Cloud resources via Terraform:
 - **Service Accounts**: 
   - `drive-scanner-sa`: Drive scanning with least-privilege permissions
   - `doc-processor-sa`: Document processing with Cloud Storage access
-- **IAM Roles**: Storage viewer, service usage consumer, PubSub publisher
-
-### Data Flow Architecture
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  Cloud Scheduler│    │  PubSub Topic    │    │ drive-scanner   │
-│  (Cron Job)     │───▶│ drive-scan-      │───▶│ Cloud Function  │
-│                 │    │ trigger          │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                                         │
-                                                         ▼
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  External       │    │  PubSub Topic    │    │ Google Drive    │
-│  Consumers      │◀───│ doc-classify-    │◀───│ API             │
-│                 │    │ trigger          │    │                 │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-
-
-┌─────────────────┐    ┌──────────────────┐
-│  Cloud Storage  │    │ Service Account  │
-│  Bucket         │    │ drive-scanner    │
-│  (Source Code)  │    │ (IAM Roles)      │
-└─────────────────┘    └──────────────────┘
-```
-
-**Flow Description**:
-
-1. **Scheduled Trigger**: Cloud Scheduler publishes messages to `drive-scan-trigger` topic
-2. **Drive Scanning**: `drive-scanner` function processes PubSub events, scans Google Drive
-3. **Document Processing**: Scanner publishes document metadata to `doc-classify-trigger` topic
-4. **External Integration**: Downstream consumers process document classification messages
-
-## Functions
-
-### Drive Scanner
-
-Automated Google Drive document scanning with PubSub integration and advanced file management capabilities.
-
-**Function Name**: `drive-scanner`  
-**Entry Point**: `driveScanner`
-
-**Features**:
-
-- **Pagination Support**: Handles folders with unlimited number of files (100+ files)
-- **Type Safety**: Full TypeScript typing with Google Drive API v3 schemas
-- **File Operations**: List, create, move, copy, and search operations
-- **Document Types**: Supports PDF, Word, Excel, PowerPoint, text files, and Google Docs
-- **Scheduling**: Configurable cron-based scanning via Cloud Scheduler
-- **Integration**: Publishes findings to PubSub topic for downstream processing
-- **Security**: Manual folder sharing model for precise access control
-- **Logging**: Comprehensive error handling and operation tracking
-
-
-**Manual trigger**:
-
-```bash
-# Trigger via PubSub (recommended for production)
-gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"your-folder-id","topicName":"doc-classify-trigger"}'
-
-# Examples with different folder targets
-gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"root","topicName":"doc-classify-trigger"}'  # Scan entire Drive
-gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS","topicName":"doc-classify-trigger"}'  # Specific folder
-```
-
-### Document Processor
-
-Processes Google Drive files by copying them to Cloud Storage for further analysis and processing.
-
-**Function Name**: `doc-processor`  
-**Entry Point**: `docProcessor`
-
-**Features**:
-
-- **File Download**: Downloads files from Google Drive to Cloud Storage
-- **Multiple Formats**: Supports various document types and formats
-- **Cloud Storage**: Efficient file management with Cloud Storage integration
-- **Event-Driven**: Triggered by PubSub messages containing file metadata
-- **Scalable**: Auto-scaling from 0-100 instances based on workload
-- **Security**: Dedicated service account with Cloud Storage admin permissions
-
-**Manual trigger**:
-
-```bash
-# Trigger document processing via PubSub
-gcloud pubsub topics publish doc-process-trigger --message='{"fileId":"your-file-id","fileName":"document.pdf"}'
-```
+  - `text-vision-processor`: Vision API processing with ML developer role
+  - `text-firebase-writer`: Firestore data writing with datastore user role
+- **IAM Roles**: Storage viewer/admin, service usage consumer, PubSub publisher, ML developer, datastore user
