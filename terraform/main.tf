@@ -77,6 +77,20 @@ resource "google_storage_bucket" "vision_results" {
   force_destroy               = true
 }
 
+# Data source to get the Cloud Storage service account
+# This service account is used by CloudEvent triggers for Cloud Functions
+data "google_storage_project_service_account" "gcs_account" {
+  project = var.project_id
+}
+
+# Grant the Cloud Storage service account pubsub.publisher role
+# Required for CloudEvent triggers to publish messages to Cloud Functions
+resource "google_project_iam_member" "gcs_pubsub_publisher" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"
+}
+
 
 # PubSub topic for document classification workflow
 # Receives messages containing document metadata for processing
