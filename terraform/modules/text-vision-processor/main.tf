@@ -29,7 +29,7 @@ resource "google_storage_bucket_iam_member" "text_vision_processor_vision_result
 resource "google_storage_bucket_object" "text_vision_processor_zip" {
   name   = "text-vision-processor.zip"
   bucket = var.function_bucket_name
-  source = "${path.root}/../dist/text-vision-processor.zip"
+  source = "../dist/functions/text-vision-processor.zip"
 }
 
 # Cloud Function for text vision processing

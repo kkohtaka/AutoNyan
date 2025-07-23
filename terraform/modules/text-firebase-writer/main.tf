@@ -29,7 +29,7 @@ resource "google_storage_bucket_iam_member" "text_firebase_writer_document_stora
 resource "google_storage_bucket_object" "text_firebase_writer_zip" {
   name   = "text-firebase-writer.zip"
   bucket = var.function_bucket_name
-  source = "${path.root}/../dist/text-firebase-writer.zip"
+  source = "../dist/functions/text-firebase-writer.zip"
 }
 
 # Cloud Function for storing Vision API results to Firebase
