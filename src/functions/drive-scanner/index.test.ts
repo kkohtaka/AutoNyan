@@ -24,7 +24,7 @@ describe('driveScanner', () => {
       specversion: '1.0',
       source: 'test-source',
       type: 'test-type',
-      data: Buffer.from(JSON.stringify(payload)).toString('base64'),
+      data: JSON.stringify(payload),
     } as CloudEvent<MessagePublishedData>;
   };
 
@@ -60,25 +60,16 @@ describe('driveScanner', () => {
 
   describe('CloudEvent request', () => {
     it('should throw error when folderId is missing', async () => {
-      const cloudEvent = buildEvent({ topicName: 'test-topic' });
+      const cloudEvent = buildEvent({});
 
       await expect(driveScanner(cloudEvent)).rejects.toThrow(
-        'Missing required parameters: folderId and topicName'
-      );
-    });
-
-    it('should throw error when topicName is missing', async () => {
-      const cloudEvent = buildEvent({ folderId: 'test-folder-id' });
-
-      await expect(driveScanner(cloudEvent)).rejects.toThrow(
-        'Missing required parameters: folderId and topicName'
+        'Missing required parameter: folderId'
       );
     });
 
     it('should successfully process CloudEvent and return result', async () => {
       const cloudEvent = buildEvent({
         folderId: 'test-folder-id',
-        topicName: 'test-topic',
       });
 
       const mockFiles = [
@@ -120,7 +111,7 @@ describe('driveScanner', () => {
       expect(result.filesFound).toBe(1);
       expect(result.files).toHaveLength(1);
       expect(result.publishedMessages).toBe(1);
-      expect(result.topicName).toBe('test-topic');
+      expect(result.topicName).toBe('doc-process-trigger');
 
       // Verify folder get was called
       expect(mockDriveGet).toHaveBeenCalledWith({
@@ -141,7 +132,7 @@ describe('driveScanner', () => {
 
       // Verify PubSub messages were published
       expect(mockPublishMessage).toHaveBeenCalledTimes(1);
-      expect(mockTopic).toHaveBeenCalledWith('test-topic');
+      expect(mockTopic).toHaveBeenCalledWith('doc-process-trigger');
 
       // Verify message content
       const publishCall = mockPublishMessage.mock.calls[0][0];
@@ -166,7 +157,6 @@ describe('driveScanner', () => {
     it('should handle errors in CloudEvent processing', async () => {
       const cloudEvent = buildEvent({
         folderId: 'test-folder-id',
-        topicName: 'test-topic',
       });
 
       mockDriveGet.mockRejectedValue(new Error('Drive API error'));
@@ -181,7 +171,6 @@ describe('driveScanner', () => {
     it('should include all supported document MIME types in search query', async () => {
       const cloudEvent = buildEvent({
         folderId: 'test-folder-id',
-        topicName: 'test-topic',
       });
 
       mockDriveGet.mockResolvedValue({
@@ -234,7 +223,6 @@ describe('driveScanner', () => {
     it('should handle pagination when folder has more than 100 files', async () => {
       const cloudEvent = buildEvent({
         folderId: 'test-folder-id',
-        topicName: 'test-topic',
       });
 
       mockDriveGet.mockResolvedValue({

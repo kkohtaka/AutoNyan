@@ -92,20 +92,12 @@ resource "google_project_iam_member" "gcs_pubsub_publisher" {
 }
 
 
-# PubSub topic for document classification workflow
-# Receives messages containing document metadata for processing
-# Used by the drive scanner to queue documents for classification
-resource "google_pubsub_topic" "document_classification" {
-  name = "doc-classify-trigger"
-}
-
-
 
 # Cloud Scheduler job for automated Google Drive scanning
-# Publishes messages to folder-scan-trigger topic on a configurable schedule
+# Publishes messages to drive-scan-trigger topic on a configurable schedule
 # Schedule format uses Unix cron syntax (e.g., "0 9 * * 1" for weekly Monday 9 AM)
-resource "google_cloud_scheduler_job" "folder_scan_schedule" {
-  name        = "folder-scan-schedule"
+resource "google_cloud_scheduler_job" "drive_scan_schedule" {
+  name        = "drive-scan-schedule"
   description = "Automated scheduler for Google Drive document scanning and classification"
   schedule    = var.drive_scanner_schedule
   time_zone   = "UTC"
@@ -113,9 +105,9 @@ resource "google_cloud_scheduler_job" "folder_scan_schedule" {
 
   pubsub_target {
     topic_name = module.drive_scanner.topic_id
-    data = base64encode(jsonencode({
+    data = jsonencode({
       folderId = var.drive_folder_id
-    }))
+    })
   }
 }
 

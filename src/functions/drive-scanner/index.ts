@@ -20,7 +20,6 @@ const DOCUMENT_MIME_TYPES = [
 
 interface Message {
   folderId: string;
-  topicName: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -36,23 +35,22 @@ export const driveScanner = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   try {
-    // CloudEvent from Cloud Scheduler contains base64 encoded data directly
-    // Note: TypeScript types expect MessagePublishedData but Cloud Scheduler sends string data
+    // CloudEvent from Cloud Scheduler contains plain text JSON data directly
     const eventData = cloudEvent.data as unknown as string;
 
     if (!eventData || typeof eventData !== 'string') {
       throw new Error('No message data found in CloudEvent');
     }
 
-    const messageData: Message = JSON.parse(
-      Buffer.from(eventData, 'base64').toString()
-    );
+    const messageData: Message = JSON.parse(eventData);
 
-    const { folderId, topicName } = messageData;
+    const { folderId } = messageData;
 
-    if (!folderId || !topicName) {
-      throw new Error('Missing required parameters: folderId and topicName');
+    if (!folderId) {
+      throw new Error('Missing required parameter: folderId');
     }
+
+    const topicName = 'doc-process-trigger';
 
     // Initialize Google Drive API with default credentials
     const auth = new google.auth.GoogleAuth({
