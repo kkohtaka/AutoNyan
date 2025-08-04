@@ -17,6 +17,6 @@
     "@google/events": "^5.4.0",
     "googleapis": "^153.0.0",
     "@types/node": "^24.1.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.9.2"
   }
 }
