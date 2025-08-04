@@ -12,7 +12,7 @@
     "format": "prettier --write '**/*.ts'"
   },
   "dependencies": {
-    "@google-cloud/functions-framework": "^3.0.0",
+    "@google-cloud/functions-framework": "^4.0.0",
     "@google-cloud/firestore": "^7.0.0",
     "@google-cloud/storage": "^7.0.0",
     "@google/events": "^5.4.0"
