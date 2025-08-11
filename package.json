@@ -35,7 +35,7 @@
   ],
   "dependencies": {
     "@google-cloud/storage": "^7.0.0",
-    "@google-cloud/vision": "^4.0.0",
+    "@google-cloud/vision": "^5.3.3",
     "@google-cloud/firestore": "^7.0.0"
   },
   "devDependencies": {
