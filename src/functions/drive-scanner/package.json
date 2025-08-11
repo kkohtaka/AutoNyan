@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^4.0.0",
-    "@google-cloud/pubsub": "^5.1.0",
+    "@google-cloud/pubsub": "^5.2.0",
     "googleapis": "^153.0.0",
     "@google/events": "^5.4.0",
     "@types/node": "^24.1.0",
