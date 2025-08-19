@@ -43,8 +43,9 @@ resource "google_cloudfunctions2_function" "text_vision_processor" {
     entry_point = "textVisionProcessor"
     source {
       storage_source {
-        bucket = var.function_bucket_name
-        object = google_storage_bucket_object.text_vision_processor_zip.name
+        bucket     = var.function_bucket_name
+        object     = google_storage_bucket_object.text_vision_processor_zip.name
+        generation = google_storage_bucket_object.text_vision_processor_zip.generation
       }
     }
   }

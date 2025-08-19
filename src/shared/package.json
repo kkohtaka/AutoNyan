@@ -1,0 +1,19 @@
+{
+  "name": "autonyan-shared",
+  "version": "1.0.0",
+  "description": "Shared utilities for AutoNyan Cloud Functions",
+  "main": "parameter-parser.js",
+  "types": "parameter-parser.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.4.2",
+    "@google/events": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.3"
+  }
+}

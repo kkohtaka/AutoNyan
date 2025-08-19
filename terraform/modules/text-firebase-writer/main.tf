@@ -43,8 +43,9 @@ resource "google_cloudfunctions2_function" "text_firebase_writer" {
     entry_point = "textFirebaseWriter"
     source {
       storage_source {
-        bucket = var.function_bucket_name
-        object = google_storage_bucket_object.text_firebase_writer_zip.name
+        bucket     = var.function_bucket_name
+        object     = google_storage_bucket_object.text_firebase_writer_zip.name
+        generation = google_storage_bucket_object.text_firebase_writer_zip.generation
       }
     }
   }

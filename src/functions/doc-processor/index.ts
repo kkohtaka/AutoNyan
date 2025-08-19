@@ -3,8 +3,16 @@ import { GetFileMetadataResponse, Storage } from '@google-cloud/storage';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { createHash } from 'crypto';
 import { google } from 'googleapis';
+import {
+  parsePubSubEvent,
+  validateRequiredFields,
+  getProjectId,
+  createErrorResponse,
+  ParameterParsingError,
+  ValidationError,
+} from './shared/parameter-parser';
 
-interface Message {
+interface DocProcessMessage extends Record<string, unknown> {
   fileId: string;
   metadata?: Record<string, unknown>;
 }
@@ -23,21 +31,21 @@ export const docProcessor = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   try {
-    // Parse the PubSub message data
-    const pubsubMessage = cloudEvent.data?.message;
-    if (!pubsubMessage || !pubsubMessage.data) {
-      throw new Error('No message data found in CloudEvent');
-    }
+    // Log the incoming CloudEvent for debugging
+    // eslint-disable-next-line no-console
+    console.log('Received CloudEvent:', JSON.stringify(cloudEvent, null, 2));
 
-    const messageData: Message = JSON.parse(
-      Buffer.from(pubsubMessage.data, 'base64').toString()
-    );
+    // Parse PubSub event data using shared utility
+    const { data: messageData } =
+      parsePubSubEvent<DocProcessMessage>(cloudEvent);
+
+    // Validate required fields
+    validateRequiredFields(messageData, ['fileId']);
 
     const { fileId } = messageData;
 
-    if (!fileId) {
-      throw new Error('Missing required parameter: fileId');
-    }
+    // eslint-disable-next-line no-console
+    console.log('Parsed message data:', JSON.stringify(messageData, null, 2));
 
     // Initialize Google Drive API with default credentials
     const auth = new google.auth.GoogleAuth({
@@ -47,7 +55,8 @@ export const docProcessor = async (
 
     // Initialize Cloud Storage client
     const storage = new Storage();
-    const bucketName = `${process.env.PROJECT_ID}-document-storage`;
+    const projectId = getProjectId();
+    const bucketName = `${projectId}-document-storage`;
     const bucket = storage.bucket(bucketName);
 
     // Get file metadata from Google Drive
@@ -158,11 +167,19 @@ export const docProcessor = async (
 
     return result;
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error occurred';
-    // eslint-disable-next-line no-console
-    console.error('Document scan preparation error:', error);
+    const errorResponse = createErrorResponse(error, 'docProcessor');
 
-    throw new Error(`Document scan preparation failed: ${errorMessage}`);
+    // eslint-disable-next-line no-console
+    console.error('Document scan preparation error:', errorResponse);
+
+    // Re-throw with proper error type
+    if (
+      error instanceof ParameterParsingError ||
+      error instanceof ValidationError
+    ) {
+      throw error;
+    }
+
+    throw new Error(`Document scan preparation failed: ${errorResponse.error}`);
   }
 };

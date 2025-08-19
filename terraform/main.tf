@@ -105,9 +105,9 @@ resource "google_cloud_scheduler_job" "drive_scan_schedule" {
 
   pubsub_target {
     topic_name = module.drive_scanner.topic_id
-    data = jsonencode({
+    data = base64encode(jsonencode({
       folderId = var.drive_folder_id
-    })
+    }))
   }
 }
 
