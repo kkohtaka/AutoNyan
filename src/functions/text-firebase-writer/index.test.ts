@@ -98,7 +98,7 @@ describe('textFirebaseWriter', () => {
       .file()
       .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
 
-    const result = await textFirebaseWriter(cloudEvent);
+    const result = await textFirebaseWriter(cloudEvent.data!);
 
     expect(result.message).toContain(
       'Successfully stored extracted text from test.pdf'
@@ -175,7 +175,7 @@ describe('textFirebaseWriter', () => {
       .file()
       .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
 
-    const result = await textFirebaseWriter(cloudEvent);
+    const result = await textFirebaseWriter(cloudEvent.data!);
 
     expect(result.pages).toBe(2); // Only non-empty pages counted
     expect(result.confidence).toBe(0.915); // Average of 0.95 and 0.88
@@ -187,7 +187,7 @@ describe('textFirebaseWriter', () => {
       contentType: 'text/plain',
     });
 
-    await expect(textFirebaseWriter(cloudEvent)).rejects.toThrow(
+    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
       'Unsupported file type: text/plain'
     );
   });
@@ -223,8 +223,8 @@ describe('textFirebaseWriter', () => {
       .file()
       .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
 
-    await expect(textFirebaseWriter(cloudEvent)).rejects.toThrow(
-      'PROJECT_ID environment variable not set'
+    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
+      'PROJECT_ID environment variable is required'
     );
   });
 
@@ -237,7 +237,7 @@ describe('textFirebaseWriter', () => {
 
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
 
-    await expect(textFirebaseWriter(cloudEvent)).rejects.toThrow(
+    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
       'Missing required metadata from Vision API result file'
     );
   });
@@ -264,7 +264,7 @@ describe('textFirebaseWriter', () => {
       .file()
       .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
 
-    await expect(textFirebaseWriter(cloudEvent)).rejects.toThrow(
+    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
       'No responses found in Vision API result'
     );
   });

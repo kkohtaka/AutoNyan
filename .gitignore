@@ -48,6 +48,9 @@ logs/
 coverage/
 .nyc_output/
 
+# Test setup temporary files
+src/functions/*/shared/
+
 # Temporary files
 *.tmp
 *.temp

@@ -79,7 +79,7 @@ describe('textVisionProcessor', () => {
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
     mockVision.asyncBatchAnnotateFiles.mockResolvedValue([mockOperation]);
 
-    const result = await textVisionProcessor(cloudEvent);
+    const result = await textVisionProcessor(cloudEvent.data!);
 
     expect(result.message).toContain(
       'Successfully processed test.pdf with Vision API'
@@ -123,7 +123,7 @@ describe('textVisionProcessor', () => {
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
     mockStorage.bucket().file().download.mockResolvedValue([fileContent]);
 
-    const result = await textVisionProcessor(cloudEvent);
+    const result = await textVisionProcessor(cloudEvent.data!);
 
     expect(result.message).toContain(
       'Successfully processed text file test.txt'
@@ -145,7 +145,7 @@ describe('textVisionProcessor', () => {
       contentType: 'application/zip',
     });
 
-    await expect(textVisionProcessor(cloudEvent)).rejects.toThrow(
+    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
       'Unsupported file type for text extraction: application/zip'
     );
   });
@@ -167,8 +167,8 @@ describe('textVisionProcessor', () => {
 
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
 
-    await expect(textVisionProcessor(cloudEvent)).rejects.toThrow(
-      'PROJECT_ID environment variable not set'
+    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
+      'PROJECT_ID environment variable is required'
     );
   });
 
@@ -183,7 +183,7 @@ describe('textVisionProcessor', () => {
 
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
 
-    await expect(textVisionProcessor(cloudEvent)).rejects.toThrow(
+    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
       'Missing required metadata from uploaded file'
     );
   });

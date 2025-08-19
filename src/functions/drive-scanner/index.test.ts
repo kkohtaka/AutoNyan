@@ -24,7 +24,7 @@ describe('driveScanner', () => {
       specversion: '1.0',
       source: 'test-source',
       type: 'test-type',
-      data: JSON.stringify(payload),
+      data: Buffer.from(JSON.stringify(payload)).toString('base64'),
     } as CloudEvent<MessagePublishedData>;
   };
 
@@ -63,7 +63,7 @@ describe('driveScanner', () => {
       const cloudEvent = buildEvent({});
 
       await expect(driveScanner(cloudEvent)).rejects.toThrow(
-        'Missing required parameter: folderId'
+        'Missing required fields: folderId'
       );
     });
 

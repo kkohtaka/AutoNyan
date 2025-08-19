@@ -37,7 +37,7 @@ describe('Parameter Parser', () => {
         source: 'test-source',
         id: 'test-id',
         time: '2023-01-01T00:00:00Z',
-        data: base64Data,
+        data: base64Data as any,
       };
 
       const result = parsePubSubEvent(cloudEvent);
@@ -85,7 +85,7 @@ describe('Parameter Parser', () => {
         source: 'test-source',
         id: 'test-id',
         time: '2023-01-01T00:00:00Z',
-        data: invalidBase64,
+        data: invalidBase64 as any,
       };
 
       expect(() => parsePubSubEvent(cloudEvent)).toThrow(ParameterParsingError);
@@ -146,17 +146,17 @@ describe('Parameter Parser', () => {
     it('should throw ValidationError for missing fields', () => {
       const data = { field1: 'value1' };
 
-      expect(() => validateRequiredFields(data, ['field1', 'field2'])).toThrow(
-        ValidationError
-      );
+      expect(() =>
+        validateRequiredFields(data, ['field1', 'field2'] as any)
+      ).toThrow(ValidationError);
     });
 
     it('should throw ValidationError for empty string fields', () => {
       const data = { field1: 'value1', field2: '' };
 
-      expect(() => validateRequiredFields(data, ['field1', 'field2'])).toThrow(
-        ValidationError
-      );
+      expect(() =>
+        validateRequiredFields(data, ['field1', 'field2'] as any)
+      ).toThrow(ValidationError);
     });
   });
 

@@ -106,11 +106,7 @@ describe('docProcessor', () => {
       specversion: '1.0',
       type: 'google.cloud.pubsub.topic.v1.messagePublished',
       time: '2023-01-01T00:00:00.000Z',
-      data: {
-        message: {
-          data: Buffer.from(JSON.stringify(messageData)).toString('base64'),
-        },
-      },
+      data: Buffer.from(JSON.stringify(messageData)).toString('base64') as any,
     };
 
     const result = await docProcessor(cloudEvent);
@@ -151,15 +147,11 @@ describe('docProcessor', () => {
       specversion: '1.0',
       type: 'google.cloud.pubsub.topic.v1.messagePublished',
       time: '2023-01-01T00:00:00.000Z',
-      data: {
-        message: {
-          data: Buffer.from(JSON.stringify(messageData)).toString('base64'),
-        },
-      },
+      data: Buffer.from(JSON.stringify(messageData)).toString('base64') as any,
     };
 
     await expect(docProcessor(cloudEvent)).rejects.toThrow(
-      'Missing required parameter: fileId'
+      'Missing required fields: fileId'
     );
   });
 
@@ -174,7 +166,7 @@ describe('docProcessor', () => {
     };
 
     await expect(docProcessor(cloudEvent)).rejects.toThrow(
-      'No message data found in CloudEvent'
+      'CloudEvent data is required'
     );
   });
 
@@ -189,11 +181,7 @@ describe('docProcessor', () => {
       specversion: '1.0',
       type: 'google.cloud.pubsub.topic.v1.messagePublished',
       time: '2023-01-01T00:00:00.000Z',
-      data: {
-        message: {
-          data: Buffer.from(JSON.stringify(messageData)).toString('base64'),
-        },
-      },
+      data: Buffer.from(JSON.stringify(messageData)).toString('base64') as any,
     };
 
     mockDrive.files.get.mockRejectedValueOnce(new Error('Drive API error'));
