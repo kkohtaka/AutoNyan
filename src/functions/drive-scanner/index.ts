@@ -2,6 +2,13 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { drive_v3, google } from 'googleapis';
+import {
+  parsePubSubEvent,
+  validateRequiredFields,
+  createErrorResponse,
+  ParameterParsingError,
+  ValidationError,
+} from './shared/parameter-parser';
 
 const DOCUMENT_MIME_TYPES = [
   'application/pdf',
@@ -18,7 +25,7 @@ const DOCUMENT_MIME_TYPES = [
   'application/vnd.google-apps.presentation',
 ];
 
-interface Message {
+interface DriveScanMessage extends Record<string, unknown> {
   folderId: string;
   metadata?: Record<string, unknown>;
 }
@@ -35,20 +42,21 @@ export const driveScanner = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   try {
-    // CloudEvent from Cloud Scheduler contains plain text JSON data directly
-    const eventData = cloudEvent.data as unknown as string;
+    // Log the incoming CloudEvent for debugging
+    // eslint-disable-next-line no-console
+    console.log('Received CloudEvent:', JSON.stringify(cloudEvent, null, 2));
 
-    if (!eventData || typeof eventData !== 'string') {
-      throw new Error('No message data found in CloudEvent');
-    }
+    // Parse PubSub event data using shared utility
+    const { data: messageData } =
+      parsePubSubEvent<DriveScanMessage>(cloudEvent);
 
-    const messageData: Message = JSON.parse(eventData);
+    // Validate required fields
+    validateRequiredFields(messageData, ['folderId']);
 
     const { folderId } = messageData;
 
-    if (!folderId) {
-      throw new Error('Missing required parameter: folderId');
-    }
+    // eslint-disable-next-line no-console
+    console.log('Parsed message data:', JSON.stringify(messageData, null, 2));
 
     const topicName = 'doc-process-trigger';
 
@@ -134,11 +142,19 @@ export const driveScanner = async (
 
     return result;
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error occurred';
-    // eslint-disable-next-line no-console
-    console.error('Drive document scanner error:', error);
+    const errorResponse = createErrorResponse(error, 'driveScanner');
 
-    throw new Error(`Drive document scanner failed: ${errorMessage}`);
+    // eslint-disable-next-line no-console
+    console.error('Drive document scanner error:', errorResponse);
+
+    // Re-throw with proper error type
+    if (
+      error instanceof ParameterParsingError ||
+      error instanceof ValidationError
+    ) {
+      throw error;
+    }
+
+    throw new Error(`Drive document scanner failed: ${errorResponse.error}`);
   }
 };

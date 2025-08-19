@@ -1,7 +1,13 @@
-import { CloudEvent } from '@google-cloud/functions-framework';
 import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
+import {
+  parseStorageEvent,
+  getProjectId,
+  createErrorResponse,
+  ParameterParsingError,
+  ValidationError,
+} from './shared/parameter-parser';
 
 interface PageText {
   pageNumber: number;
@@ -46,22 +52,28 @@ interface VisionApiResult {
 }
 
 export const textFirebaseWriter = async (
-  cloudEvent: CloudEvent<StorageObjectData>
+  storageObjectData: StorageObjectData
 ): Promise<Result> => {
   try {
-    const eventData = cloudEvent.data;
-    if (!eventData) {
-      throw new Error('No event data found in CloudEvent');
-    }
+    // Log the incoming Storage object data for debugging
+    // eslint-disable-next-line no-console
+    console.log(
+      'Received Storage object data:',
+      JSON.stringify(storageObjectData, null, 2)
+    );
 
-    const { bucket, name: objectName, contentType } = eventData;
-
-    if (!bucket || !objectName) {
-      throw new Error('Missing required event data: bucket or objectName');
-    }
+    // Parse storage event data using shared utility
+    const {
+      bucket,
+      name: objectName,
+      contentType,
+    } = parseStorageEvent(storageObjectData);
 
     // Only process JSON files from Vision API
-    if (contentType !== 'application/json') {
+    if (
+      contentType !== 'application/octet-stream' &&
+      contentType !== 'application/json'
+    ) {
       // eslint-disable-next-line no-console
       console.log(`Skipping non-JSON file: ${objectName}`);
       throw new Error(`Unsupported file type: ${contentType}`);
@@ -134,11 +146,7 @@ export const textFirebaseWriter = async (
     const overallConfidence = pageCount > 0 ? totalConfidence / pageCount : 0;
 
     // Get file size from the original document storage
-    const projectId =
-      process.env.GOOGLE_CLOUD_PROJECT || process.env.PROJECT_ID;
-    if (!projectId) {
-      throw new Error('PROJECT_ID environment variable not set');
-    }
+    const projectId = getProjectId();
 
     const documentBucket = `${projectId}-document-storage`;
     const originalObjectName = `documents/${contentHash}`;
@@ -188,11 +196,19 @@ export const textFirebaseWriter = async (
 
     return result;
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error occurred';
-    // eslint-disable-next-line no-console
-    console.error('Firebase storage error:', error);
+    const errorResponse = createErrorResponse(error, 'textFirebaseWriter');
 
-    throw new Error(`Firebase storage failed: ${errorMessage}`);
+    // eslint-disable-next-line no-console
+    console.error('Firebase storage error:', errorResponse);
+
+    // Re-throw with proper error type
+    if (
+      error instanceof ParameterParsingError ||
+      error instanceof ValidationError
+    ) {
+      throw error;
+    }
+
+    throw new Error(`Firebase storage failed: ${errorResponse.error}`);
   }
 };

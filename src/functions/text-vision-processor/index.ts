@@ -1,7 +1,13 @@
-import { CloudEvent } from '@google-cloud/functions-framework';
-import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { Storage } from '@google-cloud/storage';
+import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
+import {
+  parseStorageEvent,
+  getProjectId,
+  createErrorResponse,
+  ParameterParsingError,
+  ValidationError,
+} from './shared/parameter-parser';
 
 interface Result {
   message: string;
@@ -24,19 +30,22 @@ const SUPPORTED_MIME_TYPES = [
 ];
 
 export const textVisionProcessor = async (
-  cloudEvent: CloudEvent<StorageObjectData>
+  storageObjectData: StorageObjectData
 ): Promise<Result> => {
   try {
-    const eventData = cloudEvent.data;
-    if (!eventData) {
-      throw new Error('No event data found in CloudEvent');
-    }
+    // Log the incoming Storage object data for debugging
+    // eslint-disable-next-line no-console
+    console.log(
+      'Received Storage object data:',
+      JSON.stringify(storageObjectData, null, 2)
+    );
 
-    const { bucket, name: objectName, contentType } = eventData;
-
-    if (!bucket || !objectName) {
-      throw new Error('Missing required event data: bucket or objectName');
-    }
+    // Parse storage event data using shared utility
+    const {
+      bucket,
+      name: objectName,
+      contentType,
+    } = parseStorageEvent(storageObjectData);
 
     // Check if file type is supported for text extraction
     if (!contentType || !SUPPORTED_MIME_TYPES.includes(contentType)) {
@@ -71,11 +80,7 @@ export const textVisionProcessor = async (
     );
 
     // Setup output bucket and path
-    const projectId =
-      process.env.GOOGLE_CLOUD_PROJECT || process.env.PROJECT_ID;
-    if (!projectId) {
-      throw new Error('PROJECT_ID environment variable not set');
-    }
+    const projectId = getProjectId();
 
     const outputBucket = `${projectId}-vision-results`;
     const outputPath = `results/${contentHash}/`;
@@ -176,11 +181,19 @@ export const textVisionProcessor = async (
 
     return result_obj;
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error occurred';
-    // eslint-disable-next-line no-console
-    console.error('Vision API processing error:', error);
+    const errorResponse = createErrorResponse(error, 'textVisionProcessor');
 
-    throw new Error(`Vision API processing failed: ${errorMessage}`);
+    // eslint-disable-next-line no-console
+    console.error('Vision API processing error:', errorResponse);
+
+    // Re-throw with proper error type
+    if (
+      error instanceof ParameterParsingError ||
+      error instanceof ValidationError
+    ) {
+      throw error;
+    }
+
+    throw new Error(`Vision API processing failed: ${errorResponse.error}`);
   }
 };
