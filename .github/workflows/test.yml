@@ -181,7 +181,7 @@ jobs:
       (github.event_name == 'push' && github.ref == 'refs/heads/master')
     steps:
       - name: Trigger Terraform Plan workflow
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const isPR = context.eventName === 'pull_request';
