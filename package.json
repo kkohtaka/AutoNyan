@@ -34,11 +34,7 @@
     "src/functions/*",
     "src/shared"
   ],
-  "dependencies": {
-    "@google-cloud/storage": "^7.0.0",
-    "@google-cloud/vision": "^4.0.0",
-    "@google-cloud/firestore": "^7.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "jest": "^30.0.4",
     "@types/jest": "^30.0.0",
