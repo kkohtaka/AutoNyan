@@ -166,7 +166,7 @@ jobs:
       - name: Run Terraform plan
         id: plan
         run: |
-          npm run build
+          npm run build:function
           npm run terraform:init
           npm run terraform:plan 2>&1 | tee plan_output.txt
           PLAN_EXIT_CODE=${PIPESTATUS[0]}
