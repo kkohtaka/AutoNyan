@@ -65,7 +65,7 @@ export function parsePubSubEvent<T = Record<string, unknown>>(
       // PubSub messages are typically base64-encoded
       try {
         decodedData = Buffer.from(rawData, 'base64').toString('utf-8');
-      } catch (decodeError) {
+      } catch {
         // If base64 decode fails, treat as plain string
         decodedData = rawData;
       }

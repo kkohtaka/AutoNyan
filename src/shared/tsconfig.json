@@ -4,8 +4,9 @@
     "outDir": "./dist",
     "rootDir": "./",
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "composite": true
   },
-  "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "include": ["*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

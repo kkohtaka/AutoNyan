@@ -2,12 +2,12 @@ import { Storage } from '@google-cloud/storage';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
 import {
-  parseStorageEvent,
-  getProjectId,
   createErrorResponse,
+  getProjectId,
   ParameterParsingError,
+  parseStorageEvent,
   ValidationError,
-} from './shared/parameter-parser';
+} from 'autonyan-shared';
 
 interface Result {
   message: string;
