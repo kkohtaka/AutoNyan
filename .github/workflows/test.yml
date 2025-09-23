@@ -81,7 +81,7 @@ jobs:
           terraform_version: '1.5.0'
 
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v4
+        uses: terraform-linters/setup-tflint@v5
         with:
           tflint_version: v0.50.3
 
@@ -181,7 +181,7 @@ jobs:
       (github.event_name == 'push' && github.ref == 'refs/heads/master')
     steps:
       - name: Trigger Terraform Plan workflow
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const isPR = context.eventName === 'pull_request';
