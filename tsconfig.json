@@ -9,9 +9,25 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "incremental": true,
-    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+    "incremental": true
   },
-  "include": ["src/**/*"],
+  "references": [
+    {
+      "path": "./src/shared"
+    },
+    {
+      "path": "./src/functions/doc-processor"
+    },
+    {
+      "path": "./src/functions/drive-scanner"
+    },
+    {
+      "path": "./src/functions/text-firebase-writer"
+    },
+    {
+      "path": "./src/functions/text-vision-processor"
+    }
+  ],
+  "include": [],
   "exclude": ["node_modules", "dist"]
 }

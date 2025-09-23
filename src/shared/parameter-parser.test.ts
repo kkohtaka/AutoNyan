@@ -2,15 +2,15 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
 import {
+  createErrorResponse,
+  getEnvironmentVariables,
+  getProjectId,
+  ParameterParsingError,
   parsePubSubEvent,
   parseStorageEvent,
   validateRequiredFields,
-  getProjectId,
-  createErrorResponse,
-  ParameterParsingError,
   ValidationError,
-  getEnvironmentVariables,
-} from './parameter-parser';
+} from './index';
 
 describe('Parameter Parser', () => {
   const originalEnv = process.env;

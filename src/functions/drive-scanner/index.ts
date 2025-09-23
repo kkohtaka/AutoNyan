@@ -1,14 +1,14 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { drive_v3, google } from 'googleapis';
 import {
-  parsePubSubEvent,
-  validateRequiredFields,
   createErrorResponse,
   ParameterParsingError,
+  parsePubSubEvent,
+  validateRequiredFields,
   ValidationError,
-} from './shared/parameter-parser';
+} from 'autonyan-shared';
+import { drive_v3, google } from 'googleapis';
 
 const DOCUMENT_MIME_TYPES = [
   'application/pdf',

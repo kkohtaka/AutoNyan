@@ -15,7 +15,8 @@
     "@google-cloud/functions-framework": "^3.0.0",
     "@google-cloud/firestore": "^7.0.0",
     "@google-cloud/storage": "^7.0.0",
-    "@google/events": "^5.4.0"
+    "@google/events": "^5.4.0",
+    "autonyan-shared": "file:../../shared"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

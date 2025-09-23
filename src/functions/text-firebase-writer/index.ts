@@ -2,12 +2,12 @@ import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
 import {
-  parseStorageEvent,
-  getProjectId,
   createErrorResponse,
+  getProjectId,
   ParameterParsingError,
+  parseStorageEvent,
   ValidationError,
-} from './shared/parameter-parser';
+} from 'autonyan-shared';
 
 interface PageText {
   pageNumber: number;
