@@ -12,11 +12,11 @@
     "format": "prettier --write '**/*.ts'"
   },
   "dependencies": {
-    "@google-cloud/functions-framework": "^3.0.0",
+    "@google-cloud/functions-framework": "^4.0.0",
     "@google/events": "^5.4.0"
   },
   "devDependencies": {
-    "@types/node": "^20.19.17",
+    "@types/node": "^24.5.2",
     "typescript": "^5.9.2",
     "@types/jest": "^30.0.0",
     "jest": "^30.1.3",

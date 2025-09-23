@@ -54,7 +54,7 @@ jobs:
     steps:
       - name: Get PR details
         id: pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             if (context.eventName === 'issue_comment') {
@@ -92,7 +92,7 @@ jobs:
 
       - name: Comment acknowledgment for manual trigger
         if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prDetails = ${{ steps.pr.outputs.result }};
@@ -110,7 +110,7 @@ jobs:
             });
 
       - name: Set status to pending
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prDetails = ${{ steps.pr.outputs.result }};
@@ -175,7 +175,7 @@ jobs:
 
       - name: Comment PR with plan results
         if: steps.pr.outputs.result && fromJson(steps.pr.outputs.result).number != null
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
@@ -214,7 +214,7 @@ jobs:
 
       - name: Set final status
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prDetails = ${{ steps.pr.outputs.result }};
@@ -246,7 +246,7 @@ jobs:
           steps.plan.outputs.plan_exit_code == '0' &&
           github.event_name == 'workflow_dispatch' &&
           fromJson(steps.pr.outputs.result).ref == 'master'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
