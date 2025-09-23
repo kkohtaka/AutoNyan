@@ -30,8 +30,8 @@ for FUNCTION in "${FUNCTIONS[@]}"; do
 	echo "  - Preparing $FUNCTION function package..."
 	mkdir -p "dist/functions/$FUNCTION"
 	cp "src/functions/$FUNCTION/package.json" "dist/functions/$FUNCTION/"
-	# Transform tsconfig.json to remove project references for cloud deployment
-	sed 's/"references": \[.*\]/"include": ["index.ts", "index.test.ts", "shared\/**\/*"]/' "src/functions/$FUNCTION/tsconfig.json" |
+	# Copy and modify tsconfig.json to include shared files for cloud deployment
+	sed 's/"include": \["index.ts", "index.test.ts"\]/"include": ["index.ts", "shared\/**\/*"]/' "src/functions/$FUNCTION/tsconfig.json" |
 		sed '/^[[:space:]]*"references":/,/^[[:space:]]*\]/d' >"dist/functions/$FUNCTION/tsconfig.json"
 
 	# Copy and transform TypeScript files to use relative imports
