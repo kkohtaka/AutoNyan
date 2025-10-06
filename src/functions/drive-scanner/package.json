@@ -22,7 +22,7 @@
     "autonyan-shared": "file:../../shared"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
+    "@types/node": "^24.7.0",
     "typescript": "^5.9.2"
   }
 }
