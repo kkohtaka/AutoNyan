@@ -12,7 +12,14 @@ run-name: |
 
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize, edited]
+  # Also trigger when Test workflow completes successfully for Dependabot PRs
+  workflow_run:
+    workflows: ['Test']
+    types:
+      - completed
+    branches:
+      - master
 
 permissions:
   contents: write
@@ -21,13 +28,87 @@ permissions:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    # Run for Dependabot PRs on pull_request_target events, or when Test workflow completes successfully
+    if: |
+      (github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
 
     steps:
+      # For workflow_run events, we need to get the PR number
+      - name: Get PR details for workflow_run event
+        if: github.event_name == 'workflow_run'
+        id: get-pr
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pulls = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${context.payload.workflow_run.head_branch}`,
+              state: 'open'
+            });
+
+            if (pulls.data.length === 0) {
+              core.info('No open PR found for this branch');
+              return;
+            }
+
+            const pr = pulls.data[0];
+
+            // Only process Dependabot PRs
+            if (pr.user.login !== 'dependabot[bot]') {
+              core.info(`PR #${pr.number} is not from Dependabot, skipping`);
+              return;
+            }
+
+            core.setOutput('pr_number', pr.number);
+            core.setOutput('pr_title', pr.title);
+            core.setOutput('is_dependabot', 'true');
+
+      # Skip if not a Dependabot PR (for workflow_run events)
+      - name: Exit if not Dependabot PR
+        if: |
+          github.event_name == 'workflow_run' &&
+          steps.get-pr.outputs.is_dependabot != 'true'
+        run: exit 0
+
+      - name: Set PR context
+        id: pr-context
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "pr_number=${{ steps.get-pr.outputs.pr_number }}" >> $GITHUB_OUTPUT
+            echo "pr_title=${{ steps.get-pr.outputs.pr_title }}" >> $GITHUB_OUTPUT
+          else
+            echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if auto-merge is already enabled
+        id: check-automerge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
+        run: |
+          automerge_status=$(gh pr view "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --json autoMergeRequest \
+            --jq '.autoMergeRequest != null')
+
+          echo "Auto-merge already enabled: $automerge_status"
+          echo "enabled=$automerge_status" >> $GITHUB_OUTPUT
+
+      - name: Exit if auto-merge already enabled
+        if: steps.check-automerge.outputs.enabled == 'true'
+        run: |
+          echo "✅ Auto-merge is already enabled for PR #${{ steps.pr-context.outputs.pr_number }}"
+          exit 0
+
       - name: Detect version bump type
         id: version-check
         env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_TITLE: ${{ steps.pr-context.outputs.pr_title }}
         run: |
           echo "Analyzing PR title: $PR_TITLE"
 
@@ -138,7 +219,7 @@ jobs:
         if: steps.version-check.outputs.is_major == 'unknown'
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
         run: |
           gh pr comment "$PR_NUMBER" \
             --repo "${{ github.repository }}" \
@@ -157,7 +238,7 @@ jobs:
         if: steps.version-check.outputs.is_major == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
         run: |
           gh pr comment "$PR_NUMBER" \
             --repo "${{ github.repository }}" \
@@ -177,7 +258,7 @@ jobs:
       - name: Comment before enabling auto-merge
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
           BUMP_TYPE: ${{ steps.version-check.outputs.bump_type }}
         run: |
           gh pr comment "$PR_NUMBER" \
@@ -193,7 +274,7 @@ jobs:
       - name: Enable auto-merge
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
         run: |
           gh pr merge --auto --squash "$PR_NUMBER" \
             --repo "${{ github.repository }}"
