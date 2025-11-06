@@ -37,6 +37,10 @@ permissions:
   statuses: write
   actions: write
 
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
 jobs:
   terraform-plan:
     if: |
