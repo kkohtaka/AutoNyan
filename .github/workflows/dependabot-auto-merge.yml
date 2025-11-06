@@ -25,6 +25,11 @@ permissions:
   contents: write
   pull-requests: write
 
+# Prevent concurrent runs for the same PR to avoid race conditions
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
@@ -78,32 +83,30 @@ jobs:
         id: pr-context
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "pr_number=${{ steps.get-pr.outputs.pr_number }}" >> $GITHUB_OUTPUT
-            echo "pr_title=${{ steps.get-pr.outputs.pr_title }}" >> $GITHUB_OUTPUT
+            PR_NUM="${{ steps.get-pr.outputs.pr_number }}"
+            PR_TITLE="${{ steps.get-pr.outputs.pr_title }}"
+
+            # Validate PR context was successfully retrieved
+            if [ -z "$PR_NUM" ] || [ -z "$PR_TITLE" ]; then
+              echo "❌ Failed to get PR context from workflow_run event"
+              exit 1
+            fi
+
+            echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
+            echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
+            echo "event_type=workflow_run" >> $GITHUB_OUTPUT
           else
             echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
             echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+            echo "event_type=pull_request_target" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check if auto-merge is already enabled
-        id: check-automerge
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
-        run: |
-          automerge_status=$(gh pr view "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
-            --json autoMergeRequest \
-            --jq '.autoMergeRequest != null')
-
-          echo "Auto-merge already enabled: $automerge_status"
-          echo "enabled=$automerge_status" >> $GITHUB_OUTPUT
-
-      - name: Exit if auto-merge already enabled
-        if: steps.check-automerge.outputs.enabled == 'true'
-        run: |
-          echo "✅ Auto-merge is already enabled for PR #${{ steps.pr-context.outputs.pr_number }}"
-          exit 0
+          echo "🔍 Event: ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "🔍 PR Number: $PR_NUM"
+          else
+            echo "🔍 PR Number: ${{ github.event.pull_request.number }}"
+          fi
 
       - name: Detect version bump type
         id: version-check
@@ -254,6 +257,29 @@ jobs:
       - name: Exit if major version bump
         if: steps.version-check.outputs.is_major == 'true'
         run: exit 0
+
+      # At this point, we know it's a minor or patch version bump
+      # Check if auto-merge is already enabled to avoid duplicate operations
+      - name: Check if auto-merge is already enabled
+        id: check-automerge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
+        run: |
+          automerge_status=$(gh pr view "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --json autoMergeRequest \
+            --jq '.autoMergeRequest != null')
+
+          echo "Auto-merge status: $automerge_status"
+          echo "enabled=$automerge_status" >> $GITHUB_OUTPUT
+
+      - name: Exit if auto-merge already enabled
+        if: steps.check-automerge.outputs.enabled == 'true'
+        run: |
+          echo "✅ Auto-merge is already enabled for PR #${{ steps.pr-context.outputs.pr_number }}"
+          echo "ℹ️  Event: ${{ steps.pr-context.outputs.event_type }}"
+          exit 0
 
       - name: Comment before enabling auto-merge
         env:
