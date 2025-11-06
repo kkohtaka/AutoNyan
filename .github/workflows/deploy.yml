@@ -21,7 +21,8 @@ jobs:
     environment:
       name: production
     concurrency:
-      group: production
+      group: terraform
+      cancel-in-progress: false
     env:
       NODE_OPTIONS: --max-old-space-size=4096
 
