@@ -21,7 +21,9 @@ jobs:
     environment:
       name: production
     concurrency:
-      group: terraform
+      # Composite key: ensures both Terraform state locking coordination
+      # AND production environment-level deployment serialization
+      group: terraform-production
       cancel-in-progress: false
     env:
       NODE_OPTIONS: --max-old-space-size=4096
