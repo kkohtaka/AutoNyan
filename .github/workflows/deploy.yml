@@ -21,8 +21,10 @@ jobs:
     environment:
       name: production
     concurrency:
-      # Composite key: ensures both Terraform state locking coordination
-      # AND production environment-level deployment serialization
+      # Use the same concurrency group as plan to ensure mutual exclusion.
+      # Plan and Apply both acquire the same Terraform state lock in GCS,
+      # so only one operation (plan OR apply) can run at a time.
+      # The composite key also ensures environment-level deployment serialization.
       group: terraform-production
       cancel-in-progress: false
     env:

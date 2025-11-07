@@ -38,11 +38,11 @@ permissions:
   actions: write
 
 concurrency:
-  # Serializes all Terraform plan operations to prevent concurrent plans.
-  # Note: Deploys use 'terraform-{environment}' groups for environment-specific
-  # serialization, allowing plans and deploys to potentially overlap.
-  # Terraform's state locking mechanism provides the final coordination.
-  group: terraform
+  # Use the same concurrency group as deploy to ensure mutual exclusion.
+  # Plan and Apply both acquire the same Terraform state lock in GCS,
+  # so only one operation (plan OR apply) can run at a time.
+  # The composite key also ensures environment-level deployment serialization.
+  group: terraform-production
   cancel-in-progress: false
 
 jobs:
