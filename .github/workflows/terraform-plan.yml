@@ -167,7 +167,8 @@ jobs:
           # - src/** (function source code)
           # - package.json / package-lock.json (dependencies)
           # - scripts/build-function.sh (build process)
-          if echo "$CHANGED_FILES" | grep -qE '(^|/)(terraform/|src/|package\.json|package-lock\.json|scripts/build-function\.sh)'; then
+          PATTERN='(^|/)(terraform/|src/|package\.json|package-lock\.json|scripts/build-function\.sh)'
+          if echo "$CHANGED_FILES" | grep -qE "$PATTERN"; then
             echo "needs_terraform=true" >> $GITHUB_OUTPUT
             echo "✅ Terraform-related files changed - will run plan"
           else
