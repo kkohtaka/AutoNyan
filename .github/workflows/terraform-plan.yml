@@ -154,6 +154,8 @@ jobs:
               CHANGED_FILES=$(git diff --name-only HEAD^..HEAD)
             else
               # Initial commit: diff against empty tree
+              # All files will be considered "changed" in this scenario.
+              # This is intentional; the workflow will still filter by file patterns below to avoid unnecessary Terraform plans for documentation-only repositories.
               CHANGED_FILES=$(git diff --name-only $(git hash-object -t tree /dev/null)..HEAD)
             fi
           fi
