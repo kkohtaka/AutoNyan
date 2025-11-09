@@ -231,11 +231,7 @@ jobs:
           echo "plan_exit_code=0" >> $GITHUB_OUTPUT
           echo "⏭️  Skipping Terraform plan - no infrastructure files changed" | tee plan_output.txt
           echo "" >> plan_output.txt
-          echo "This PR only modifies files that don't affect infrastructure:" >> plan_output.txt
-          echo "- Documentation (.md files)" >> plan_output.txt
-          echo "- GitHub workflows" >> plan_output.txt
-          echo "- IDE configuration (.vscode, .devcontainer)" >> plan_output.txt
-          echo "- Other non-infrastructure files" >> plan_output.txt
+          echo "This PR only modifies files that do not affect infrastructure. No Terraform plan is required." >> plan_output.txt
 
       - name: Comment PR with plan results
         if: steps.pr.outputs.result && fromJson(steps.pr.outputs.result).number != null
