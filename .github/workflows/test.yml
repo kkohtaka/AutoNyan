@@ -177,7 +177,8 @@ jobs:
     needs: [test]
     if: |
       (github.event_name == 'pull_request' &&
-       github.repository_owner == github.event.pull_request.user.login) ||
+       (github.repository_owner == github.event.pull_request.user.login ||
+        github.actor == 'dependabot[bot]')) ||
       (github.event_name == 'push' && github.ref == 'refs/heads/master')
     steps:
       - name: Trigger Terraform Plan workflow

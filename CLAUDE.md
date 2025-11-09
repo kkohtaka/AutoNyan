@@ -112,13 +112,14 @@ The project implements a security-first CI/CD approach with automated workflows:
 
 ### Pipeline Stages
 1. **Test Workflow**: Runs linting and tests on all code changes
-2. **Terraform Plan Workflow**: Validates infrastructure changes (auto-triggered after Test success for owner PRs)
+2. **Terraform Plan Workflow**: Validates infrastructure changes (auto-triggered after Test success for owner and Dependabot PRs)
 3. **Build Workflow**: Builds deployment packages (auto-triggered after Terraform Plan success)
 
 ### Security Features
-- **Dependabot PRs**: Limited to testing only, no Google Cloud credentials access
+- **Dependabot PRs**: Auto-triggered through full pipeline with smart detection - Terraform plan only runs if infrastructure-related files are changed
 - **Owner PRs**: Full pipeline access with automatic progression through stages
 - **Manual Override**: Comment `/terraform plan` on any PR to manually validate infrastructure
+- **Smart Detection**: Terraform plan automatically skips when only non-infrastructure files (docs, workflows, IDE config) are changed
 - **Workload Identity Federation**: Secure authentication without storing service account keys
 
 ### Configuration Requirements
