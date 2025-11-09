@@ -137,6 +137,38 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ fromJson(steps.pr.outputs.result).sha }}
+          fetch-depth: 0
+
+      - name: Detect if Terraform plan is needed
+        id: detect
+        run: |
+          # For PRs, compare against master branch
+          # For master pushes, check the changed files in the commit
+          if [ -n "${{ fromJson(steps.pr.outputs.result).number }}" ]; then
+            # This is a PR - fetch master and compare
+            git fetch origin master:master
+            CHANGED_FILES=$(git diff --name-only master...${{ fromJson(steps.pr.outputs.result).sha }})
+          else
+            # This is a push to master - check the commit changes
+            CHANGED_FILES=$(git diff --name-only HEAD^..HEAD)
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Check if any changed files affect Terraform
+          # Patterns that require terraform plan:
+          # - terraform/** (infrastructure config)
+          # - src/** (function source code)
+          # - package.json / package-lock.json (dependencies)
+          # - scripts/build-function.sh (build process)
+          if echo "$CHANGED_FILES" | grep -qE '^(terraform/|src/|package\.json|package-lock\.json|scripts/build-function\.sh)'; then
+            echo "needs_terraform=true" >> $GITHUB_OUTPUT
+            echo "✅ Terraform-related files changed - will run plan"
+          else
+            echo "needs_terraform=false" >> $GITHUB_OUTPUT
+            echo "⏭️  No Terraform-related files changed - will skip plan"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -148,23 +180,27 @@ jobs:
         run: npm ci
 
       - name: Setup Terraform
+        if: steps.detect.outputs.needs_terraform == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.5.0'
 
       - name: Authenticate to Google Cloud
+        if: steps.detect.outputs.needs_terraform == 'true'
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Setup Terraform backend
+        if: steps.detect.outputs.needs_terraform == 'true'
         run: npm run setup:terraform-backend
         env:
           TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
           TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
 
       - name: Generate terraform.tfvars
+        if: steps.detect.outputs.needs_terraform == 'true'
         run: npm run setup:terraform-variables
         env:
           GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
@@ -172,6 +208,7 @@ jobs:
           DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
 
       - name: Run Terraform plan
+        if: steps.detect.outputs.needs_terraform == 'true'
         id: plan
         run: |
           npm run build:function
@@ -181,6 +218,19 @@ jobs:
           echo "plan_exit_code=${PLAN_EXIT_CODE}" >> $GITHUB_OUTPUT
           exit ${PLAN_EXIT_CODE}
 
+      - name: Skip Terraform plan (no relevant changes)
+        if: steps.detect.outputs.needs_terraform == 'false'
+        id: skip
+        run: |
+          echo "plan_exit_code=0" >> $GITHUB_OUTPUT
+          echo "⏭️  Skipping Terraform plan - no infrastructure-related files changed" | tee plan_output.txt
+          echo "" >> plan_output.txt
+          echo "This PR only modifies files that don't affect infrastructure:" >> plan_output.txt
+          echo "- Documentation (.md files)" >> plan_output.txt
+          echo "- GitHub workflows" >> plan_output.txt
+          echo "- IDE configuration (.vscode, .devcontainer)" >> plan_output.txt
+          echo "- Other non-infrastructure files" >> plan_output.txt
+
       - name: Comment PR with plan results
         if: steps.pr.outputs.result && fromJson(steps.pr.outputs.result).number != null
         uses: actions/github-script@v8
@@ -188,11 +238,12 @@ jobs:
           script: |
             const fs = require('fs');
             const planOutput = fs.readFileSync('plan_output.txt', 'utf8');
-            const exitCode = '${{ steps.plan.outputs.plan_exit_code }}';
+            const exitCode = '${{ steps.plan.outputs.plan_exit_code || steps.skip.outputs.plan_exit_code }}';
+            const wasSkipped = '${{ steps.detect.outputs.needs_terraform }}' === 'false';
 
             const success = exitCode === '0';
-            const emoji = success ? '✅' : '❌';
-            const status = success ? 'SUCCESS' : 'FAILED';
+            const emoji = wasSkipped ? '⏭️' : (success ? '✅' : '❌');
+            const status = wasSkipped ? 'SKIPPED' : (success ? 'SUCCESS' : 'FAILED');
 
             const triggerInfo = context.eventName === 'issue_comment'
               ? `*Triggered by comment from @${{ github.event.comment.user.login }}*`
@@ -201,7 +252,15 @@ jobs:
             const prDetails = ${{ steps.pr.outputs.result }};
             const issueNumber = prDetails.number;
 
-            const body = `## ${emoji} Terraform Plan ${status}
+            const body = wasSkipped
+              ? `## ${emoji} Terraform Plan ${status}
+
+            No infrastructure-related files were changed in this PR.
+
+            ${planOutput}
+
+            ${triggerInfo}`
+              : `## ${emoji} Terraform Plan ${status}
 
             <details>
             <summary>Click to expand plan output</summary>
@@ -226,13 +285,16 @@ jobs:
         with:
           script: |
             const prDetails = ${{ steps.pr.outputs.result }};
-            const exitCode = '${{ steps.plan.outputs.plan_exit_code }}';
+            const exitCode = '${{ steps.plan.outputs.plan_exit_code || steps.skip.outputs.plan_exit_code }}';
+            const wasSkipped = '${{ steps.detect.outputs.needs_terraform }}' === 'false';
             const success = exitCode === '0';
 
             const state = success ? 'success' : 'failure';
-            const description = success
-              ? 'Terraform plan completed successfully'
-              : 'Terraform plan failed';
+            const description = wasSkipped
+              ? 'Terraform plan skipped (no infrastructure changes)'
+              : (success
+                ? 'Terraform plan completed successfully'
+                : 'Terraform plan failed');
 
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
@@ -251,6 +313,7 @@ jobs:
 
       - name: Trigger Deploy workflow (master branch only)
         if: |
+          steps.detect.outputs.needs_terraform == 'true' &&
           steps.plan.outputs.plan_exit_code == '0' &&
           github.event_name == 'workflow_dispatch' &&
           fromJson(steps.pr.outputs.result).ref == 'master'
