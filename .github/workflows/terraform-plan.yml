@@ -172,7 +172,7 @@ jobs:
             echo "✅ Terraform-related files changed - will run plan"
           else
             echo "needs_terraform=false" >> $GITHUB_OUTPUT
-            echo "⏭️  No Terraform-related files changed - will skip plan"
+            echo "⏭️  No infrastructure files changed - skipping plan"
           fi
 
       - name: Setup Node.js
@@ -228,7 +228,7 @@ jobs:
         id: skip
         run: |
           echo "plan_exit_code=0" >> $GITHUB_OUTPUT
-          echo "⏭️  Skipping Terraform plan - no infrastructure-related files changed" | tee plan_output.txt
+          echo "⏭️  Skipping Terraform plan - no infrastructure files changed" | tee plan_output.txt
           echo "" >> plan_output.txt
           echo "This PR only modifies files that don't affect infrastructure:" >> plan_output.txt
           echo "- Documentation (.md files)" >> plan_output.txt
