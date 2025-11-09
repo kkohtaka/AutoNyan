@@ -150,7 +150,12 @@ jobs:
             CHANGED_FILES=$(git diff --name-only master...${{ fromJson(steps.pr.outputs.result).sha }})
           else
             # This is a push to master - check the commit changes
-            CHANGED_FILES=$(git diff --name-only HEAD^..HEAD)
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED_FILES=$(git diff --name-only HEAD^..HEAD)
+            else
+              # Initial commit: diff against empty tree
+              CHANGED_FILES=$(git diff --name-only $(git hash-object -t tree /dev/null)..HEAD)
+            fi
           fi
 
           echo "Changed files:"
