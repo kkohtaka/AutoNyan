@@ -292,7 +292,7 @@ jobs:
             --body "✅ **Auto-merge enabled for Dependabot PR**
 
           - Version bump type: **${BUMP_TYPE}**
-          - Merge method: **squash**
+          - Merge method: **rebase**
 
           GitHub will automatically merge this PR when all branch \
           protection rules are satisfied."
@@ -302,6 +302,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
         run: |
-          gh pr merge --auto --squash "$PR_NUMBER" \
+          gh pr merge --auto --rebase "$PR_NUMBER" \
             --repo "${{ github.repository }}"
           echo "✅ Auto-merge enabled for PR #${PR_NUMBER}"
