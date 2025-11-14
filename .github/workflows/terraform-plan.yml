@@ -144,7 +144,7 @@ jobs:
         run: |
           # For PRs, compare against master branch
           # For master pushes, check the changed files in the commit
-          if [ -n "${{ steps.pr.outputs.result }}" ] && [ -n "${{ fromJson(steps.pr.outputs.result).number }}" ]; then
+          if [ -n "${{ inputs.pr_number }}" ]; then
             # This is a PR - fetch master and compare
             git fetch origin master:master
             CHANGED_FILES=$(git diff --name-only master...${{ fromJson(steps.pr.outputs.result).sha }})
