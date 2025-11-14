@@ -155,7 +155,8 @@ jobs:
             else
               # Initial commit: diff against empty tree
               # All files will be considered "changed" in this scenario.
-              # This is intentional; the workflow will still filter by file patterns below to avoid unnecessary Terraform plans for documentation-only repositories.
+              # The workflow will filter by file patterns below to avoid
+              # unnecessary Terraform plans for documentation-only repos.
               CHANGED_FILES=$(git diff --name-only $(git hash-object -t tree /dev/null)..HEAD)
             fi
           fi
@@ -233,7 +234,8 @@ jobs:
           echo "plan_exit_code=0" >> $GITHUB_OUTPUT
           echo "⏭️  Skipping Terraform plan - no infrastructure files changed" | tee plan_output.txt
           echo "" >> plan_output.txt
-          echo "This PR only modifies files that do not affect infrastructure. No Terraform plan is required." >> plan_output.txt
+          echo "This PR only modifies files that do not affect infrastructure." >> plan_output.txt
+          echo "No Terraform plan is required." >> plan_output.txt
 
       - name: Comment PR with plan results
         if: steps.pr.outputs.result && fromJson(steps.pr.outputs.result).number != null
