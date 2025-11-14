@@ -77,10 +77,18 @@ jobs:
         if: |
           github.event_name == 'workflow_run' &&
           steps.get-pr.outputs.is_dependabot != 'true'
-        run: exit 0
+        run: |
+          echo "ℹ️ Skipping: Not a Dependabot PR or no open PR found"
+          exit 0
 
       - name: Set PR context
         id: pr-context
+        # Only run if we have valid PR context:
+        # - For pull_request_target events, context is always available
+        # - For workflow_run events, only run if we found a Dependabot PR
+        if: |
+          github.event_name == 'pull_request_target' ||
+          (github.event_name == 'workflow_run' && steps.get-pr.outputs.is_dependabot == 'true')
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             PR_NUM="${{ steps.get-pr.outputs.pr_number }}"
@@ -110,6 +118,7 @@ jobs:
 
       - name: Detect version bump type
         id: version-check
+        if: steps.pr-context.outcome == 'success'
         env:
           PR_TITLE: ${{ steps.pr-context.outputs.pr_title }}
         run: |
@@ -219,7 +228,7 @@ jobs:
           fi
 
       - name: Comment on unparseable version
-        if: steps.version-check.outputs.is_major == 'unknown'
+        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'unknown'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
@@ -234,11 +243,11 @@ jobs:
           Dependabot's standard format, or merge this PR manually."
 
       - name: Exit if unparseable version
-        if: steps.version-check.outputs.is_major == 'unknown'
+        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'unknown'
         run: exit 0
 
       - name: Comment on major version bump
-        if: steps.version-check.outputs.is_major == 'true'
+        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
@@ -255,13 +264,14 @@ jobs:
           behavior. To merge this PR, please review and merge manually."
 
       - name: Exit if major version bump
-        if: steps.version-check.outputs.is_major == 'true'
+        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'true'
         run: exit 0
 
       # At this point, we know it's a minor or patch version bump
       # Check if auto-merge is already enabled to avoid duplicate operations
       - name: Check if auto-merge is already enabled
         id: check-automerge
+        if: steps.pr-context.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
@@ -275,13 +285,14 @@ jobs:
           echo "enabled=$automerge_status" >> $GITHUB_OUTPUT
 
       - name: Exit if auto-merge already enabled
-        if: steps.check-automerge.outputs.enabled == 'true'
+        if: steps.pr-context.outcome == 'success' && steps.check-automerge.outputs.enabled == 'true'
         run: |
           echo "✅ Auto-merge is already enabled for PR #${{ steps.pr-context.outputs.pr_number }}"
           echo "ℹ️  Event: ${{ steps.pr-context.outputs.event_type }}"
           exit 0
 
       - name: Comment before enabling auto-merge
+        if: steps.pr-context.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
@@ -298,6 +309,7 @@ jobs:
           protection rules are satisfied."
 
       - name: Enable auto-merge
+        if: steps.pr-context.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
