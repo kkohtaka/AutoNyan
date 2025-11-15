@@ -23,7 +23,7 @@ jobs:
     if: github.actor == 'dependabot[bot]'
 
     steps:
-      # Check auto-merge status early and set output to control subsequent steps
+      # Check auto-merge status early and skip if already enabled
       - name: Check auto-merge status
         id: check-automerge
         run: |
@@ -36,190 +36,34 @@ jobs:
             echo "already_enabled=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Set PR context
-        id: pr-context
-        # Only run if auto-merge is not already enabled
-        if: steps.check-automerge.outputs.already_enabled != 'true'
-        run: |
-          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-          echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
-          echo "🔍 PR Number: ${{ github.event.pull_request.number }}"
-
-      - name: Detect version bump type
-        id: version-check
-        if: steps.pr-context.outcome == 'success'
-        env:
-          PR_TITLE: ${{ steps.pr-context.outputs.pr_title }}
-        run: |
-          echo "Analyzing PR title: $PR_TITLE"
-
-          # Extract version numbers from PR title
-          # Supports standard semver including pre-release and build metadata:
-          # - npm(deps): bump package from 1.2.3 to 2.0.0
-          # - npm(deps): bump package from 1.0.0-beta to 1.0.0
-          # - github-actions(deps): bump actions/checkout from 4 to 5
-
-          # Pattern matches: X.Y.Z[-pre-release][+build]
-          # Pre-release: -alpha, -beta, -rc.1, etc.
-          # Build metadata: +build.123, etc.
-          VERSION_REGEX='[0-9]+(\.[0-9]+)?(\.[0-9]+)?(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?'
-          VERSION_PATTERN="from ${VERSION_REGEX} to ${VERSION_REGEX}"
-
-          if echo "$PR_TITLE" | grep -qE "$VERSION_PATTERN"; then
-            # Extract full version strings (including pre-release/build)
-            OLD_FULL=$(echo "$PR_TITLE" | \
-              sed -n 's/.*from \([0-9]\+[^[:space:]]*\) to.*/\1/p')
-            NEW_FULL=$(echo "$PR_TITLE" | \
-              sed -n 's/.*to \([0-9]\+[^[:space:]]*\).*/\1/p')
-
-            echo "Version change: $OLD_FULL → $NEW_FULL"
-
-            # Extract numeric version only (strip pre-release and build metadata)
-            # This ensures we compare 1.2.3-beta vs 2.0.0-rc as 1.2.3 vs 2.0.0
-            OLD_VERSION=$(echo "$OLD_FULL" | sed 's/[-+].*//')
-            NEW_VERSION=$(echo "$NEW_FULL" | sed 's/[-+].*//')
-
-            # Validate we extracted versions successfully
-            if [ -z "$OLD_VERSION" ] || [ -z "$NEW_VERSION" ]; then
-              echo "⚠️ Failed to extract numeric versions"
-              echo "bump_type=unknown" >> $GITHUB_OUTPUT
-              echo "is_major=unknown" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-
-            echo "Comparing numeric versions: $OLD_VERSION → $NEW_VERSION"
-
-            # Check for identical versions (no change)
-            if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
-              echo "⚠️ Versions are identical - no change detected"
-              echo "bump_type=unknown" >> $GITHUB_OUTPUT
-              echo "is_major=unknown" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-
-            # Parse major versions
-            OLD_MAJOR=$(echo "$OLD_VERSION" | cut -d. -f1)
-            NEW_MAJOR=$(echo "$NEW_VERSION" | cut -d. -f1)
-
-            # Determine bump type
-            if [ "$NEW_MAJOR" -gt "$OLD_MAJOR" ]; then
-              BUMP_TYPE="major"
-              IS_MAJOR="true"
-            elif [ "$OLD_MAJOR" -gt "$NEW_MAJOR" ]; then
-              # Downgrade - treat as unknown/manual review
-              echo "⚠️ Version downgrade detected: $OLD_MAJOR → $NEW_MAJOR"
-              echo "bump_type=downgrade" >> $GITHUB_OUTPUT
-              echo "is_major=unknown" >> $GITHUB_OUTPUT
-              exit 0
-            else
-              # Major versions are equal, check minor
-              OLD_MINOR=$(echo "$OLD_VERSION" | cut -d. -f2 -s)
-              NEW_MINOR=$(echo "$NEW_VERSION" | cut -d. -f2 -s)
-              OLD_MINOR=${OLD_MINOR:-0}
-              NEW_MINOR=${NEW_MINOR:-0}
-
-              if [ "$NEW_MINOR" -gt "$OLD_MINOR" ]; then
-                BUMP_TYPE="minor"
-                IS_MAJOR="false"
-              elif [ "$OLD_MINOR" -gt "$NEW_MINOR" ]; then
-                # Minor downgrade
-                echo "⚠️ Version downgrade detected"
-                echo "bump_type=downgrade" >> $GITHUB_OUTPUT
-                echo "is_major=unknown" >> $GITHUB_OUTPUT
-                exit 0
-              else
-                # Minor versions are equal, check patch
-                OLD_PATCH=$(echo "$OLD_VERSION" | cut -d. -f3 -s)
-                NEW_PATCH=$(echo "$NEW_VERSION" | cut -d. -f3 -s)
-                OLD_PATCH=${OLD_PATCH:-0}
-                NEW_PATCH=${NEW_PATCH:-0}
-
-                if [ "$NEW_PATCH" -gt "$OLD_PATCH" ]; then
-                  BUMP_TYPE="patch"
-                  IS_MAJOR="false"
-                else
-                  # Patch downgrade or equal (shouldn't happen, caught above)
-                  echo "⚠️ Ambiguous or no version change detected"
-                  echo "bump_type=unknown" >> $GITHUB_OUTPUT
-                  echo "is_major=unknown" >> $GITHUB_OUTPUT
-                  exit 0
-                fi
-              fi
-            fi
-
-            echo "Bump type: $BUMP_TYPE"
-            echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
-            echo "is_major=$IS_MAJOR" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️ Could not parse version from PR title"
-            echo "bump_type=unknown" >> $GITHUB_OUTPUT
-            echo "is_major=unknown" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Comment on unparseable version
-        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'unknown'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
-        run: |
-          gh pr comment "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
-            --body "⚠️ **Auto-merge skipped**: Unable to parse version \
-          information from PR title.
-
-          This workflow requires version information in the format \
-          'from X.Y.Z to A.B.C'. Please verify the PR title follows \
-          Dependabot's standard format, or merge this PR manually."
-
-      - name: Exit if unparseable version
-        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'unknown'
-        run: exit 0
-
-      - name: Comment on major version bump
-        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
-        run: |
-          gh pr comment "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
-            --body "⚠️ **Auto-merge skipped**: This PR contains a \
-          **major version bump** and requires manual review.
-
-          Major version updates may contain breaking changes. \
-          Please review the changelog and test thoroughly before merging.
-
-          To auto-merge minor/patch updates only, this is the expected \
-          behavior. To merge this PR, please review and merge manually."
-
-      - name: Exit if major version bump
-        if: steps.pr-context.outcome == 'success' && steps.version-check.outputs.is_major == 'true'
-        run: exit 0
-
-      # At this point, we know it's a minor or patch version bump
-      - name: Comment before enabling auto-merge
-        if: steps.pr-context.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
-          BUMP_TYPE: ${{ steps.version-check.outputs.bump_type }}
-        run: |
-          gh pr comment "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
-            --body "✅ **Auto-merge enabled for Dependabot PR**
-
-          - Version bump type: **${BUMP_TYPE}**
-          - Merge method: **rebase**
-
-          Auto-merge has been enabled and this PR will automatically merge \
-          when all branch protection rules are satisfied (including test completion)."
-
       - name: Enable auto-merge
-        if: steps.pr-context.outcome == 'success'
+        # Only run if auto-merge is not already enabled
+        id: enable-automerge
+        if: steps.check-automerge.outputs.already_enabled != 'true'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh pr merge --auto --rebase "$PR_NUMBER" \
             --repo "${{ github.repository }}"
           echo "✅ Auto-merge enabled for PR #${PR_NUMBER}"
+
+      - name: Comment on auto-merge failure
+        # Only run if enable-automerge step failed
+        if: steps.enable-automerge.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --body "⚠️ **Failed to enable auto-merge for Dependabot PR**
+
+          The workflow attempted to enable auto-merge but encountered an error.
+          This may be due to:
+          - Branch protection rules preventing auto-merge
+          - Permissions issues
+          - PR state incompatible with auto-merge
+
+          Please check the workflow logs and enable auto-merge manually if needed."
