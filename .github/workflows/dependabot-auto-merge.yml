@@ -41,6 +41,17 @@ jobs:
        github.event.workflow_run.head_repository.full_name == github.repository)
 
     steps:
+      # For pull_request_target events, check auto-merge status immediately from event payload
+      - name: Exit if auto-merge already enabled (pull_request_target)
+        if: |
+          github.event_name == 'pull_request_target' &&
+          github.event.pull_request.auto_merge != null
+        run: |
+          echo "✅ Auto-merge is already enabled for PR #${{ github.event.pull_request.number }}"
+          echo "ℹ️  Event: pull_request_target"
+          echo "⏭️  Skipping workflow - no action needed"
+          exit 0
+
       # For workflow_run events, we need to get the PR number
       - name: Get PR details for workflow_run event
         if: github.event_name == 'workflow_run'
@@ -82,6 +93,17 @@ jobs:
           echo "ℹ️ Skipping: Not a Dependabot PR or no open PR found"
           exit 0
 
+      # For workflow_run events, check auto-merge status and exit early if already enabled
+      - name: Exit if auto-merge already enabled (workflow_run)
+        if: |
+          github.event_name == 'workflow_run' &&
+          steps.get-pr.outputs.auto_merge_enabled == 'true'
+        run: |
+          echo "✅ Auto-merge is already enabled for PR #${{ steps.get-pr.outputs.pr_number }}"
+          echo "ℹ️  Event: workflow_run"
+          echo "⏭️  Skipping workflow - no action needed"
+          exit 0
+
       - name: Set PR context
         id: pr-context
         # Only run if we have valid PR context:
@@ -94,7 +116,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             PR_NUM="${{ steps.get-pr.outputs.pr_number }}"
             PR_TITLE="${{ steps.get-pr.outputs.pr_title }}"
-            AUTO_MERGE="${{ steps.get-pr.outputs.auto_merge_enabled }}"
 
             # Validate PR context was successfully retrieved
             if [ -z "$PR_NUM" ] || [ -z "$PR_TITLE" ]; then
@@ -104,15 +125,10 @@ jobs:
 
             echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
             echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
-            echo "auto_merge_enabled=$AUTO_MERGE" >> $GITHUB_OUTPUT
             echo "event_type=workflow_run" >> $GITHUB_OUTPUT
           else
-            # For pull_request_target events, check auto_merge directly from event payload
-            AUTO_MERGE_STATUS="${{ github.event.pull_request.auto_merge != null && 'true' || 'false' }}"
-
             echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
             echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
-            echo "auto_merge_enabled=$AUTO_MERGE_STATUS" >> $GITHUB_OUTPUT
             echo "event_type=pull_request_target" >> $GITHUB_OUTPUT
           fi
 
@@ -122,16 +138,6 @@ jobs:
           else
             echo "🔍 PR Number: ${{ github.event.pull_request.number }}"
           fi
-
-      # Check if auto-merge is already enabled to avoid duplicate operations
-      # Uses auto_merge field from event payload (no API call needed)
-      - name: Exit if auto-merge already enabled
-        if: steps.pr-context.outcome == 'success' && steps.pr-context.outputs.auto_merge_enabled == 'true'
-        run: |
-          echo "✅ Auto-merge is already enabled for PR #${{ steps.pr-context.outputs.pr_number }}"
-          echo "ℹ️  Event: ${{ steps.pr-context.outputs.event_type }}"
-          echo "⏭️  Skipping workflow - no action needed"
-          exit 0
 
       - name: Detect version bump type
         id: version-check
