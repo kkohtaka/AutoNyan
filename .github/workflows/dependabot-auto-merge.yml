@@ -41,20 +41,30 @@ jobs:
        github.event.workflow_run.head_repository.full_name == github.repository)
 
     steps:
-      # For pull_request_target events, check auto-merge status immediately from event payload
-      - name: Exit if auto-merge already enabled (pull_request_target)
-        if: |
-          github.event_name == 'pull_request_target' &&
-          github.event.pull_request.auto_merge != null
+      # Check auto-merge status early and set output to control subsequent steps
+      - name: Check auto-merge status
+        id: check-automerge
         run: |
-          echo "✅ Auto-merge is already enabled for PR #${{ github.event.pull_request.number }}"
-          echo "ℹ️  Event: pull_request_target"
-          echo "⏭️  Skipping workflow - no action needed"
-          exit 0
+          if [ "${{ github.event_name }}" = "pull_request_target" ]; then
+            # For pull_request_target, check directly from event payload
+            if [ "${{ github.event.pull_request.auto_merge != null }}" = "true" ]; then
+              echo "✅ Auto-merge is already enabled for PR #${{ github.event.pull_request.number }}"
+              echo "ℹ️  Event: pull_request_target"
+              echo "⏭️  Skipping workflow - no action needed"
+              echo "already_enabled=true" >> $GITHUB_OUTPUT
+            else
+              echo "already_enabled=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            # For workflow_run, we'll check after getting PR details
+            echo "already_enabled=false" >> $GITHUB_OUTPUT
+          fi
 
       # For workflow_run events, we need to get the PR number
       - name: Get PR details for workflow_run event
-        if: github.event_name == 'workflow_run'
+        if: |
+          github.event_name == 'workflow_run' &&
+          steps.check-automerge.outputs.already_enabled != 'true'
         id: get-pr
         uses: actions/github-script@v8
         with:
@@ -88,30 +98,36 @@ jobs:
       - name: Exit if not Dependabot PR
         if: |
           github.event_name == 'workflow_run' &&
+          steps.check-automerge.outputs.already_enabled != 'true' &&
           steps.get-pr.outputs.is_dependabot != 'true'
         run: |
           echo "ℹ️ Skipping: Not a Dependabot PR or no open PR found"
-          exit 0
 
-      # For workflow_run events, check auto-merge status and exit early if already enabled
-      - name: Exit if auto-merge already enabled (workflow_run)
+      # For workflow_run events, check auto-merge status and update the check
+      - name: Check auto-merge for workflow_run event
         if: |
           github.event_name == 'workflow_run' &&
-          steps.get-pr.outputs.auto_merge_enabled == 'true'
+          steps.get-pr.outputs.is_dependabot == 'true'
+        id: check-automerge-workflow-run
         run: |
-          echo "✅ Auto-merge is already enabled for PR #${{ steps.get-pr.outputs.pr_number }}"
-          echo "ℹ️  Event: workflow_run"
-          echo "⏭️  Skipping workflow - no action needed"
-          exit 0
+          if [ "${{ steps.get-pr.outputs.auto_merge_enabled }}" = "true" ]; then
+            echo "✅ Auto-merge is already enabled for PR #${{ steps.get-pr.outputs.pr_number }}"
+            echo "ℹ️  Event: workflow_run"
+            echo "⏭️  Skipping workflow - no action needed"
+            echo "already_enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "already_enabled=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set PR context
         id: pr-context
-        # Only run if we have valid PR context:
-        # - For pull_request_target events, context is always available
-        # - For workflow_run events, only run if we found a Dependabot PR
+        # Only run if auto-merge is not already enabled and we have valid PR context
         if: |
-          github.event_name == 'pull_request_target' ||
-          (github.event_name == 'workflow_run' && steps.get-pr.outputs.is_dependabot == 'true')
+          steps.check-automerge.outputs.already_enabled != 'true' &&
+          (steps.check-automerge-workflow-run.outputs.already_enabled != 'true' ||
+           steps.check-automerge-workflow-run.outcome == 'skipped') &&
+          (github.event_name == 'pull_request_target' ||
+           (github.event_name == 'workflow_run' && steps.get-pr.outputs.is_dependabot == 'true'))
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
             PR_NUM="${{ steps.get-pr.outputs.pr_number }}"
