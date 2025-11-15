@@ -116,6 +116,30 @@ jobs:
             echo "🔍 PR Number: ${{ github.event.pull_request.number }}"
           fi
 
+      # Check if auto-merge is already enabled to avoid duplicate operations
+      - name: Check if auto-merge is already enabled
+        id: check-automerge
+        if: steps.pr-context.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
+        run: |
+          automerge_status=$(gh pr view "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --json autoMergeRequest \
+            --jq '.autoMergeRequest != null')
+
+          echo "Auto-merge status: $automerge_status"
+          echo "enabled=$automerge_status" >> $GITHUB_OUTPUT
+
+      - name: Exit if auto-merge already enabled
+        if: steps.pr-context.outcome == 'success' && steps.check-automerge.outputs.enabled == 'true'
+        run: |
+          echo "✅ Auto-merge is already enabled for PR #${{ steps.pr-context.outputs.pr_number }}"
+          echo "ℹ️  Event: ${{ steps.pr-context.outputs.event_type }}"
+          echo "⏭️  Skipping workflow - no action needed"
+          exit 0
+
       - name: Detect version bump type
         id: version-check
         if: steps.pr-context.outcome == 'success'
@@ -268,29 +292,6 @@ jobs:
         run: exit 0
 
       # At this point, we know it's a minor or patch version bump
-      # Check if auto-merge is already enabled to avoid duplicate operations
-      - name: Check if auto-merge is already enabled
-        id: check-automerge
-        if: steps.pr-context.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr-context.outputs.pr_number }}
-        run: |
-          automerge_status=$(gh pr view "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
-            --json autoMergeRequest \
-            --jq '.autoMergeRequest != null')
-
-          echo "Auto-merge status: $automerge_status"
-          echo "enabled=$automerge_status" >> $GITHUB_OUTPUT
-
-      - name: Exit if auto-merge already enabled
-        if: steps.pr-context.outcome == 'success' && steps.check-automerge.outputs.enabled == 'true'
-        run: |
-          echo "✅ Auto-merge is already enabled for PR #${{ steps.pr-context.outputs.pr_number }}"
-          echo "ℹ️  Event: ${{ steps.pr-context.outputs.event_type }}"
-          exit 0
-
       - name: Comment before enabling auto-merge
         if: steps.pr-context.outcome == 'success'
         env:
