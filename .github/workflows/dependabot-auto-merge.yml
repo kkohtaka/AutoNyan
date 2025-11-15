@@ -27,7 +27,7 @@ jobs:
       - name: Check auto-merge status
         id: check-automerge
         run: |
-          # Check directly from event payload
+          # Check if auto-merge is already enabled for this PR
           if [ "${{ github.event.pull_request.auto_merge != null }}" = "true" ]; then
             echo "✅ Auto-merge is already enabled for PR #${{ github.event.pull_request.number }}"
             echo "⏭️  Skipping workflow - no action needed"
