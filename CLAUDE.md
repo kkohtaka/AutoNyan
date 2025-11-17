@@ -257,7 +257,7 @@ resource "google_cloudfunctions2_function" "my_function" {
 
   build_config {
     runtime     = "nodejs20"
-    entry_point = "myFunction"  # Must match exported function name
+    entry_point = "myFunction"  # Must match the actual exported function name in the implementation
     source {
       storage_source {
         bucket = var.function_bucket_name
