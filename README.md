@@ -1,30 +1,69 @@
 # AutoNyan
 
-A Google Cloud Functions project built with TypeScript and managed with Terraform. This project demonstrates creating and deploying serverless functions to Google Cloud Platform with infrastructure as code.
+A Google Cloud Functions project demonstrating serverless document processing with TypeScript and Terraform. AutoNyan implements an event-driven pipeline for automated Google Drive document scanning, text extraction using Vision API, and data persistence to Firestore.
+
+## Architecture Overview
+
+AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 4-stage pipeline:
+
+```mermaid
+graph LR
+    A[Cloud Scheduler] --> B[1. Drive Discovery]
+    B --> C[2. Document Preparation]
+    C --> D[3. Text Extraction]
+    D --> E[4. Data Persistence]
+    E --> F[Firestore]
+```
+
+**Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database
+
+### Pipeline Stages
+
+1. **Drive Discovery**: Scheduled scanning of Google Drive folders to discover documents
+2. **Document Preparation**: Downloads and copies documents from Google Drive to Cloud Storage
+3. **Text Extraction**: Processes documents using Vision API for OCR and text extraction
+4. **Data Persistence**: Stores extracted text and metadata in Firestore database
+
+### Event Triggers
+
+- **Scheduled Triggers**: Cloud Scheduler initiates periodic Drive scans
+- **PubSub Triggers**: Message-based communication between discovery and preparation stages
+- **Storage Triggers**: New file uploads automatically trigger processing stages
+
+### Key Technologies
+
+- **Cloud Functions v2**: Serverless compute with Node.js runtime
+- **PubSub**: Asynchronous messaging between pipeline stages
+- **Cloud Storage**: Document staging and results storage
+- **Vision API**: OCR and text extraction from documents
+- **Firestore**: NoSQL database for extracted text and metadata
+- **Terraform**: Infrastructure as Code for all cloud resources
 
 ## Features
 
-- **Serverless Functions**: Google Cloud Functions v2 with Node.js 20 runtime
-- **TypeScript**: Full TypeScript support with strict typing and Jest testing
-- **Infrastructure as Code**: Terraform for cloud resource management
+- **Event-Driven Architecture**: Fully asynchronous pipeline with automatic retries
+- **TypeScript**: Full type safety with strict typing and comprehensive testing
+- **Infrastructure as Code**: Terraform modules for reproducible deployments
 - **Google Drive Integration**: Advanced Drive API operations with pagination support
-- **Document Processing**: Automated Google Drive document scanning and processing
-- **Text Extraction**: Vision API integration for OCR and text extraction from documents
-- **Data Storage**: Firestore integration for storing extracted text and metadata
-- **Type Safety**: Comprehensive TypeScript types for all API operations
-- **Dev Container**: Pre-configured development environment with linting and formatting
+- **Document Processing**: Automated scanning and text extraction from multiple file formats
+- **Modular Design**: Each function is independently deployable and testable
+- **Security-First CI/CD**: GitHub Actions with Workload Identity Federation
+- **Dev Container**: Pre-configured development environment with all tools
 
 ## Prerequisites
 
-- Node.js (version specified in `.nvmrc`)
-- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
-- [Terraform](https://www.terraform.io/downloads.html) >= 1.0
-- A Google Cloud project with billing enabled
-- [nvm](https://github.com/nvm-sh/nvm) (recommended for Node.js version management)
+- **Node.js**: Version specified in `.nvmrc` file
+- **Google Cloud SDK**: [Installation guide](https://cloud.google.com/sdk/docs/install)
+- **Terraform**: Version >= 1.0 ([Download](https://www.terraform.io/downloads.html))
+- **Google Cloud Project**: With billing enabled
+- **nvm**: Recommended for Node.js version management ([Install nvm](https://github.com/nvm-sh/nvm))
+- **Docker**: Required for dev container workflow ([Install Docker](https://www.docker.com/))
 
 ## Quick Start
 
-1. Install [Docker](https://www.docker.com/) and [VS Code Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+### Option 1: Dev Container (Recommended)
+
+1. Install [VS Code](https://code.visualstudio.com/) and [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 2. Open this project in VS Code
 3. Reopen in dev container when prompted (or use `Dev Containers: Reopen in Container`)
 4. Authenticate with Google Cloud:
@@ -33,275 +72,431 @@ A Google Cloud Functions project built with TypeScript and managed with Terrafor
    gcloud config set project YOUR_PROJECT_ID
    ```
 
+### Option 2: Local Development
+
+1. Install prerequisites listed above
+2. Install Node.js version from `.nvmrc`:
+   ```bash
+   nvm install && nvm use
+   ```
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Authenticate with Google Cloud:
+   ```bash
+   gcloud auth application-default login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+
 ### Configuration
 
-1. **Set up Terraform backend**:
+#### 1. Terraform Backend Setup
 
-   ```bash
-   # Optional: Configure custom bucket name and location
-   export TF_STATE_BUCKET="your-custom-bucket-name"
-   export TF_STATE_LOCATION="your-preferred-region"
+Set up remote state storage in Cloud Storage:
 
-   # Run the setup script
-   npm run setup:terraform-backend
+```bash
+# Optional: Configure custom bucket name and location
+export TF_STATE_BUCKET="your-custom-bucket-name"
+export TF_STATE_LOCATION="your-preferred-region"
 
-   # Initialize Terraform
-   npm run terraform:init
-   ```
+# Run the setup script
+npm run setup:terraform-backend
 
-2. **Configure project variables**:
-
-   ```bash
-   cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-   ```
-
-   Edit `terraform/terraform.tfvars`:
-
-   ```hcl
-   project_id = "your-project-id"
-   region     = "us-central1"
-   drive_folder_id = "your-google-drive-folder-id"  # See Google Drive Setup section below
-   ```
-
-3. **Configure GitHub Actions CI/CD** (if using GitHub repository):
-
-   For the CI/CD pipeline to work properly, you need to configure GitHub repository variables and secrets:
-
-   **Repository Variables** (Settings > Secrets and variables > Actions > Variables):
-   - `TF_STATE_BUCKET`: Terraform state storage bucket name
-   - `TF_STATE_LOCATION`: Cloud Storage bucket region/location
-   - `DRIVE_FOLDER_ID`: Google Drive folder ID for scanning
-   - `DRIVE_SCANNER_SCHEDULE`: Cron schedule for automatic scanning (e.g., "0 9 * * 1")
-
-   **Repository Secrets** (Settings > Secrets and variables > Actions > Secrets):
-   - `WIF_PROVIDER`: Workload Identity Federation provider (set up via `npm run setup:github-actions`)
-   - `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions authentication
-   - `DRIVE_FOLDER_ID`: Google Drive folder ID (if sensitive)
-
-   ### GitHub Actions Workflow Pipeline
-
-   The project uses a secure, multi-stage CI/CD pipeline:
-
-   **For Repository Owner PRs:**
-   1. **Test Workflow**: Runs linting and tests on all code changes
-   2. **Terraform Plan Workflow**: Validates infrastructure changes (auto-triggered after Test success)
-   3. **Build Workflow**: Builds deployment packages (auto-triggered after Terraform Plan success)
-
-   **For Dependabot PRs:**
-   - Only runs Test workflow (secure by default, no infrastructure access)
-   - Manual infrastructure validation via `/terraform plan` comment (repository owners only)
-
-   **Manual Triggers:**
-   - Comment `/terraform plan` on any PR to manually run Terraform validation
-   - Only repository owners, members, and collaborators can trigger manual validation
-
-## Google Drive Setup
-
-### Finding Your Google Drive Folder ID
-
-To configure the `drive_folder_id` variable, you need to find the ID of the Google Drive folder you want to scan:
-
-**Method 1: From Google Drive Web Interface (Easiest)**
-
-1. Open Google Drive in your web browser (drive.google.com)
-2. Navigate to the folder you want to scan
-3. Look at the URL in your browser's address bar
-4. The folder ID is the long string after `/folders/`
-
-**Example URL:**
-
-```
-https://drive.google.com/drive/folders/1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS
+# Initialize Terraform
+npm run terraform:init
 ```
 
-**Folder ID:** `1BxiMVs0XRA5nFMF-FYqen0wBVTGOT4xS`
+#### 2. Project Variables
 
-**Method 2: Right-click Share Option**
+Copy the example configuration file:
 
-1. Right-click on the folder in Google Drive
-2. Select "Share" or "Get link"
-3. Copy the shareable link
-4. Extract the folder ID from the link (same format as above)
+```bash
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+```
 
-### Granting Drive Access to Service Account
+Edit `terraform/terraform.tfvars` with your values:
 
-**IMPORTANT**: Google Drive access requires manual folder sharing, as Drive API roles cannot be assigned at the project level.
+```hcl
+project_id              = "your-gcp-project-id"
+region                  = "us-central1"
+drive_folder_id         = "your-google-drive-folder-id"
+drive_scanner_schedule  = "0 9 * * 1"  # Weekly on Mondays at 9 AM UTC
+```
 
-1. **Deploy the infrastructure first**:
-   ```bash
-   npm run deploy
-   ```
+**Finding Your Drive Folder ID:**
+- Open Google Drive in your browser
+- Navigate to the folder you want to scan
+- Copy the ID from the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
+- Use `"root"` to scan entire Drive (after sharing)
 
-2. **Get the service account email**:
+#### 3. Deploy Infrastructure
+
+```bash
+npm run deploy
+```
+
+This command builds the functions and deploys all infrastructure via Terraform.
+
+#### 4. Configure Google Drive Access
+
+Google Drive requires **manual folder sharing** with the service account:
+
+1. Get the service account email:
    ```bash
    terraform output service_account_email
    ```
 
-3. **Share your Drive folders**:
-   - Open Google Drive (https://drive.google.com)
-   - Right-click "My Drive" (for full access) or specific folders
-   - Select "Share" 
-   - Add the service account email as an "Editor"
+2. Share your Google Drive folders:
+   - Open [Google Drive](https://drive.google.com)
+   - Right-click the folder(s) to share
+   - Click "Share"
+   - Add the service account email as "Editor"
    - Click "Send"
 
-4. **Test the setup**:
+3. Test the setup:
    ```bash
-   # Trigger a manual scan
-   gcloud pubsub topics publish drive-scan-trigger --message='{"folderId":"your-folder-id","topicName":"doc-classify-trigger"}'
+   # Trigger a manual scan (replace topic name from terraform output)
+   gcloud pubsub topics publish SCAN_TRIGGER_TOPIC --message='{"folderId":"YOUR_FOLDER_ID"}'
    ```
 
-**Folder ID Options:**
+**Why Manual Sharing?**
+Drive API doesn't support project-level IAM roles. Service accounts can only access explicitly shared folders, ensuring least-privilege access and preventing accidental access to unintended files.
 
-- **Specific folder**: Use the folder ID from the URL (28+ character alphanumeric string)
-- **Entire Drive**: Use `"root"` as the folder ID to scan all accessible content
-- **Multiple folders**: Share multiple folders individually with the service account
+## Development Workflows
 
-**Permissions Summary:**
-
-✅ **Allowed Operations** (once shared):
-- List files and folders (in shared areas only)
-- Create new folders (in shared areas only) 
-- Move files between folders (within shared areas)
-- Copy files (within shared areas)
-- Read file metadata
-
-❌ **Restricted Operations**:
-- Access unshared folders
-- Delete files or folders
-- Manage sharing permissions
-
-## Development
-
-**Build and test**:
+### Building & Testing
 
 ```bash
-npm run build    # Compile TypeScript
-npm test         # Run Jest tests
+# Build all functions
+npm run build
+
+# Run tests for all functions
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Clean build artifacts
+npm run clean
 ```
 
-**Deploy to Google Cloud**:
+**Available test commands:**
+See individual function workspaces in `src/functions/*/package.json` for function-specific scripts.
+
+### Code Quality
 
 ```bash
-npm run deploy   # Build + Terraform apply
+# Run all linters and formatters
+npm run lint
+npm run format
+
+# Check specific file types
+npm run lint:ts          # TypeScript linting
+npm run lint:yaml        # YAML linting
+npm run lint:terraform   # Terraform linting
+npm run lint:json        # JSON linting
+npm run lint:sh          # Shell script linting
 ```
 
-This will build the TypeScript code, create deployment packages, and apply the Terraform configuration.
+**Pre-commit workflow:**
+Always run `npm run lint && npm run format` before committing to ensure code quality standards.
 
-### CI/CD Workflow Security
+### Infrastructure Management
 
-The project implements a security-first approach to CI/CD:
+```bash
+# Initialize Terraform (first time or after backend changes)
+npm run terraform:init
 
-- **Dependabot PRs**: Automatically limited to testing only, no access to Google Cloud credentials
-- **Repository Owner PRs**: Full pipeline access with automatic Terraform validation after tests pass
-- **Manual Override**: Use `/terraform plan` comment to manually validate infrastructure on any PR
-- **Staged Pipeline**: Each workflow stage must succeed before proceeding to the next
+# Preview infrastructure changes
+npm run terraform:plan
 
-This ensures that automated dependency updates are secure while maintaining full validation capabilities for code changes.
+# Apply infrastructure changes
+npm run terraform:apply
 
-## Available Scripts
+# Validate Terraform configuration
+npm run terraform:validate
 
-### Build and Test
+# Destroy all infrastructure (use with caution)
+npm run terraform:destroy
+```
 
-- `npm run build` - Compile TypeScript to JavaScript in the `dist/` directory
-- `npm run build:function` - Build and create a zip archive for deployment
-- `npm test` - Run Jest tests for all functions
+**Terraform workflow:**
+1. Modify infrastructure in `terraform/` or `terraform/modules/`
+2. Run `npm run terraform:plan` to preview changes
+3. Review the plan carefully
+4. Run `npm run terraform:apply` to apply changes
+5. Verify resources in Google Cloud Console
 
-### Linting and Formatting
+### Deployment
 
-- `npm run lint` - Run all linters (TypeScript, YAML, Terraform)
-- `npm run lint:ts` - Run ESLint on TypeScript files with auto-fix
-- `npm run lint:yaml` - Run yamllint on GitHub workflows
-- `npm run lint:terraform` - Run terraform fmt check and TFLint
-- `npm run format` - Format all code (TypeScript, YAML, and Terraform)
-- `npm run format:ts` - Format TypeScript files with Prettier
-- `npm run format:yaml` - Format YAML files with Prettier
-- `npm run format:terraform` - Format Terraform files
+**Local Deployment:**
+```bash
+npm run deploy
+```
 
-### Terraform Operations
-
-- `npm run terraform:init` - Initialize Terraform backend
-- `npm run terraform:apply` - Apply Terraform configuration and deploy functions
-- `npm run terraform:plan` - Generate execution plan for Terraform changes
-- `npm run terraform:validate` - Validate Terraform configuration
-- `npm run terraform:destroy` - Destroy all Terraform-managed infrastructure
-- `npm run deploy` - Full deployment pipeline (build + terraform apply)
-
-### Setup
-
-- `npm run setup:github-actions` - Configure GitHub Actions authentication
+**CI/CD Deployment:**
+The project uses GitHub Actions for automated testing and validation. See [GitHub Actions Setup](#github-actions-cicd-optional) for configuration.
 
 ## Project Structure
 
 ```
 .
-├── .devcontainer/           # Dev container configuration
-├── src/functions/           # Cloud Functions source code
-│   └── drive-scanner/           # Drive scanning function
-├── terraform/              # Infrastructure as code
-│   ├── main.tf            # Main Terraform configuration
-│   ├── variables.tf       # Variable definitions
-│   └── terraform.tfvars.example  # Example configuration
-├── scripts/               # Build and deployment scripts
-├── dist/                  # Compiled TypeScript output
-├── CLAUDE.md             # AI assistant instructions
-└── [config files]        # package.json, tsconfig.json, etc.
+├── src/
+│   ├── functions/          # Cloud Functions (npm workspaces)
+│   │   ├── drive-scanner/
+│   │   ├── doc-processor/
+│   │   ├── text-vision-processor/
+│   │   └── text-firebase-writer/
+│   └── shared/             # Shared utilities across functions
+├── terraform/              # Infrastructure as Code
+│   ├── modules/            # Terraform modules (one per function)
+│   ├── main.tf
+│   ├── variables.tf
+│   └── terraform.tfvars.example
+├── scripts/                # Build and setup scripts
+├── .devcontainer/          # Dev container configuration
+├── .github/workflows/      # CI/CD workflows
+├── dist/                   # Build output (generated)
+├── CLAUDE.md               # AI assistant development guide
+├── README.md               # This file
+└── package.json            # Root workspace configuration
+```
+
+### Architectural Patterns
+
+**npm Workspaces:**
+Each Cloud Function is an independent npm workspace with its own dependencies, tests, and configuration. Shared code lives in `src/shared/`.
+
+**Terraform Modules:**
+Infrastructure is organized into modules matching the function structure. Each module manages:
+- Cloud Function resource
+- Service account with least-privilege IAM
+- Event triggers (PubSub or Storage)
+- Related resources (topics, storage buckets)
+
+**Co-located Tests:**
+Tests live alongside implementation code in each function directory, following the pattern `index.test.ts` next to `index.ts`.
+
+## Google Drive Integration
+
+### Supported File Types
+
+AutoNyan can process the following document types:
+- **PDF documents**: `.pdf`
+- **Microsoft Office**: Word (`.doc`, `.docx`), Excel (`.xls`, `.xlsx`), PowerPoint (`.ppt`, `.pptx`)
+- **Google Workspace**: Docs, Sheets, Slides
+- **Text files**: `.txt`, `.rtf`
+
+The system handles folders with unlimited files using pagination.
+
+### Drive Operations
+
+The document pipeline provides these Drive API operations:
+- List files with pagination
+- Create folders in shared areas
+- Move files between folders
+- Copy files within accessible areas
+- Search files by name and MIME type
+- Retrieve folder metadata
+
+### Manual Triggers
+
+Trigger document scanning manually via PubSub:
+
+```bash
+# Get the PubSub topic name from Terraform
+terraform output -raw drive_scan_topic_name
+
+# Trigger a folder scan
+gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"YOUR_FOLDER_ID"}'
+
+# Scan entire accessible Drive
+gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"root"}'
+```
+
+### Permissions Model
+
+**What the service account CAN do** (in shared folders only):
+- List files and folders
+- Read file metadata and content
+- Create new folders
+- Move and copy files
+- Download documents for processing
+
+**What the service account CANNOT do:**
+- Access unshared folders or files
+- Delete files or folders
+- Modify sharing permissions
+- Access other users' private Drive content
+
+## GitHub Actions CI/CD (Optional)
+
+AutoNyan includes a security-first CI/CD pipeline with GitHub Actions.
+
+### Pipeline Security Model
+
+- **Workload Identity Federation**: No service account keys stored in GitHub
+- **PR Author Detection**: Different permissions for repository owners vs. Dependabot vs. external contributors
+- **Progressive Stages**: Each stage must pass before the next stage runs
+- **Manual Override**: Repository owners can trigger infrastructure validation with comments
+
+### Pipeline Stages
+
+1. **Code Quality**: Linting and formatting checks
+2. **Testing**: Unit tests and coverage thresholds
+3. **Infrastructure Validation**: Terraform plan (auto-triggered for owner PRs)
+4. **Build**: Create deployment packages (auto-triggered after successful validation)
+5. **Deploy**: Manual or scheduled only (not automatic)
+
+### Configuration
+
+For detailed GitHub Actions setup instructions, see [GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md).
+
+**Required Variables** (Settings → Secrets and variables → Actions → Variables):
+- `TF_STATE_BUCKET`: Terraform state storage bucket
+- `TF_STATE_LOCATION`: Cloud Storage bucket location
+- `DRIVE_FOLDER_ID`: Google Drive folder ID for scanning
+- `DRIVE_SCANNER_SCHEDULE`: Cron schedule (e.g., `"0 9 * * 1"`)
+
+**Required Secrets**:
+- `WIF_PROVIDER`: Workload Identity Federation provider
+- `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions
+
+**Setup command:**
+```bash
+npm run setup:github-actions
 ```
 
 ## Adding New Functions
 
-1. Create a new directory: `src/functions/{function-name}/`
-2. Implement function in `index.ts` following the dual HTTP/CloudEvent pattern:
-   ```typescript
-   export const functionName = async (
-     req: Request | CloudEvent<DataType>,
-     res?: Response
-   ) => {
-     if (res) {
-       // HTTP request handling
-     } else {
-       // CloudEvent handling
-     }
-   };
-   ```
-3. Add corresponding test file `index.test.ts` with both execution path coverage
-4. Add Terraform resource configuration in `terraform/main.tf`
-5. Build and deploy using the commands above
+To add a new function to the pipeline:
 
-Functions support both HTTP requests and CloudEvent triggers, with tests covering both execution paths using Jest with ts-jest preset.
+### 1. Create Function Workspace
 
-## Google Cloud Resources
+```bash
+mkdir -p src/functions/my-new-function
+cd src/functions/my-new-function
+npm init -y
+```
 
-AutoNyan provisions the following Google Cloud resources via Terraform:
+Set up the workspace structure following existing functions.
 
-### Compute Resources
+### 2. Implement Event Handler
 
-- **Cloud Functions v2**: Serverless Node.js 20 runtime functions
-  - `drive-scanner`: Drive scanner (512MB memory, 300s timeout, 0-10 instances)
-  - `doc-processor`: Document processor (512MB memory, 300s timeout, 0-10 instances)
-  - `text-vision-processor`: Vision API text extraction (1GB memory, 540s timeout, 0-10 instances)
-  - `text-firebase-writer`: Firestore data writer (512MB memory, 300s timeout, 0-10 instances)
+Create `index.ts` with a CloudEvent handler:
 
-### Storage Resources
+```typescript
+import { CloudEvent } from '@google-cloud/functions-framework';
 
-- **Cloud Storage Buckets**: 
-  - `{project-id}-function-source`: Function source code storage
-  - `{project-id}-document-storage`: Document file storage for processing
-  - `{project-id}-vision-results`: Vision API results storage
-- **Storage Objects**: Zip archives containing built function code
+export const myNewFunction = async (
+  cloudEvent: CloudEvent<YourDataType>
+): Promise<Result> => {
+  // Your implementation
+};
+```
 
-### Messaging & Scheduling
+### 3. Add Tests
 
-- **PubSub Topics**:
-  - `drive-scan-trigger`: Triggers scheduled drive scans
-  - `doc-process-trigger`: Triggers document processing
-  - `doc-classify-trigger`: Receives document metadata for processing
-- **Cloud Scheduler**: Automated folder scanning (configurable cron schedule)
+Create `index.test.ts` following the existing test patterns:
+- Mock Google Cloud services
+- Test with sample CloudEvents
+- Achieve coverage thresholds
 
-### Identity & Access
+### 4. Create Terraform Module
 
-- **Service Accounts**: 
-  - `drive-scanner-sa`: Drive scanning with least-privilege permissions
-  - `doc-processor-sa`: Document processing with Cloud Storage access
-  - `text-vision-processor`: Vision API processing with ML developer role
-  - `text-firebase-writer`: Firestore data writing with datastore user role
-- **IAM Roles**: Storage viewer/admin, service usage consumer, PubSub publisher, ML developer, datastore user
+Create `terraform/modules/my-new-function/` with:
+- Service account and IAM bindings
+- Cloud Function resource
+- Event trigger configuration (PubSub or Storage)
+- Required infrastructure (buckets, topics, etc.)
+
+### 5. Wire Up in Main Configuration
+
+Add the module to `terraform/main.tf` and connect it to the pipeline.
+
+### 6. Build and Deploy
+
+```bash
+npm run deploy
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Drive Access Errors:**
+- Verify the folder has been shared with the service account
+- Check the service account email from `terraform output service_account_email`
+- Ensure "Editor" permissions were granted
+- Wait a few minutes after sharing for permissions to propagate
+
+**Terraform State Lock:**
+- Another process may be running Terraform
+- Check for stale locks: `terraform -chdir=terraform force-unlock LOCK_ID`
+- Verify backend bucket accessibility
+
+**Function Timeout:**
+- Check Cloud Functions logs: `gcloud functions logs read FUNCTION_NAME`
+- Adjust timeout in the function's Terraform module
+- Consider batch size for processing operations
+
+**Build Failures:**
+- Ensure Node.js version matches `.nvmrc`
+- Run `npm clean` and rebuild
+- Check for TypeScript errors: `npm run lint:ts`
+
+### Viewing Logs
+
+```bash
+# View function logs
+gcloud functions logs read FUNCTION_NAME --region=REGION
+
+# Stream logs in real-time
+gcloud functions logs read FUNCTION_NAME --region=REGION --follow
+
+# View logs in Cloud Console
+# Navigate to Cloud Functions → Select function → Logs tab
+```
+
+### Monitoring
+
+Monitor your pipeline in Google Cloud Console:
+- **Cloud Functions**: View invocations, errors, and performance metrics
+- **Cloud Storage**: Monitor bucket usage and object counts
+- **PubSub**: Track message delivery and subscription backlogs
+- **Firestore**: Query stored documents and metadata
+
+## Resources
+
+- [Cloud Functions Documentation](https://cloud.google.com/functions/docs)
+- [Terraform Google Provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
+- [Google Drive API](https://developers.google.com/drive/api/guides/about-sdk)
+- [Cloud Vision API](https://cloud.google.com/vision/docs)
+- [Firestore Documentation](https://cloud.google.com/firestore/docs)
+
+## Maintaining This Document
+
+**When to update README.md:**
+
+- ✅ **Architecture changes**: When adding/removing pipeline stages or changing the event flow
+- ✅ **New major features**: When adding significant new capabilities (e.g., new data sources, new output formats)
+- ✅ **Setup process changes**: When prerequisites or configuration steps change
+- ✅ **Troubleshooting updates**: When discovering new common issues and solutions
+
+**What NOT to update:**
+
+- ❌ **Specific function names**: Let code/Terraform be the source of truth
+- ❌ **Exact command syntax**: Reference `package.json` instead
+- ❌ **Version numbers**: Use relative references (e.g., "version in `.nvmrc`")
+- ❌ **Implementation details**: Keep focus on concepts and workflows
+
+**Maintenance principle:** Keep documentation high-level and workflow-focused. Implementation details should be discovered from code, not duplicated in documentation.
+
+## Contributing
+
+For development patterns, code conventions, and AI-assisted development guidelines, see [CLAUDE.md](./CLAUDE.md).
+
+## License
+
+This project is provided as-is for demonstration and educational purposes.
