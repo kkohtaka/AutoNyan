@@ -41,7 +41,7 @@
     "ts-jest": "^29.4.5",
     "@google/events": "^5.4.0",
     "@eslint/js": "^9.36.0",
-    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
     "@typescript-eslint/parser": "^8.46.3",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
