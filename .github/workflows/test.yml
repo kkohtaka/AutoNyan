@@ -22,7 +22,6 @@ permissions:
   checks: write
   contents: read
   pull-requests: read
-  id-token: write
   actions: write
 
 jobs:
