@@ -1,0 +1,13 @@
+# CODEOWNERS
+#
+# This file defines code ownership for the AutoNyan repository.
+# Code owners are automatically requested for review when someone opens
+# a pull request that modifies files they own.
+#
+# Note: This does not enforce required reviews from code owners.
+# Enforcement is configured in repository rulesets.
+#
+# More info: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository
+* @kkohtaka
