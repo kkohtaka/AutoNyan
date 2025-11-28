@@ -1,0 +1,39 @@
+---
+name: Auto Approve
+
+run-name: 'Auto Approve - PR #${{ github.event.pull_request.number }}'
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    # Only auto-approve PRs created by the repository owner
+    # Test status verification is delegated to branch protection rules
+    if: github.event.pull_request.user.login == github.repository_owner
+
+    steps:
+      # Generate authentication token using GitHub App credentials
+      - name: Generate token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      # Approve the pull request immediately
+      # Merging is still blocked until all required status checks pass (enforced by branch protection)
+      - name: Approve pull request
+        run: |
+          gh pr review ${{ github.event.pull_request.number }} \
+            --approve \
+            --body "✅ Automatically approved (tests must pass before merge)"
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
