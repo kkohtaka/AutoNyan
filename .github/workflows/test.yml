@@ -28,7 +28,8 @@ jobs:
   lint-functions:
     runs-on: ubuntu-latest
     env:
-      NODE_OPTIONS: --max-old-space-size=4096
+      # Reduced from 4096MB: type checking disabled for test files + .eslintignore reduces file set
+      NODE_OPTIONS: --max-old-space-size=2048
     strategy:
       matrix:
         function:
@@ -57,7 +58,8 @@ jobs:
   lint-global:
     runs-on: ubuntu-latest
     env:
-      NODE_OPTIONS: --max-old-space-size=4096
+      # Reduced from 4096MB: still needs more memory for Terraform + multi-tool linting
+      NODE_OPTIONS: --max-old-space-size=3072
 
     steps:
       - uses: actions/checkout@v6
@@ -119,7 +121,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint-functions, lint-global]
     env:
-      NODE_OPTIONS: --max-old-space-size=4096
+      # Reduced from 4096MB: Jest workerIdleMemoryLimit prevents memory leaks
+      NODE_OPTIONS: --max-old-space-size=2048
     strategy:
       matrix:
         function:
