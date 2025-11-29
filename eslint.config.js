@@ -60,7 +60,8 @@ module.exports = [
       parserOptions: {
         ecmaVersion: 2020,
         sourceType: 'module',
-        project: getTsConfigPath(),
+        // Disable type checking for test files to reduce memory usage
+        // Type safety is still enforced by TypeScript compiler and Jest
       },
       globals: {
         console: 'readonly',
