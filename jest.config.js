@@ -9,6 +9,7 @@ module.exports = {
   testRegex: '(/__tests__/.*|(\\.|/)(test|spec))\\.tsx?$',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   maxWorkers: 1,
+  workerIdleMemoryLimit: '512MB',
   collectCoverage: true,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
