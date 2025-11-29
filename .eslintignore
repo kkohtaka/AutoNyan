@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.js.map
+*.d.ts
+
+# Test coverage
+coverage/
+
+# Infrastructure
+terraform/
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Compiled JavaScript (only lint TypeScript source)
+# Individual compiled files in function directories
+index.js
+index.test.js
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+.tmp/
+tmp/
