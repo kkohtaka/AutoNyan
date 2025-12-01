@@ -10,6 +10,7 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   maxWorkers: 1,
   workerIdleMemoryLimit: '512MB',
+  maxConcurrency: 1,
   collectCoverage: true,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
