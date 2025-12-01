@@ -237,7 +237,7 @@ describe('driveScanner', () => {
       mockDriveList
         .mockResolvedValueOnce({
           data: {
-            files: Array(100)
+            files: Array(5)
               .fill(null)
               .map((_, i) => ({
                 id: `file${i + 1}`,
@@ -252,15 +252,15 @@ describe('driveScanner', () => {
         })
         .mockResolvedValueOnce({
           data: {
-            files: Array(50)
+            files: Array(3)
               .fill(null)
               .map((_, i) => ({
-                id: `file${i + 101}`,
-                name: `document${i + 101}.pdf`,
+                id: `file${i + 6}`,
+                name: `document${i + 6}.pdf`,
                 mimeType: 'application/pdf',
                 size: '1024',
                 modifiedTime: '2023-01-01T00:00:00.000Z',
-                webViewLink: `https://drive.google.com/file/d/file${i + 101}/view`,
+                webViewLink: `https://drive.google.com/file/d/file${i + 6}/view`,
               })),
             nextPageToken: undefined,
           },
@@ -272,7 +272,7 @@ describe('driveScanner', () => {
 
       const result = await driveScanner(cloudEvent);
 
-      expect(result.filesFound).toBe(150);
+      expect(result.filesFound).toBe(8);
 
       // Verify pagination calls
       expect(mockDriveList).toHaveBeenCalledTimes(2);
