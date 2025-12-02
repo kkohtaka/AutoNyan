@@ -7,7 +7,7 @@
     "build": "tsc",
     "clean": "rm -f *.js *.js.map *.d.ts && rm -rf dist/",
     "test": "jest --config=../../../jest.config.js --testPathPatterns=text-vision-processor",
-    "test:coverage": "jest --config=../../../jest.config.js --coverage --testPathPatterns=text-vision-processor",
+    "test:coverage": "jest --config=../../../jest.config.js --coverage --testPathPatterns=text-vision-processor --collectCoverageFrom='src/functions/text-vision-processor/**/*.{ts,tsx}' --collectCoverageFrom='!src/functions/text-vision-processor/**/*.test.{ts,tsx}' --collectCoverageFrom='!src/functions/text-vision-processor/**/*.spec.{ts,tsx}'",
     "lint": "eslint --config=../../../eslint.config.js --fix",
     "format": "prettier --write '**/*.ts'"
   },
