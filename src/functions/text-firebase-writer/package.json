@@ -6,8 +6,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -f *.js *.js.map *.d.ts && rm -rf dist/",
-    "test": "jest --config=../../../jest.config.js",
-    "test:coverage": "jest --config=../../../jest.config.js --coverage",
+    "test": "jest --config=../../../jest.config.js --testPathPatterns=text-firebase-writer",
+    "test:coverage": "jest --config=../../../jest.config.js --coverage --testPathPatterns=text-firebase-writer",
     "lint": "eslint --config=../../../eslint.config.js --fix",
     "format": "prettier --write '**/*.ts'"
   },

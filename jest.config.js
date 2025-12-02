@@ -11,7 +11,7 @@ module.exports = {
   maxWorkers: 1,
   workerIdleMemoryLimit: '512MB',
   maxConcurrency: 1,
-  collectCoverage: true,
+  collectCoverage: false,
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.test.{ts,tsx}',
