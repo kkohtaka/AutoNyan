@@ -150,13 +150,12 @@ jobs:
 
       - name: Run coverage for ${{ matrix.function }}
         id: coverage
-        if: matrix.function != 'drive-scanner'
         run: npm run test:coverage --workspace=src/functions/${{ matrix.function }}
         continue-on-error: true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        if: matrix.function != 'drive-scanner' && always()
+        if: always()
         with:
           files: ./coverage/lcov.info
           flags: ${{ matrix.function }}
@@ -165,7 +164,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Fail if coverage thresholds not met
-        if: matrix.function != 'drive-scanner' && steps.coverage.outcome == 'failure'
+        if: steps.coverage.outcome == 'failure'
         run: exit 1
 
   test:
