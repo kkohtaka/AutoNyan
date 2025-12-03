@@ -516,6 +516,58 @@ Terraform plan automatically skips when PR only changes:
 
 This prevents unnecessary Terraform runs for Dependabot updates to dev dependencies or workflow improvements.
 
+### Debugging CI/CD Workflows
+
+When CI tests fail or you need to investigate GitHub Actions execution, use the WebFetch tool to retrieve CI results and logs directly from Claude Code on the Web.
+
+**Accessing CI Results:**
+
+Use WebFetch with PR or Actions URLs to view CI status:
+
+```
+WebFetch URL: https://github.com/{owner}/{repo}/pull/{pr_number}
+Prompt: "Extract all CI check results, job names, and their status (success/failure)"
+
+WebFetch URL: https://github.com/{owner}/{repo}/actions/runs/{run_id}
+Prompt: "Extract detailed job results, failure messages, and which steps failed"
+```
+
+**Common CI Debugging Patterns:**
+
+1. **Check PR CI Status**
+   ```
+   URL: https://github.com/{owner}/{repo}/pull/{pr_number}/checks
+   Prompt: "List all checks with their status and identify failed jobs"
+   ```
+
+2. **View Specific Workflow Run**
+   ```
+   URL: https://github.com/{owner}/{repo}/actions/runs/{run_id}
+   Prompt: "Show job statuses, error messages, and which matrix jobs failed"
+   ```
+
+3. **Find Latest Runs for Branch**
+   ```
+   URL: https://github.com/{owner}/{repo}/actions
+   Prompt: "Find the latest Test workflow runs for branch X and their status"
+   ```
+
+**Troubleshooting CI Failures:**
+
+- **Test failures**: Check which specific test jobs (matrix) failed
+- **Coverage failures**: Verify coverage thresholds are met locally first
+- **Codecov issues**: Ensure Codecov repository is activated (not deactivated)
+- **Memory errors**: Check for out-of-memory errors in test jobs
+- **Isolated failures**: If tests pass locally but fail in CI, investigate environment-specific issues
+
+**Best Practices:**
+
+- Always verify tests pass locally before pushing
+- Use WebFetch to retrieve full CI logs when debugging
+- Check both job-level and step-level failures
+- Look for patterns across multiple workflow runs
+- Verify external services (like Codecov) are properly configured
+
 ## Google Drive Integration
 
 ### Service Account Pattern
