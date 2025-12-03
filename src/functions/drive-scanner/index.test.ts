@@ -220,7 +220,7 @@ describe('driveScanner', () => {
       );
     });
 
-    it.skip('should handle pagination when folder has more than 100 files', async () => {
+    it('should handle pagination when folder has more than 100 files', async () => {
       const cloudEvent = buildEvent({
         folderId: 'test-folder-id',
       });
