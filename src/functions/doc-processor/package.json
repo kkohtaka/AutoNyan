@@ -7,7 +7,7 @@
     "build": "tsc",
     "clean": "rm -f *.js *.js.map *.d.ts && rm -rf dist/",
     "test": "jest --config=../../../jest.config.js --testPathPatterns=doc-processor",
-    "test:coverage": "jest --config=../../../jest.config.js --coverage --testPathPatterns=doc-processor --collectCoverageFrom='src/functions/doc-processor/**/*.{ts,tsx}' --collectCoverageFrom='!src/functions/doc-processor/**/*.test.{ts,tsx}' --collectCoverageFrom='!src/functions/doc-processor/**/*.spec.{ts,tsx}'",
+    "test:coverage": "jest --config=../../../jest.config.js --coverage --testPathPatterns=doc-processor --collectCoverageFrom='[\"src/functions/doc-processor/**/*.{ts,tsx}\",\"!src/functions/doc-processor/**/*.test.{ts,tsx}\",\"!src/functions/doc-processor/**/*.spec.{ts,tsx}\"]'",
     "lint": "eslint --config=../../../eslint.config.js --fix",
     "format": "prettier --write '**/*.ts'"
   },
