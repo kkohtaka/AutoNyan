@@ -40,7 +40,6 @@ jobs:
         # Only run if auto-merge is not already enabled
         id: enable-automerge
         if: steps.check-automerge.outputs.already_enabled != 'true'
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -48,22 +47,3 @@ jobs:
           gh pr merge --auto --rebase "$PR_NUMBER" \
             --repo "${{ github.repository }}"
           echo "✅ Auto-merge enabled for PR #${PR_NUMBER}"
-
-      - name: Comment on auto-merge failure
-        # Only run if enable-automerge step failed
-        if: steps.enable-automerge.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh pr comment "$PR_NUMBER" \
-            --repo "${{ github.repository }}" \
-            --body "⚠️ **Failed to enable auto-merge for Dependabot PR**
-
-          The workflow attempted to enable auto-merge but encountered an error.
-          This may be due to:
-          - Branch protection rules preventing auto-merge
-          - Permissions issues
-          - PR state incompatible with auto-merge
-
-          Please check the workflow logs and enable auto-merge manually if needed."
