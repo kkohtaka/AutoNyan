@@ -4,9 +4,12 @@
  * The actual googleapis package is 191MB and loads all Google API clients,
  * causing excessive memory consumption (2GB+) during Jest tests.
  * This mock provides only the Drive API interfaces needed for testing.
+ *
+ * Note: This file MUST be .js (not .ts) for Jest to properly recognize it
+ * in coverage mode. TypeScript mocks are not reliably loaded during coverage.
  */
 
-export const google = {
+const google = {
   auth: {
     GoogleAuth: jest.fn().mockImplementation(() => ({})),
   },
@@ -17,3 +20,5 @@ export const google = {
     },
   }),
 };
+
+module.exports = { google };

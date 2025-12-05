@@ -1,6 +1,5 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { google } from 'googleapis';
 import { docProcessor } from './index';
 
 // Mock dependencies
@@ -42,7 +41,8 @@ describe('docProcessor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.PROJECT_ID = 'test-project';
-    mockDrive = (google.drive as jest.Mock)();
+    const { google } = require('googleapis');
+    mockDrive = google.drive();
   });
 
   afterEach(() => {
