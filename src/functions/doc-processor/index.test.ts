@@ -41,6 +41,7 @@ describe('docProcessor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.PROJECT_ID = 'test-project';
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const { google } = require('googleapis');
     mockDrive = google.drive();
   });
