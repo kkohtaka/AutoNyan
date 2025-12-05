@@ -432,9 +432,15 @@ npm run deploy
 - Wait a few minutes after sharing for permissions to propagate
 
 **Terraform State Lock:**
-- Another process may be running Terraform
-- Check for stale locks: `terraform -chdir=terraform force-unlock LOCK_ID`
-- Verify backend bucket accessibility
+- Another process may be running Terraform concurrently
+- Automatic cleanup on failure is built into CI/CD workflows
+- For manual unlock in emergencies, use the GitHub Actions workflow:
+  1. Go to Actions → "Unlock Terraform State (Manual)"
+  2. Click "Run workflow"
+  3. Type "UNLOCK" in the confirmation field
+  4. Run the workflow to safely remove the lock
+- Local development: `terraform -chdir=terraform force-unlock LOCK_ID`
+- The unlock workflow uses the same concurrency group as plan/deploy for safety
 
 **Function Timeout:**
 - Check Cloud Functions logs: `gcloud functions logs read FUNCTION_NAME`

@@ -1,0 +1,136 @@
+---
+name: Unlock Terraform State (Manual)
+
+run-name: |
+  Unlock Terraform State - ${{ inputs.confirm == 'UNLOCK' && '✅ Confirmed' || '❌ Not Confirmed' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "UNLOCK" to confirm'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  # Use the same concurrency group as plan/deploy to ensure mutual exclusion.
+  # This ensures the unlock workflow cannot run while Terraform operations are in progress,
+  # and vice versa. This provides stronger guarantees than checking with gh CLI.
+  group: terraform-production
+  cancel-in-progress: false
+
+jobs:
+  unlock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ inputs.confirm }}" != "UNLOCK" ]; then
+            echo "❌ Confirmation failed. Please type 'UNLOCK' to proceed."
+            exit 1
+          fi
+          echo "✅ Confirmation validated"
+          echo ""
+          echo "ℹ️  Note: This workflow uses the 'terraform-production' concurrency group."
+          echo "If other Terraform operations are running, this workflow will wait for them to complete."
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.5.0'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Setup Terraform backend
+        run: |
+          cat > terraform/backend.hcl <<EOF
+          bucket = "${{ vars.TF_STATE_BUCKET }}"
+          prefix = "terraform/state"
+          EOF
+
+      - name: Initialize Terraform
+        run: terraform -chdir=terraform init -backend-config=backend.hcl
+
+      - name: Get lock information
+        id: lock_info
+        run: |
+          LOCK_FILE="gs://${{ vars.TF_STATE_BUCKET }}/terraform/state/default.tflock"
+
+          echo "Checking for lock file: ${LOCK_FILE}"
+
+          if gsutil ls "${LOCK_FILE}" 2>/dev/null; then
+            echo "🔓 Lock file found. Retrieving details..."
+            gsutil stat "${LOCK_FILE}"
+            echo ""
+
+            # Get lock file content
+            LOCK_CONTENT=$(gsutil cat "${LOCK_FILE}" 2>/dev/null || echo "")
+
+            if [ -n "$LOCK_CONTENT" ]; then
+              # Extract lock ID from JSON using jq
+              LOCK_ID=$(echo "$LOCK_CONTENT" | jq -r '.ID // empty')
+
+              if [ -n "$LOCK_ID" ]; then
+                echo "lock_id=${LOCK_ID}" >> $GITHUB_OUTPUT
+                echo "lock_exists=true" >> $GITHUB_OUTPUT
+                echo "Lock ID: ${LOCK_ID}"
+              else
+                echo "lock_exists=false" >> $GITHUB_OUTPUT
+                echo "⚠️  Could not extract lock ID from lock file"
+              fi
+            else
+              echo "lock_exists=false" >> $GITHUB_OUTPUT
+              echo "⚠️  Lock file is empty"
+            fi
+          else
+            echo "lock_exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No lock file found"
+          fi
+
+      - name: Force unlock Terraform state
+        if: steps.lock_info.outputs.lock_exists == 'true'
+        run: |
+          LOCK_ID="${{ steps.lock_info.outputs.lock_id }}"
+
+          echo "Attempting to force unlock Terraform state..."
+          echo "Lock ID: ${LOCK_ID}"
+
+          if terraform -chdir=terraform force-unlock -force "${LOCK_ID}"; then
+            echo "✅ Lock removed successfully"
+          else
+            echo "⚠️  Force unlock failed"
+            exit 1
+          fi
+
+      - name: Post-unlock summary
+        if: always()
+        run: |
+          echo ""
+          echo "========================================="
+          echo "Terraform State Unlock Summary"
+          echo "========================================="
+          echo "Triggered by: ${{ github.actor }}"
+          echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+          echo "Lock exists: ${{ steps.lock_info.outputs.lock_exists }}"
+          if [ "${{ steps.lock_info.outputs.lock_exists }}" == "true" ]; then
+            echo "Lock ID: ${{ steps.lock_info.outputs.lock_id }}"
+          fi
+          echo ""
+          echo "Next steps:"
+          echo "  1. Verify no failed workflows in GitHub Actions"
+          echo "  2. Run terraform plan to ensure state is accessible"
+          echo "  3. Monitor for any lock errors in future runs"
+          echo "========================================="
