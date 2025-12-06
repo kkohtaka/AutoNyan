@@ -1,14 +1,25 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { google } from 'googleapis';
 import { driveScanner } from './index';
 
 // Mock the Google APIs
-jest.mock('googleapis');
+jest.mock('googleapis', () => ({
+  google: {
+    auth: {
+      GoogleAuth: jest.fn(),
+    },
+    drive: jest.fn().mockReturnValue({
+      files: {
+        list: jest.fn(),
+        get: jest.fn(),
+      },
+    }),
+  },
+}));
+
 jest.mock('@google-cloud/pubsub');
 
-const mockGoogle = google as jest.Mocked<typeof google>;
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 
 describe('driveScanner', () => {
@@ -17,6 +28,7 @@ describe('driveScanner', () => {
   let mockPublishMessage: jest.Mock;
   let mockTopic: jest.Mock;
   let mockPubSubInstance: jest.Mocked<PubSub>;
+  let mockDrive: any;
 
   const buildEvent = (payload: any): CloudEvent<MessagePublishedData> => {
     return {
@@ -31,21 +43,21 @@ describe('driveScanner', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires, no-undef
+    const { google } = require('googleapis');
+
     // Mock Drive API
     mockDriveList = jest.fn();
     mockDriveGet = jest.fn();
-    mockGoogle.drive.mockReturnValue({
+    mockDrive = {
       files: {
         list: mockDriveList,
         get: mockDriveGet,
       },
-    } as any);
+    };
+    google.drive.mockReturnValue(mockDrive);
 
-    (
-      mockGoogle.auth.GoogleAuth as jest.MockedClass<
-        typeof google.auth.GoogleAuth
-      >
-    ).mockImplementation(() => ({}) as any);
+    google.auth.GoogleAuth.mockImplementation(() => ({}) as any);
 
     // Mock PubSub
     mockPublishMessage = jest.fn();
