@@ -5,3 +5,9 @@ project_id = "your-project-id"
 region = "us-central1"
 drive_folder_id = "your-google-drive-folder-id"
 drive_scanner_schedule = "0 * * * *"
+
+# File classification configuration
+# category_root_folder_id: Google Drive folder containing category subfolders (e.g., "請求書", "契約書")
+# uncategorized_folder_id: Google Drive folder for files that don't match any category
+category_root_folder_id = "your-category-root-folder-id"
+uncategorized_folder_id = "your-uncategorized-folder-id"

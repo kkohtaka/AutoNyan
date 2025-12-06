@@ -338,14 +338,31 @@ resource "google_cloudfunctions2_function" "my_function" {
    - Connect to pipeline via event triggers
    - Add to build script if needed
 
-6. **Test locally**
+6. **Update CI workflow**
+   - Add new function to matrix in `.github/workflows/test.yml`
+   - Update both `lint-functions` and `test-functions` job matrices
+   - Example:
+     ```yaml
+     strategy:
+       matrix:
+         function:
+           [
+             doc-processor,
+             drive-scanner,
+             file-classifier,  # Add new function here
+             text-firebase-writer,
+             text-vision-processor,
+           ]
+     ```
+
+7. **Test locally**
    ```bash
    npm run build
    npm test --workspace=src/functions/new-function
    npm run terraform:plan  # Review infrastructure changes
    ```
 
-7. **Deploy**
+8. **Deploy**
    ```bash
    npm run deploy
    ```

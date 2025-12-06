@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "outDir": ".",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "index.ts",
+    "index.test.ts",
+    "drive-operations.ts",
+    "classification.ts",
+    "firestore-operations.ts"
+  ],
+  "exclude": [],
+  "references": [
+    {
+      "path": "../../shared"
+    }
+  ]
+}

@@ -46,6 +46,12 @@ resource "google_project_service" "firestore_api" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "vertex_ai_api" {
+  service = "aiplatform.googleapis.com"
+
+  disable_on_destroy = false
+}
+
 
 # Google Cloud Storage bucket for function source code archives
 # Stores zip files containing built function code for deployment
@@ -156,6 +162,18 @@ module "text_firebase_writer" {
   document_storage_bucket_name = google_storage_bucket.document_storage.name
 }
 
+# File Classifier Module
+# Classifies documents using AI and moves them to categorized folders in Google Drive
+module "file_classifier" {
+  source = "./modules/file-classifier"
+
+  project_id              = var.project_id
+  region                  = var.region
+  function_bucket_name    = google_storage_bucket.function_bucket.name
+  category_root_folder_id = var.category_root_folder_id
+  uncategorized_folder_id = var.uncategorized_folder_id
+}
+
 # Note: Service accounts, IAM bindings, and storage bucket objects
 # are now managed within their respective function modules
 
@@ -195,6 +213,11 @@ output "text_firebase_writer_service_account_email" {
   value       = module.text_firebase_writer.service_account_email
 }
 
+output "file_classifier_service_account_email" {
+  description = "Email of the file classifier service account"
+  value       = module.file_classifier.service_account_email
+}
+
 output "drive_folder_setup_instructions" {
   description = "Instructions for granting Google Drive access through manual sharing"
   value       = <<-EOT
@@ -212,6 +235,7 @@ output "drive_folder_setup_instructions" {
     4. Add these emails as editors:
        - Drive Scanner: ${module.drive_scanner.service_account_email}
        - Document Processor: ${module.doc_processor.service_account_email}
+       - File Classifier: ${module.file_classifier.service_account_email}
     5. Set permission level to "Editor"
     6. Click "Send"
 
