@@ -36,6 +36,7 @@ jobs:
           [
             doc-processor,
             drive-scanner,
+            file-classifier,
             text-firebase-writer,
             text-vision-processor,
           ]
@@ -129,6 +130,7 @@ jobs:
           [
             doc-processor,
             drive-scanner,
+            file-classifier,
             text-firebase-writer,
             text-vision-processor,
           ]
