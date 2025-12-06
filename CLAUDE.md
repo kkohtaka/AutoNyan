@@ -552,6 +552,25 @@ Prompt: "Extract detailed job results, failure messages, and which steps failed"
    Prompt: "Find the latest Test workflow runs for branch X and their status"
    ```
 
+**Direct GitHub API Access:**
+
+When WebFetch is not suitable (e.g., downloading binary log archives), use direct GitHub API access with curl:
+
+```bash
+# Download workflow run logs as ZIP archive
+# IMPORTANT: Use "token" prefix, not "Bearer"
+curl -L -H "Authorization: token ${GITHUB_TOKEN}" \
+  "https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/logs" \
+  -o logs.zip
+
+# Extract specific log file from archive
+unzip -p logs.zip "*{job-name}*" | grep -E "(FAIL|Error|heap out of memory)"
+```
+
+**Common authentication mistake:**
+- ❌ `Authorization: Bearer ${GITHUB_TOKEN}` → Results in 401 "Bad credentials"
+- ✅ `Authorization: token ${GITHUB_TOKEN}` → Correct format for GitHub API
+
 **Troubleshooting CI Failures:**
 
 - **Test failures**: Check which specific test jobs (matrix) failed
