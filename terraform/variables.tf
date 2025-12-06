@@ -18,4 +18,14 @@ variable "drive_scanner_schedule" {
   description = "Cron schedule for the drive document scanner (e.g., '0 * * * *' for every hour)"
   type        = string
   default     = "0 * * * *"
+}
+
+variable "category_root_folder_id" {
+  description = "Google Drive folder ID containing category subfolders for file classification"
+  type        = string
+}
+
+variable "uncategorized_folder_id" {
+  description = "Google Drive folder ID for uncategorized files"
+  type        = string
 } 

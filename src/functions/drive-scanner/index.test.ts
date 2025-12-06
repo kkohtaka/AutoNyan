@@ -43,7 +43,7 @@ describe('driveScanner', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires, no-undef
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const { google } = require('googleapis');
 
     // Mock Drive API
