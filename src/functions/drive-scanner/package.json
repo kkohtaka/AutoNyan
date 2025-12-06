@@ -7,7 +7,7 @@
     "build": "tsc",
     "clean": "rm -f *.js *.js.map *.d.ts && rm -rf dist/",
     "test": "jest --config=../../../jest.config.js --testPathPatterns=drive-scanner --logHeapUsage",
-    "test:coverage": "jest --config=../../../jest.config.js --coverage --testPathPatterns=drive-scanner --collectCoverageFrom='src/functions/drive-scanner/**/*.{ts,tsx}' --collectCoverageFrom='!src/functions/drive-scanner/**/*.test.{ts,tsx}' --collectCoverageFrom='!src/functions/drive-scanner/**/*.spec.{ts,tsx}' --logHeapUsage",
+    "test:coverage": "cd ../../.. && jest --config=jest.config.js --coverage --testPathPatterns=drive-scanner --collectCoverageFrom='src/functions/drive-scanner/**/*.{ts,tsx}' --collectCoverageFrom='!src/functions/drive-scanner/**/*.test.{ts,tsx}' --collectCoverageFrom='!src/functions/drive-scanner/**/*.spec.{ts,tsx}' --logHeapUsage",
     "lint": "eslint --config=../../../eslint.config.js --fix",
     "format": "prettier --write '**/*.ts'"
   },
