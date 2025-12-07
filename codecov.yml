@@ -1,0 +1,51 @@
+# Codecov configuration for AutoNyan monorepo
+# Reference: https://docs.codecov.com/docs/codecovyml-reference
+
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  # Coverage color range: <60% = red, 60-90% = yellow, >90% = green
+  # Aligned with Jest's 60% threshold defined in jest.config.js
+  range: "60..90"
+  status:
+    project:
+      default:
+        # Maintain coverage from base branch (prevent regression)
+        target: auto
+        # Allow up to 1% coverage drop (for temporary fluctuations)
+        threshold: 1%
+        if_ci_failed: error
+    patch:
+      default:
+        # Require minimum 60% coverage for changed lines
+        target: 60%
+        threshold: 0%
+
+# Flag management with default rules for all flags
+# This eliminates the need to update this file when adding new functions.
+# Flags are dynamically created from CI uploads (flags: ${{ matrix.function }})
+flag_management:
+  default_rules:
+    # Preserve coverage data for unchanged functions between runs
+    carryforward: true
+
+# Condensed PR comment layout for cleaner pull request reviews
+comment:
+  layout: "condensed_header, condensed_files, condensed_footer"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+  hide_project_coverage: true
+
+# Exclude non-source files from coverage calculation
+ignore:
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  - "**/jest.config.js"
+  - "terraform/**"
+  - "scripts/**"
+  - "**/*.d.ts"
