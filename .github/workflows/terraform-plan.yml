@@ -216,6 +216,8 @@ jobs:
           GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
           DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
           DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
+          CATEGORY_ROOT_FOLDER_ID: ${{ secrets.CATEGORY_ROOT_FOLDER_ID }}
+          UNCATEGORIZED_FOLDER_ID: ${{ secrets.UNCATEGORIZED_FOLDER_ID }}
 
       - name: Run Terraform plan
         if: steps.detect.outputs.needs_terraform == 'true'
