@@ -103,18 +103,25 @@ jobs:
             echo "ℹ️  No lock file found"
           fi
 
-      - name: Force unlock Terraform state
+      - name: Remove Terraform state lock
         if: steps.lock_info.outputs.lock_exists == 'true'
         run: |
+          LOCK_FILE="gs://${{ vars.TF_STATE_BUCKET }}/terraform/state/default.tflock"
           LOCK_ID="${{ steps.lock_info.outputs.lock_id }}"
 
-          echo "Attempting to force unlock Terraform state..."
+          echo "Removing Terraform state lock..."
           echo "Lock ID: ${LOCK_ID}"
+          echo "Lock file: ${LOCK_FILE}"
 
-          if terraform -chdir=terraform force-unlock -force "${LOCK_ID}"; then
+          # Note: The GCS backend uses UUID-format lock IDs, but 'terraform force-unlock'
+          # expects numerical lock IDs. Therefore, we delete the lock file directly.
+          # This is safe because:
+          # 1. The concurrency group ensures no other Terraform operations are running
+          # 2. This workflow requires manual confirmation before execution
+          if gcloud storage rm "${LOCK_FILE}"; then
             echo "✅ Lock removed successfully"
           else
-            echo "⚠️  Force unlock failed"
+            echo "⚠️  Failed to remove lock file"
             exit 1
           fi
 

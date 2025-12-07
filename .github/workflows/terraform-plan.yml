@@ -330,31 +330,21 @@ jobs:
           # support Workload Identity Federation credentials. See:
           # https://github.com/google-github-actions/auth#authenticating-via-workload-identity-federation
           if gcloud storage ls "${LOCK_FILE}" 2>/dev/null; then
-            echo "🔓 Lock file found. Attempting to unlock..."
+            echo "🔓 Lock file found. Removing..."
 
-            # Get lock file content and extract lock ID
+            # Display lock info for debugging
             LOCK_CONTENT=$(gcloud storage cat "${LOCK_FILE}" 2>/dev/null || echo "")
-
             if [ -n "$LOCK_CONTENT" ]; then
               LOCK_ID=$(echo "$LOCK_CONTENT" | jq -r '.ID // empty')
+              echo "Lock ID: ${LOCK_ID}"
+            fi
 
-              if [ -n "$LOCK_ID" ]; then
-                echo "Lock ID: ${LOCK_ID}"
-                echo "Using terraform force-unlock..."
-
-                if terraform -chdir=terraform force-unlock -force "${LOCK_ID}"; then
-                  echo "✅ Lock cleanup completed"
-                else
-                  echo "⚠️  terraform force-unlock failed"
-                fi
-              else
-                echo "⚠️  Could not extract lock ID from lock file"
-                echo "Using gcloud storage rm as fallback..."
-                gcloud storage rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
-              fi
+            # Note: The GCS backend uses UUID-format lock IDs, but 'terraform force-unlock'
+            # expects numerical lock IDs. Therefore, we delete the lock file directly.
+            if gcloud storage rm "${LOCK_FILE}"; then
+              echo "✅ Lock cleanup completed"
             else
-              echo "⚠️  Lock file is empty, using gcloud storage rm..."
-              gcloud storage rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
+              echo "⚠️  Failed to remove lock file"
             fi
           else
             echo "ℹ️  No lock file found (already unlocked)"
