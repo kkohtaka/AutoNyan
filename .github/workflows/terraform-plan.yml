@@ -326,11 +326,14 @@ jobs:
 
           LOCK_FILE="gs://${{ vars.TF_STATE_BUCKET }}/terraform/state/default.tflock"
 
-          if gsutil ls "${LOCK_FILE}" 2>/dev/null; then
+          # Note: Using 'gcloud storage' instead of 'gsutil' because gsutil does not
+          # support Workload Identity Federation credentials. See:
+          # https://github.com/google-github-actions/auth#authenticating-via-workload-identity-federation
+          if gcloud storage ls "${LOCK_FILE}" 2>/dev/null; then
             echo "🔓 Lock file found. Attempting to unlock..."
 
             # Get lock file content and extract lock ID
-            LOCK_CONTENT=$(gsutil cat "${LOCK_FILE}" 2>/dev/null || echo "")
+            LOCK_CONTENT=$(gcloud storage cat "${LOCK_FILE}" 2>/dev/null || echo "")
 
             if [ -n "$LOCK_CONTENT" ]; then
               LOCK_ID=$(echo "$LOCK_CONTENT" | jq -r '.ID // empty')
@@ -346,12 +349,12 @@ jobs:
                 fi
               else
                 echo "⚠️  Could not extract lock ID from lock file"
-                echo "Using gsutil rm as fallback..."
-                gsutil rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
+                echo "Using gcloud storage rm as fallback..."
+                gcloud storage rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
               fi
             else
-              echo "⚠️  Lock file is empty, using gsutil rm..."
-              gsutil rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
+              echo "⚠️  Lock file is empty, using gcloud storage rm..."
+              gcloud storage rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
             fi
           else
             echo "ℹ️  No lock file found (already unlocked)"

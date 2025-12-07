@@ -71,13 +71,16 @@ jobs:
 
           echo "Checking for lock file: ${LOCK_FILE}"
 
-          if gsutil ls "${LOCK_FILE}" 2>/dev/null; then
+          # Note: Using 'gcloud storage' instead of 'gsutil' because gsutil does not
+          # support Workload Identity Federation credentials. See:
+          # https://github.com/google-github-actions/auth#authenticating-via-workload-identity-federation
+          if gcloud storage ls "${LOCK_FILE}" 2>/dev/null; then
             echo "🔓 Lock file found. Retrieving details..."
-            gsutil stat "${LOCK_FILE}"
+            gcloud storage ls -l "${LOCK_FILE}"
             echo ""
 
             # Get lock file content
-            LOCK_CONTENT=$(gsutil cat "${LOCK_FILE}" 2>/dev/null || echo "")
+            LOCK_CONTENT=$(gcloud storage cat "${LOCK_FILE}" 2>/dev/null || echo "")
 
             if [ -n "$LOCK_CONTENT" ]; then
               # Extract lock ID from JSON using jq
