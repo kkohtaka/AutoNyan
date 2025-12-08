@@ -16,7 +16,7 @@
     "@google-cloud/firestore": "^8.0.0",
     "@google-cloud/vertexai": "^1.0.0",
     "@google/events": "^5.4.0",
-    "googleapis": "^128.0.0",
+    "googleapis": "^167.0.0",
     "autonyan-shared": "file:../../shared"
   },
   "devDependencies": {
