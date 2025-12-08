@@ -38,7 +38,7 @@
   "devDependencies": {
     "jest": "^30.2.0",
     "@types/jest": "^30.0.0",
-    "ts-jest": "^29.4.5",
+    "ts-jest": "^29.4.6",
     "@google/events": "^5.4.0",
     "@eslint/js": "^9.36.0",
     "@typescript-eslint/eslint-plugin": "^8.48.0",
