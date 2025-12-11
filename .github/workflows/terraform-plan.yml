@@ -57,6 +57,8 @@ jobs:
       (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: staging
     env:
       NODE_OPTIONS: --max-old-space-size=4096
 
@@ -216,10 +218,10 @@ jobs:
         env:
           ENVIRONMENT: staging
           GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
-          DRIVE_FOLDER_ID: ${{ secrets.STAGING_DRIVE_FOLDER_ID }}
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
           DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
-          CATEGORY_ROOT_FOLDER_ID: ${{ secrets.STAGING_CATEGORY_ROOT_FOLDER_ID }}
-          UNCATEGORIZED_FOLDER_ID: ${{ secrets.STAGING_UNCATEGORIZED_FOLDER_ID }}
+          CATEGORY_ROOT_FOLDER_ID: ${{ secrets.CATEGORY_ROOT_FOLDER_ID }}
+          UNCATEGORIZED_FOLDER_ID: ${{ secrets.UNCATEGORIZED_FOLDER_ID }}
 
       - name: Run Terraform plan
         if: steps.detect.outputs.needs_terraform == 'true'

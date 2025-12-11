@@ -465,8 +465,14 @@ resource "google_project_iam_member" "function_pubsub_publisher" {
 **Staging and Production environments:**
 - Resources are prefixed with environment name (e.g., `staging-drive-scanner`, `production-drive-scanner`)
 - Separate Terraform state files per environment (`terraform/state/staging/`, `terraform/state/production/`)
-- Environment-specific secrets in GitHub (e.g., `STAGING_DRIVE_FOLDER_ID`, `DRIVE_FOLDER_ID`)
+- Environment Secrets in GitHub: same secret names (`DRIVE_FOLDER_ID`, etc.) defined in each Environment
 - Allows independent deployment and testing
+
+**GitHub Environment Secrets setup:**
+Each environment (`staging`, `production`) should have these secrets with the same names:
+- `DRIVE_FOLDER_ID` - Google Drive folder to scan
+- `CATEGORY_ROOT_FOLDER_ID` - Root folder for categorized files
+- `UNCATEGORIZED_FOLDER_ID` - Folder for uncategorized files
 
 **Environment variable in Terraform:**
 ```hcl
