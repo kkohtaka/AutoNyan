@@ -1,6 +1,6 @@
 # Service account for text-firebase-writer function
 resource "google_service_account" "text_firebase_writer" {
-  account_id   = "${var.environment}-text-fb-writer"
+  account_id   = "${var.environment}-text-firebase-writer"
   display_name = "Text Firebase Writer Service Account (${var.environment})"
   description  = "Service account for text-firebase-writer Cloud Function"
 }
