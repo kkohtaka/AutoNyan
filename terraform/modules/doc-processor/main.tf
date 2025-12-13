@@ -2,15 +2,15 @@
 # Receives messages containing Google Drive file IDs for document processing
 # Triggers the document scanner function to copy files to Cloud Storage
 resource "google_pubsub_topic" "doc_process_trigger" {
-  name = "doc-process-trigger"
+  name = "${var.environment}-doc-process-trigger"
 }
 
 # Dedicated service account for the document scan preparation function
 # Accesses Google Drive through manual folder sharing (not project-level IAM)
 # Includes permissions for API access, Cloud Storage, and PubSub
 resource "google_service_account" "doc_processor_sa" {
-  account_id   = "doc-processor-sa"
-  display_name = "Document Processor Service Account"
+  account_id   = "${var.environment}-doc-processor-sa"
+  display_name = "Document Processor Service Account (${var.environment})"
   description  = "Service account for Google Drive access and Cloud Storage operations"
 }
 
@@ -44,8 +44,8 @@ resource "google_storage_bucket_object" "doc_processor_zip" {
 # Downloads files from Google Drive and copies them to Cloud Storage
 # Provides document preparation for downstream processing
 resource "google_cloudfunctions2_function" "doc_processor" {
-  name        = "doc-processor"
-  description = "Prepares documents for scanning by copying Google Drive files to Cloud Storage"
+  name        = "${var.environment}-doc-processor"
+  description = "Prepares documents for scanning by copying Google Drive files to Cloud Storage (${var.environment})"
   location    = var.region
 
   build_config {

@@ -3,6 +3,11 @@ variable "project_id" {
   type        = string
 }
 
+variable "environment" {
+  description = "Deployment environment (staging or production)"
+  type        = string
+}
+
 variable "region" {
   description = "The GCP region for resources"
   type        = string

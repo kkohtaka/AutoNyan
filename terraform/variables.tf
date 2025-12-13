@@ -3,6 +3,15 @@ variable "project_id" {
   type        = string
 }
 
+variable "environment" {
+  description = "Deployment environment (staging or production)"
+  type        = string
+  validation {
+    condition     = contains(["staging", "production"], var.environment)
+    error_message = "Environment must be either 'staging' or 'production'."
+  }
+}
+
 variable "region" {
   description = "The Google Cloud region"
   type        = string

@@ -2,15 +2,15 @@
 # Receives scheduled messages from Cloud Scheduler
 # Initiates the drive document scanner function
 resource "google_pubsub_topic" "drive_scan_trigger" {
-  name = "drive-scan-trigger"
+  name = "${var.environment}-drive-scan-trigger"
 }
 
 # Dedicated service account for the drive scanner function
 # Accesses Google Drive through manual folder sharing (not project-level IAM)
 # Includes permissions for API access and PubSub publishing
 resource "google_service_account" "drive_scanner_sa" {
-  account_id   = "drive-scanner-sa"
-  display_name = "Drive File Manager Service Account"
+  account_id   = "${var.environment}-drive-scanner-sa"
+  display_name = "Drive File Manager Service Account (${var.environment})"
   description  = "Service account for Google Drive access via folder sharing and PubSub publishing"
 }
 
@@ -54,8 +54,8 @@ resource "google_storage_bucket_object" "drive_scanner_zip" {
 # Scans specified Google Drive folders and publishes document metadata
 # for downstream classification processing
 resource "google_cloudfunctions2_function" "drive_scanner" {
-  name        = "drive-scanner"
-  description = "Automated Google Drive scanner that discovers documents and queues them for classification processing"
+  name        = "${var.environment}-drive-scanner"
+  description = "Automated Google Drive scanner that discovers documents and queues them for classification processing (${var.environment})"
   location    = var.region
 
   build_config {
