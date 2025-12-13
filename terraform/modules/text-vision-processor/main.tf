@@ -1,6 +1,6 @@
 # Service account for text-vision-processor function
 resource "google_service_account" "text_vision_processor" {
-  account_id   = "${var.environment}-text-vision-proc"
+  account_id   = "${var.environment}-text-vision-processor"
   display_name = "Text Vision Processor Service Account (${var.environment})"
   description  = "Service account for text-vision-processor Cloud Function"
 }
