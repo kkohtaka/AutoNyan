@@ -552,13 +552,15 @@ const topicName = process.env.TOPIC_NAME || 'default-topic';
 **Stage 4: Deploy to Staging**
 - Auto-triggered after successful Terraform Plan on master branch
 - Deploys to **staging** environment
-- Uses staging-specific secrets (e.g., `STAGING_DRIVE_FOLDER_ID`)
+- Uses staging Environment Secrets
 
 **Stage 5: Deploy to Production**
 - Triggered by version tag push (e.g., `v1.0.0`)
 - Deploys to **production** environment
-- Uses production secrets (e.g., `DRIVE_FOLDER_ID`)
+- Uses production Environment Secrets
 - Semver format required: `v<major>.<minor>.<patch>`
+
+**Note:** Stages 4 and 5 use a unified Deploy workflow (`deploy.yml`) with environment-based configuration.
 
 **Deployment Flow:**
 ```
