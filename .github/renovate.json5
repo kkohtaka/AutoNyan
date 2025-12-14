@@ -1,0 +1,84 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+  ],
+  "timezone": "Asia/Tokyo",
+  "schedule": [
+    "before 10am on monday",
+  ],
+  "labels": [
+    "dependencies",
+  ],
+  "commitMessagePrefix": "chore(deps):",
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 10,
+
+  // Package-specific rules
+  "packageRules": [
+    // Terraform version alignment (devcontainer + GitHub Actions)
+    {
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["hashicorp/terraform"],
+      "addLabels": ["terraform"],
+      "commitMessagePrefix": "chore(terraform):",
+      "groupName": "Terraform",
+      "description": "Group Terraform version updates across devcontainer and GitHub Actions",
+    },
+    // Terraform providers and modules
+    {
+      "matchManagers": ["terraform"],
+      "addLabels": ["terraform"],
+      "commitMessagePrefix": "chore(terraform):",
+      "groupName": "Terraform providers",
+    },
+    // npm packages
+    {
+      "matchManagers": ["npm"],
+      "addLabels": ["npm"],
+      "commitMessagePrefix": "chore(deps-npm):",
+      "rangeStrategy": "bump",
+      "semanticCommitType": "chore",
+      "semanticCommitScope": "deps",
+    },
+    // npm dev dependencies
+    {
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "addLabels": ["npm"],
+      "commitMessagePrefix": "npm(deps-dev):",
+      "rangeStrategy": "bump",
+    },
+    // GitHub Actions
+    {
+      "matchManagers": ["github-actions"],
+      "addLabels": ["github-actions"],
+      "commitMessagePrefix": "chore(github-actions):",
+      "groupName": "GitHub Actions",
+    },
+  ],
+
+  // Custom regex managers
+  "regexManagers": [
+    // Terraform version in GitHub Actions workflows
+    {
+      "fileMatch": ["^\\.github/workflows/.+\\.ya?ml$"],
+      "matchStrings": [
+        "terraform_version:\\s*['\"]?(?<currentValue>[^'\"\\s]+)['\"]?",
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "hashicorp/terraform",
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+    },
+    // Terraform version in devcontainer features
+    {
+      "fileMatch": ["^\\.devcontainer/devcontainer\\.json$"],
+      "matchStrings": [
+        "\"ghcr\\.io/devcontainers/features/terraform:1\":\\s*\\{\\s*\"version\":\\s*\"(?<currentValue>[^\"]+)\"",
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "hashicorp/terraform",
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+    },
+  ],
+}
