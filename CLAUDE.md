@@ -99,6 +99,9 @@ npm run lint:terraform     # Terraform validation and linting
 
 ### Infrastructure Workflow
 ```bash
+# Set environment (staging is default)
+export ENVIRONMENT=staging  # or 'production'
+
 npm run terraform:init     # Initialize backend (first time or after changes)
 npm run terraform:plan     # Preview infrastructure changes
 npm run terraform:apply    # Apply changes to GCP
@@ -457,14 +460,40 @@ resource "google_project_iam_member" "function_pubsub_publisher" {
 }
 ```
 
+### Multi-Environment Pattern
+
+**Staging and Production environments:**
+- Resources are prefixed with environment name (e.g., `staging-drive-scanner`, `production-drive-scanner`)
+- Separate Terraform state files per environment (`terraform/state/staging/`, `terraform/state/production/`)
+- Environment Secrets in GitHub: same secret names (`DRIVE_FOLDER_ID`, etc.) defined in each Environment
+- Allows independent deployment and testing
+
+**GitHub Environment Secrets setup:**
+Each environment (`staging`, `production`) should have these secrets with the same names:
+- `DRIVE_FOLDER_ID` - Google Drive folder to scan
+- `CATEGORY_ROOT_FOLDER_ID` - Root folder for categorized files
+- `UNCATEGORIZED_FOLDER_ID` - Folder for uncategorized files
+
+**Environment variable in Terraform:**
+```hcl
+variable "environment" {
+  description = "Deployment environment (staging or production)"
+  type        = string
+  validation {
+    condition     = contains(["staging", "production"], var.environment)
+    error_message = "Environment must be either 'staging' or 'production'."
+  }
+}
+```
+
 ### Resource Naming Convention
 
 **Consistent naming across resources:**
-- Functions: `{stage-name}` (e.g., `drive-scanner`, `doc-processor`)
-- Service Accounts: `{function-name}-sa`
-- PubSub Topics: `{function-name}-trigger` or `{purpose}-trigger`
-- Storage Buckets: `{project-id}-{purpose}`
-- Terraform Modules: Match function names
+- Functions: `{environment}-{stage-name}` (e.g., `staging-drive-scanner`, `production-doc-processor`)
+- Service Accounts: `{environment}-{function-name}-sa`
+- PubSub Topics: `{environment}-{function-name}-trigger`
+- Storage Buckets: `{project-id}-{environment}-{purpose}`
+- Terraform Modules: Match function names (environment passed as variable)
 
 ### Environment Variables Pattern
 
@@ -508,8 +537,9 @@ const topicName = process.env.TOPIC_NAME || 'default-topic';
 - Unit tests with coverage thresholds
 - Formatting checks
 
-**Stage 2: Terraform Plan Workflow**
+**Stage 2: Terraform Plan Workflow (Staging)**
 - Auto-triggered after Test success (for owner/Dependabot PRs)
+- Plans against **staging** environment
 - Smart detection: skips if only non-infrastructure files changed
 - Validates Terraform configuration
 - Posts plan output as PR comment (if applicable)
@@ -519,9 +549,27 @@ const topicName = process.env.TOPIC_NAME || 'default-topic';
 - Builds function deployment packages
 - Creates zip archives for Cloud Functions
 
-**Stage 4: Deploy**
-- Manual only (not automated in GitHub Actions)
-- Use `npm run deploy` locally or via release automation
+**Stage 4: Deploy to Staging**
+- Auto-triggered after successful Terraform Plan on master branch
+- Deploys to **staging** environment
+- Uses staging Environment Secrets
+
+**Stage 5: Deploy to Production**
+- Triggered by version tag push (e.g., `v1.0.0`)
+- Deploys to **production** environment
+- Uses production Environment Secrets
+- Semver format required: `v<major>.<minor>.<patch>`
+
+**Note:** Stages 4 and 5 use a unified Deploy workflow (`deploy.yml`) with environment-based configuration.
+
+**Deployment Flow:**
+```
+PR → Test → Terraform Plan (staging)
+         ↓
+master merge → Deploy to Staging
+         ↓
+git tag v1.0.0 → Deploy to Production
+```
 
 ### Smart Detection Logic
 
@@ -766,6 +814,49 @@ When working with this codebase:
 **Maintenance principle:** Document patterns and workflows, not implementations. AI assistants should discover current implementations from code, not from documentation.
 
 **Update trigger:** When you add a new function or change infrastructure, update the pattern sections only if the new code introduces a **new pattern** not already documented. If it follows existing patterns, no documentation update is needed.
+
+## Maintaining Infrastructure Scripts
+
+### GitHub Actions Service Account Permissions
+
+**Critical:** When adding new Google Cloud services to Terraform configuration, the GitHub Actions service account must be granted appropriate IAM permissions.
+
+**Maintenance checklist for new GCP services:**
+
+1. **Identify required IAM roles** for the new service
+   - Check Google Cloud documentation for minimum required permissions
+   - Example: Firestore requires `roles/datastore.owner` or `roles/datastore.user`
+
+2. **Update `scripts/setup-github-actions.sh`**
+   - Add the role to the `ROLES` array (line ~193-204)
+   - Example:
+     ```bash
+     ROLES=(
+       "roles/cloudfunctions.admin"
+       "roles/pubsub.admin"
+       "roles/datastore.owner"  # Add new role here
+     )
+     ```
+
+3. **Run the setup script** to apply permissions
+   ```bash
+   npm run setup:github-actions
+   ```
+
+4. **Verify CI workflows** can access the new service
+   - Check Terraform plan workflow succeeds
+   - Review GitHub Actions logs for permission errors
+
+**Services currently configured:**
+- Compute Engine (networking, security, instances)
+- IAM (service accounts)
+- Cloud Storage
+- Cloud Functions
+- Pub/Sub
+- Cloud Scheduler
+- Firestore/Datastore
+
+**When to update:** Add new roles whenever Terraform configuration introduces resources from a new Google Cloud service that requires special permissions beyond the basic roles already granted.
 
 ## Quick Reference
 

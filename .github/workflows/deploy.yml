@@ -1,15 +1,31 @@
 ---
 name: Deploy
 
-run-name: Deploy to Production (${{ inputs.deploy_ref }})
+run-name: |
+  ${{
+    github.event_name == 'push' &&
+    format('Deploy to Production ({0})', github.ref_name) ||
+    format('Deploy to {0} ({1})', inputs.environment, inputs.deploy_ref)
+  }}
 
 on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+' # semver tags trigger production deployment
   workflow_dispatch:
     inputs:
       deploy_ref:
         description: 'Git ref to deploy'
         required: true
         type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
 
 permissions:
   contents: read
@@ -20,22 +36,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
-      name: production
+      name: ${{ github.event_name == 'push' && 'production' || inputs.environment }}
     concurrency:
-      # Use the same concurrency group as plan to ensure mutual exclusion.
+      # Use environment-specific concurrency group to ensure mutual exclusion.
       # Plan and Apply both acquire the same Terraform state lock in GCS,
-      # so only one operation (plan OR apply) can run at a time.
-      # The composite key also ensures environment-level deployment serialization.
-      group: terraform-production
+      # so only one operation (plan OR apply) can run at a time per environment.
+      group: terraform-${{ github.event_name == 'push' && 'production' || inputs.environment }}
       cancel-in-progress: false
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+      DEPLOY_ENV: ${{ github.event_name == 'push' && 'production' || inputs.environment }}
+      DEPLOY_REF: ${{ github.event_name == 'push' && github.ref || inputs.deploy_ref }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.deploy_ref }}
+          ref: ${{ env.DEPLOY_REF }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -49,7 +66,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: '1.5.0'
+          terraform_version: '1.8.5'
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
@@ -62,10 +79,12 @@ jobs:
         env:
           TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
           TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
+          ENVIRONMENT: ${{ env.DEPLOY_ENV }}
 
       - name: Generate terraform.tfvars
         run: npm run setup:terraform-variables
         env:
+          ENVIRONMENT: ${{ env.DEPLOY_ENV }}
           GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
           DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
           DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
@@ -84,11 +103,11 @@ jobs:
         run: |
           EXIT_CODE="${{ steps.deploy.outputs.deploy_exit_code }}"
           if [ "$EXIT_CODE" = "0" ]; then
-            echo "✅ Deployment to production completed successfully"
-            echo "Deployed ref: ${{ inputs.deploy_ref }}"
+            echo "✅ Deployment to ${{ env.DEPLOY_ENV }} completed successfully"
+            echo "Deployed ref: ${{ env.DEPLOY_REF }}"
           else
-            echo "❌ Deployment to production failed"
-            echo "Deploy ref: ${{ inputs.deploy_ref }}"
+            echo "❌ Deployment to ${{ env.DEPLOY_ENV }} failed"
+            echo "Deploy ref: ${{ env.DEPLOY_REF }}"
             exit 1
           fi
 
@@ -98,34 +117,26 @@ jobs:
           echo "🧹 Cleaning up potential stale lock due to Terraform failure..."
           echo "ℹ️  Concurrency group ensures no other Terraform operations are running"
 
-          LOCK_FILE="gs://${{ vars.TF_STATE_BUCKET }}/terraform/state/default.tflock"
+          LOCK_FILE="gs://${{ vars.TF_STATE_BUCKET }}/terraform/state/${{ env.DEPLOY_ENV }}/default.tflock"
 
-          if gsutil ls "${LOCK_FILE}" 2>/dev/null; then
-            echo "🔓 Lock file found. Attempting to unlock..."
+          # Note: Using 'gcloud storage' instead of 'gsutil' because gsutil does not
+          # support Workload Identity Federation credentials.
+          if gcloud storage ls "${LOCK_FILE}" 2>/dev/null; then
+            echo "🔓 Lock file found. Removing..."
 
-            # Get lock file content and extract lock ID
-            LOCK_CONTENT=$(gsutil cat "${LOCK_FILE}" 2>/dev/null || echo "")
-
+            # Display lock info for debugging
+            LOCK_CONTENT=$(gcloud storage cat "${LOCK_FILE}" 2>/dev/null || echo "")
             if [ -n "$LOCK_CONTENT" ]; then
               LOCK_ID=$(echo "$LOCK_CONTENT" | jq -r '.ID // empty')
+              echo "Lock ID: ${LOCK_ID}"
+            fi
 
-              if [ -n "$LOCK_ID" ]; then
-                echo "Lock ID: ${LOCK_ID}"
-                echo "Using terraform force-unlock..."
-
-                if terraform -chdir=terraform force-unlock -force "${LOCK_ID}"; then
-                  echo "✅ Lock cleanup completed"
-                else
-                  echo "⚠️  terraform force-unlock failed"
-                fi
-              else
-                echo "⚠️  Could not extract lock ID from lock file"
-                echo "Using gsutil rm as fallback..."
-                gsutil rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
-              fi
+            # Note: The GCS backend uses UUID-format lock IDs, but 'terraform force-unlock'
+            # expects numerical lock IDs. Therefore, we delete the lock file directly.
+            if gcloud storage rm "${LOCK_FILE}"; then
+              echo "✅ Lock cleanup completed"
             else
-              echo "⚠️  Lock file is empty, using gsutil rm..."
-              gsutil rm "${LOCK_FILE}" && echo "✅ Lock cleanup completed" || echo "⚠️  Failed to remove lock file"
+              echo "⚠️  Failed to remove lock file"
             fi
           else
             echo "ℹ️  No lock file found (already unlocked)"

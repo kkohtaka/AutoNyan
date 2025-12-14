@@ -1,15 +1,15 @@
 ---
-name: Terraform Plan
+name: Terraform Plan (Staging)
 
 run-name: |
   ${{
     github.event_name == 'issue_comment' &&
-    format('Manual Plan - PR #{0} ({1})', github.event.issue.number, github.event.comment.user.login) ||
+    format('Staging Plan - PR #{0} ({1})', github.event.issue.number, github.event.comment.user.login) ||
     github.event_name == 'workflow_dispatch' && inputs.pr_number &&
-    format('Auto Plan - PR #{0} ({1})', inputs.pr_number, inputs.pr_ref) ||
+    format('Staging Plan - PR #{0} ({1})', inputs.pr_number, inputs.pr_ref) ||
     github.event_name == 'workflow_dispatch' &&
-    format('Auto Plan - {0} ({1})', github.ref_name, github.sha) ||
-    'Terraform Plan'
+    format('Staging Plan - {0} ({1})', github.ref_name, github.sha) ||
+    'Terraform Plan (Staging)'
   }}
 
 on:
@@ -38,11 +38,11 @@ permissions:
   actions: write
 
 concurrency:
-  # Use the same concurrency group as deploy to ensure mutual exclusion.
+  # Use the same concurrency group as staging deploy to ensure mutual exclusion.
   # Plan and Apply both acquire the same Terraform state lock in GCS,
   # so only one operation (plan OR apply) can run at a time.
   # The composite key also ensures environment-level deployment serialization.
-  group: terraform-production
+  group: terraform-staging
   cancel-in-progress: false
 
 jobs:
@@ -57,6 +57,8 @@ jobs:
       (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: staging
     env:
       NODE_OPTIONS: --max-old-space-size=4096
 
@@ -111,9 +113,9 @@ jobs:
               issue_number: issueNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 **Terraform Plan Started**\n\n` +
+              body: `🚀 **Terraform Plan (Staging) Started**\n\n` +
                     `Triggered by @${{ github.event.comment.user.login }} with command: \`/terraform plan\`\n\n` +
-                    `Plan execution is now running... Check the ` +
+                    `Plan execution is now running for **staging** environment... Check the ` +
                     `[workflow run](${{ github.server_url }}/${{ github.repository }}/` +
                     `actions/runs/${{ github.run_id }}) for progress.`
             });
@@ -128,8 +130,8 @@ jobs:
               repo: context.repo.repo,
               sha: prDetails.sha,
               state: 'pending',
-              context: 'terraform/plan',
-              description: 'Terraform plan is running...',
+              context: 'terraform/plan/staging',
+              description: 'Terraform plan (staging) is running...',
               target_url: `${context.serverUrl}/${context.repo.owner}/` +
                           `${context.repo.repo}/actions/runs/${context.runId}`
             });
@@ -193,7 +195,7 @@ jobs:
         if: steps.detect.outputs.needs_terraform == 'true'
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: '1.5.0'
+          terraform_version: '1.8.5'
 
       - name: Authenticate to Google Cloud
         if: steps.detect.outputs.needs_terraform == 'true'
@@ -208,11 +210,13 @@ jobs:
         env:
           TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
           TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
+          ENVIRONMENT: staging
 
       - name: Generate terraform.tfvars
         if: steps.detect.outputs.needs_terraform == 'true'
         run: npm run setup:terraform-variables
         env:
+          ENVIRONMENT: staging
           GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
           DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
           DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
@@ -262,14 +266,14 @@ jobs:
             const issueNumber = prDetails.number;
 
             const body = wasSkipped
-              ? `## ${emoji} Terraform Plan ${status}
+              ? `## ${emoji} Terraform Plan (Staging) ${status}
 
             No infrastructure-related files were changed in this PR.
 
             ${planOutput}
 
             ${triggerInfo}`
-              : `## ${emoji} Terraform Plan ${status}
+              : `## ${emoji} Terraform Plan (Staging) ${status}
 
             <details>
             <summary>Click to expand plan output</summary>
@@ -300,24 +304,24 @@ jobs:
 
             const state = success ? 'success' : 'failure';
             const description = wasSkipped
-              ? 'Terraform plan skipped (no infrastructure changes)'
+              ? 'Terraform plan (staging) skipped (no infrastructure changes)'
               : (success
-                ? 'Terraform plan completed successfully'
-                : 'Terraform plan failed');
+                ? 'Terraform plan (staging) completed successfully'
+                : 'Terraform plan (staging) failed');
 
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: prDetails.sha,
               state: state,
-              context: 'terraform/plan',
+              context: 'terraform/plan/staging',
               description: description,
               target_url: `${context.serverUrl}/${context.repo.owner}/` +
                           `${context.repo.repo}/actions/runs/${context.runId}`
             });
 
             if (!success) {
-              core.setFailed('Terraform plan failed');
+              core.setFailed('Terraform plan (staging) failed');
             }
 
       - name: Cleanup Terraform lock on failure
@@ -326,7 +330,7 @@ jobs:
           echo "🧹 Cleaning up potential stale lock due to Terraform failure..."
           echo "ℹ️  Concurrency group ensures no other Terraform operations are running"
 
-          LOCK_FILE="gs://${{ vars.TF_STATE_BUCKET }}/terraform/state/default.tflock"
+          LOCK_FILE="gs://${{ vars.TF_STATE_BUCKET }}/terraform/state/staging/default.tflock"
 
           # Note: Using 'gcloud storage' instead of 'gsutil' because gsutil does not
           # support Workload Identity Federation credentials. See:
@@ -352,7 +356,7 @@ jobs:
             echo "ℹ️  No lock file found (already unlocked)"
           fi
 
-      - name: Trigger Deploy workflow (master branch only)
+      - name: Trigger Staging Deploy workflow (master branch only)
         if: |
           steps.detect.outputs.needs_terraform == 'true' &&
           steps.plan.outputs.plan_exit_code == '0' &&
@@ -371,4 +375,4 @@ jobs:
               }
             });
 
-            console.log(`Triggered Deploy workflow for ref ${context.ref}`);
+            console.log(`Triggered Staging Deploy workflow for ref ${context.ref}`);

@@ -1,7 +1,7 @@
 # Service account for text-vision-processor function
 resource "google_service_account" "text_vision_processor" {
-  account_id   = "text-vision-processor"
-  display_name = "Text Vision Processor Service Account"
+  account_id   = "${var.environment}-text-vision-proc"
+  display_name = "Text Vision Processor Service Account (${var.environment})"
   description  = "Service account for text-vision-processor Cloud Function"
 }
 
@@ -34,9 +34,9 @@ resource "google_storage_bucket_object" "text_vision_processor_zip" {
 
 # Cloud Function for text vision processing
 resource "google_cloudfunctions2_function" "text_vision_processor" {
-  name        = "text-vision-processor"
+  name        = "${var.environment}-text-vision-processor"
   location    = var.region
-  description = "Process documents with Vision API for text extraction"
+  description = "Process documents with Vision API for text extraction (${var.environment})"
 
   build_config {
     runtime     = "nodejs20"

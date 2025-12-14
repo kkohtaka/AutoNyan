@@ -1,7 +1,7 @@
 # Service account for text-firebase-writer function
 resource "google_service_account" "text_firebase_writer" {
-  account_id   = "text-firebase-writer"
-  display_name = "Text Firebase Writer Service Account"
+  account_id   = "${var.environment}-text-fb-writer"
+  display_name = "Text Firebase Writer Service Account (${var.environment})"
   description  = "Service account for text-firebase-writer Cloud Function"
 }
 
@@ -34,9 +34,9 @@ resource "google_storage_bucket_object" "text_firebase_writer_zip" {
 
 # Cloud Function for storing Vision API results to Firebase
 resource "google_cloudfunctions2_function" "text_firebase_writer" {
-  name        = "text-firebase-writer"
+  name        = "${var.environment}-text-firebase-writer"
   location    = var.region
-  description = "Store Vision API text extraction results to Firestore"
+  description = "Store Vision API text extraction results to Firestore (${var.environment})"
 
   build_config {
     runtime     = "nodejs20"
