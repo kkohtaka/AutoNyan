@@ -46,6 +46,27 @@ resource "google_project_service" "firestore_api" {
   disable_on_destroy = false
 }
 
+# Firestore database for storing extracted document text and metadata
+# Uses Native mode for real-time sync and flexible queries
+# Note: Default database is shared across environments in the same project
+resource "google_firestore_database" "default" {
+  project     = var.project_id
+  name        = "(default)"
+  location_id = var.region
+  type        = "FIRESTORE_NATIVE"
+
+  # Prevent accidental deletion of the database
+  deletion_policy = "DELETE"
+
+  # Prevent Terraform from destroying this database
+  # If database is deleted, recreating requires waiting ~3-5 minutes for Google Cloud API
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  depends_on = [google_project_service.firestore_api]
+}
+
 resource "google_project_service" "vertex_ai_api" {
   service = "aiplatform.googleapis.com"
 
@@ -57,7 +78,7 @@ resource "google_project_service" "vertex_ai_api" {
 # Stores zip files containing built function code for deployment
 # Uses uniform bucket-level access for simplified permissions
 resource "google_storage_bucket" "function_bucket" {
-  name                        = "${var.project_id}-function-source"
+  name                        = "${var.project_id}-${var.environment}-function-source"
   location                    = var.region
   uniform_bucket_level_access = true
   force_destroy               = true
@@ -67,7 +88,7 @@ resource "google_storage_bucket" "function_bucket" {
 # Stores processed document files copied from Google Drive
 # Used by the document scanner function for data persistence
 resource "google_storage_bucket" "document_storage" {
-  name                        = "${var.project_id}-document-storage"
+  name                        = "${var.project_id}-${var.environment}-document-storage"
   location                    = var.region
   uniform_bucket_level_access = true
   force_destroy               = true
@@ -77,7 +98,7 @@ resource "google_storage_bucket" "document_storage" {
 # Stores JSON output from Vision API text extraction processing
 # Used by text-firebase-writer function to parse and store extracted text
 resource "google_storage_bucket" "vision_results" {
-  name                        = "${var.project_id}-vision-results"
+  name                        = "${var.project_id}-${var.environment}-vision-results"
   location                    = var.region
   uniform_bucket_level_access = true
   force_destroy               = true
@@ -103,8 +124,8 @@ resource "google_project_iam_member" "gcs_pubsub_publisher" {
 # Publishes messages to drive-scan-trigger topic on a configurable schedule
 # Schedule format uses Unix cron syntax (e.g., "0 9 * * 1" for weekly Monday 9 AM)
 resource "google_cloud_scheduler_job" "drive_scan_schedule" {
-  name        = "drive-scan-schedule"
-  description = "Automated scheduler for Google Drive document scanning and classification"
+  name        = "${var.environment}-drive-scan-schedule"
+  description = "Automated scheduler for Google Drive document scanning and classification (${var.environment})"
   schedule    = var.drive_scanner_schedule
   time_zone   = "UTC"
   region      = var.region
@@ -123,6 +144,7 @@ module "drive_scanner" {
   source = "./modules/drive-scanner"
 
   project_id                     = var.project_id
+  environment                    = var.environment
   region                         = var.region
   function_bucket_name           = google_storage_bucket.function_bucket.name
   doc_process_trigger_topic_name = module.doc_processor.topic_name
@@ -134,6 +156,7 @@ module "doc_processor" {
   source = "./modules/doc-processor"
 
   project_id           = var.project_id
+  environment          = var.environment
   region               = var.region
   function_bucket_name = google_storage_bucket.function_bucket.name
 }
@@ -144,6 +167,7 @@ module "text_vision_processor" {
   source = "./modules/text-vision-processor"
 
   project_id                   = var.project_id
+  environment                  = var.environment
   region                       = var.region
   function_bucket_name         = google_storage_bucket.function_bucket.name
   document_storage_bucket_name = google_storage_bucket.document_storage.name
@@ -156,6 +180,7 @@ module "text_firebase_writer" {
   source = "./modules/text-firebase-writer"
 
   project_id                   = var.project_id
+  environment                  = var.environment
   region                       = var.region
   function_bucket_name         = google_storage_bucket.function_bucket.name
   vision_results_bucket_name   = google_storage_bucket.vision_results.name
@@ -168,10 +193,14 @@ module "file_classifier" {
   source = "./modules/file-classifier"
 
   project_id              = var.project_id
+  environment             = var.environment
   region                  = var.region
   function_bucket_name    = google_storage_bucket.function_bucket.name
   category_root_folder_id = var.category_root_folder_id
   uncategorized_folder_id = var.uncategorized_folder_id
+
+  # Firestore database must exist before creating Firestore triggers
+  depends_on = [google_firestore_database.default]
 }
 
 # Note: Service accounts, IAM bindings, and storage bucket objects

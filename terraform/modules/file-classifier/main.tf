@@ -1,7 +1,7 @@
 # Service account for file-classifier function
 resource "google_service_account" "file_classifier" {
-  account_id   = "file-classifier"
-  display_name = "File Classifier Service Account"
+  account_id   = "${var.environment}-file-classifier"
+  display_name = "File Classifier Service Account (${var.environment})"
   description  = "Service account for file-classifier Cloud Function"
 }
 
@@ -42,9 +42,9 @@ resource "google_storage_bucket_object" "file_classifier_zip" {
 
 # Cloud Function for classifying and moving files
 resource "google_cloudfunctions2_function" "file_classifier" {
-  name        = "file-classifier"
+  name        = "${var.environment}-file-classifier"
   location    = var.region
-  description = "Classify documents using AI and move them to categorized folders in Google Drive"
+  description = "Classify documents using AI and move them to categorized folders in Google Drive (${var.environment})"
 
   build_config {
     runtime     = "nodejs20"

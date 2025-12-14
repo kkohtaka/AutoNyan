@@ -29,6 +29,7 @@ src/functions/**/*.js.map
 terraform.rc
 .terraform.lock.hcl
 backend.hcl
+terraform/environments/*.backend.hcl
 
 # GitHub Actions auth credentials
 gha-creds-*.json

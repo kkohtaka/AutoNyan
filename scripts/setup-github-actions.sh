@@ -201,6 +201,7 @@ ROLES=(
 	"roles/pubsub.admin"
 	"roles/cloudscheduler.admin"
 	"roles/serviceusage.serviceUsageAdmin"
+	"roles/datastore.owner"
 )
 SERVICE_ACCOUNT_MEMBER="serviceAccount:$SERVICE_ACCOUNT_EMAIL"
 for ROLE in "${ROLES[@]}"; do
