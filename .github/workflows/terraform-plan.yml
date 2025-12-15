@@ -229,7 +229,7 @@ jobs:
         run: |
           npm run build:function
           npm run terraform:init
-          npm run terraform:plan 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tee plan_output.txt
+          npm run terraform:plan 2>&1 | sed 's/\x1b\[[0-9;:]*[a-zA-Z]//g' | tee plan_output.txt
           PLAN_EXIT_CODE=${PIPESTATUS[0]}
           echo "plan_exit_code=${PLAN_EXIT_CODE}" >> $GITHUB_OUTPUT
           exit ${PLAN_EXIT_CODE}
