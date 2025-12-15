@@ -15,18 +15,18 @@
   "prConcurrentLimit": 10,
 
   // Auto-merge configuration
-  // Only auto-merge patch and minor updates after CI passes
-  // Major updates require manual review
+  // Auto-merge all updates after CI passes (enforced by branch protection rules)
+  // GitHub's auto-merge feature ensures tests pass before merging
   "platformAutomerge": true,
 
   // Package-specific rules
   "packageRules": [
-    // Auto-merge non-major updates
+    // Auto-merge all updates
     {
-      "matchUpdateTypes": ["patch", "minor"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
       "automerge": true,
       "automergeType": "pr",
-      "description": "Auto-merge patch and minor updates after CI passes",
+      "description": "Auto-merge all updates after CI passes",
     },
     // Terraform version alignment (devcontainer + GitHub Actions)
     {
