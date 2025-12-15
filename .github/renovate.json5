@@ -14,8 +14,20 @@
   "prHourlyLimit": 0,
   "prConcurrentLimit": 10,
 
+  // Auto-merge configuration
+  // Only auto-merge patch and minor updates after CI passes
+  // Major updates require manual review
+  "platformAutomerge": true,
+
   // Package-specific rules
   "packageRules": [
+    // Auto-merge non-major updates
+    {
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "automergeType": "pr",
+      "description": "Auto-merge patch and minor updates after CI passes",
+    },
     // Terraform version alignment (devcontainer + GitHub Actions)
     {
       "matchDatasources": ["github-releases"],
