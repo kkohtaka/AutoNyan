@@ -525,7 +525,8 @@ const topicName = process.env.TOPIC_NAME || 'default-topic';
 
 **PR Author-Based Permissions:**
 - **Repository Owner PRs**: Full pipeline access (test → plan → build)
-- **Dependabot PRs**: Auto-triggered with smart detection (skips Terraform if only docs/workflows changed)
+- **Renovate PRs**: Auto-triggered with smart detection (skips Terraform if only docs/workflows changed)
+  - Renovate runs with Personal Access Token (PAT), so PRs are created by repository owner
 - **External PRs**: Testing only (no infrastructure access)
 - **Manual Override**: Comment `/terraform plan` to trigger infrastructure validation (owners only)
 
@@ -538,7 +539,7 @@ const topicName = process.env.TOPIC_NAME || 'default-topic';
 - Formatting checks
 
 **Stage 2: Terraform Plan Workflow (Staging)**
-- Auto-triggered after Test success (for owner/Dependabot PRs)
+- Auto-triggered after Test success (for owner/Renovate PRs)
 - Plans against **staging** environment
 - Smart detection: skips if only non-infrastructure files changed
 - Validates Terraform configuration
@@ -579,7 +580,7 @@ Terraform plan automatically skips when PR only changes:
 - IDE configuration files (`.vscode/`, `.devcontainer/`)
 - Non-infrastructure files
 
-This prevents unnecessary Terraform runs for Dependabot updates to dev dependencies or workflow improvements.
+This prevents unnecessary Terraform runs for Renovate updates to dev dependencies or workflow improvements.
 
 ### Debugging CI/CD Workflows
 
