@@ -106,7 +106,7 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const prDetails = ${{ steps.pr.outputs.result }};
+            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
             const issueNumber = prDetails.number;
 
             await github.rest.issues.createComment({
@@ -124,7 +124,7 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const prDetails = ${{ steps.pr.outputs.result }};
+            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -262,7 +262,7 @@ jobs:
               ? `*Triggered by comment from @${{ github.event.comment.user.login }}*`
               : `*Auto-triggered after Test workflow success*`;
 
-            const prDetails = ${{ steps.pr.outputs.result }};
+            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
             const issueNumber = prDetails.number;
 
             const body = wasSkipped
@@ -297,7 +297,7 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const prDetails = ${{ steps.pr.outputs.result }};
+            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
             const exitCode = '${{ steps.plan.outputs.plan_exit_code || steps.skip.outputs.plan_exit_code }}';
             const wasSkipped = '${{ steps.detect.outputs.needs_terraform }}' === 'false';
             const success = exitCode === '0';
@@ -358,21 +358,24 @@ jobs:
 
       - name: Trigger Staging Deploy workflow (master branch only)
         if: |
-          steps.detect.outputs.needs_terraform == 'true' &&
-          steps.plan.outputs.plan_exit_code == '0' &&
+          (steps.plan.outputs.plan_exit_code == '0' || steps.skip.outputs.plan_exit_code == '0') &&
           github.event_name == 'workflow_dispatch' &&
           fromJson(steps.pr.outputs.result).ref == 'master'
         uses: actions/github-script@v8
         with:
           script: |
+            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
+            const deployRef = prDetails.ref;
+
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'deploy.yml',
-              ref: context.ref,
+              ref: deployRef,
               inputs: {
-                deploy_ref: context.ref
+                deploy_ref: deployRef,
+                environment: 'staging'
               }
             });
 
-            console.log(`Triggered Staging Deploy workflow for ref ${context.ref}`);
+            console.log(`Triggered Staging Deploy workflow for ref ${deployRef} to staging environment`);
