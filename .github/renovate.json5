@@ -3,7 +3,9 @@
   "extends": [
     "config:recommended",
   ],
-  "schedule": ["at any time"],
+  "dependencyDashboard": true,
+  "dependencyDashboardApproval": false,
+  "schedule": null,
   "labels": [
     "dependencies",
   ],
