@@ -3,10 +3,6 @@
   "extends": [
     "config:recommended",
   ],
-  "timezone": "Asia/Tokyo",
-  "schedule": [
-    "before 10am on monday",
-  ],
   "labels": [
     "dependencies",
   ],
