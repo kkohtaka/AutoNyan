@@ -11,8 +11,7 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | b
     && NODE_VERSION=$(cat /tmp/.nvmrc | tr -d '\n\r') \
     && nvm install $NODE_VERSION \
     && nvm use $NODE_VERSION \
-    && nvm alias default $NODE_VERSION \
-    && npm install -g @anthropic-ai/claude-code
+    && nvm alias default $NODE_VERSION
 
 # Set environment variables using Node version from .nvmrc
 USER root
@@ -32,6 +31,9 @@ RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -
     && curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv and uvx
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Switch back to vscode user
 USER vscode

@@ -36,7 +36,8 @@ gha-creds-*.json
 
 # IDE
 .idea/
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 *.swp
 *.swo
 .DS_Store
@@ -55,4 +56,8 @@ src/functions/*/shared/
 # Temporary files
 *.tmp
 *.temp
-.cache/ 
+.cache/
+
+# Serena AI assistant
+.serena/cache/
+.serena/*.log 
