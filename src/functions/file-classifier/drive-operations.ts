@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
+import { GoogleAuth } from 'google-auth-library';
+import { drive_v3 } from 'googleapis';
 
 export interface CategoryFolder {
   id: string;
@@ -8,12 +9,12 @@ export interface CategoryFolder {
 
 /**
  * List all folders within a specified parent folder in Google Drive
- * @param auth OAuth2 client for authentication
+ * @param auth GoogleAuth instance for authentication
  * @param rootFolderId Parent folder ID to list subfolders from
  * @returns Array of category folders
  */
 export async function listCategoryFolders(
-  auth: OAuth2Client,
+  auth: GoogleAuth,
   rootFolderId: string
 ): Promise<CategoryFolder[]> {
   const drive = google.drive({ version: 'v3', auth });
@@ -24,11 +25,9 @@ export async function listCategoryFolders(
     orderBy: 'name',
   });
 
-  if (!response.data.files) {
-    return [];
-  }
+  const files: drive_v3.Schema$File[] = response.data.files || [];
 
-  return response.data.files.map((file) => ({
+  return files.map((file: drive_v3.Schema$File) => ({
     id: file.id!,
     name: file.name!,
   }));
@@ -36,12 +35,12 @@ export async function listCategoryFolders(
 
 /**
  * Move a file to a different folder in Google Drive
- * @param auth OAuth2 client for authentication
+ * @param auth GoogleAuth instance for authentication
  * @param fileId File ID to move
  * @param targetFolderId Destination folder ID
  */
 export async function moveFileInDrive(
-  auth: OAuth2Client,
+  auth: GoogleAuth,
   fileId: string,
   targetFolderId: string
 ): Promise<void> {

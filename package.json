@@ -26,6 +26,8 @@
     "format:json": "prettier --write '**/*.json'",
     "format:terraform": "terraform fmt -recursive terraform/",
     "format:sh": "shfmt -w scripts/*.sh",
+    "prepare": "./scripts/setup-git-hooks.sh",
+    "setup:git-hooks": "./scripts/setup-git-hooks.sh",
     "setup:terraform-backend": "./scripts/setup-backend.sh",
     "setup:terraform-variables": "./scripts/setup-terraform-variables.sh",
     "setup:github-actions": "./scripts/setup-github-actions.sh"
@@ -34,19 +36,18 @@
     "src/functions/*",
     "src/shared"
   ],
-  "dependencies": {},
   "devDependencies": {
-    "jest": "^30.2.0",
-    "@types/jest": "^30.0.0",
-    "ts-jest": "^29.4.6",
-    "@google/events": "^5.4.0",
     "@eslint/js": "^9.39.2",
+    "@google/events": "^5.4.0",
+    "@types/jest": "^30.0.0",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
     "@typescript-eslint/parser": "^8.50.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.7.4",
     "eslint-plugin-jsonc": "^2.21.0",
+    "jest": "^30.2.0",
+    "prettier": "^3.7.4",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.9.3"
   }
 }

@@ -7,7 +7,7 @@ jest.mock('./drive-operations');
 jest.mock('./classification');
 jest.mock('./firestore-operations');
 
-const mockAuthClient = {};
+const mockGoogleAuth = { mockGoogleAuthInstance: true };
 const mockFirestore = {};
 
 const mockListCategoryFolders = jest.fn();
@@ -18,9 +18,7 @@ const mockUpdateDocumentWithClassification = jest.fn();
 
 // Mock the constructors and modules
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('google-auth-library').GoogleAuth = jest.fn(() => ({
-  getClient: jest.fn().mockResolvedValue(mockAuthClient),
-}));
+require('google-auth-library').GoogleAuth = jest.fn(() => mockGoogleAuth);
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 require('@google-cloud/firestore').Firestore = jest.fn(() => mockFirestore);
@@ -104,7 +102,7 @@ describe('fileClassifier', () => {
     expect(result.fileName).toBe('invoice.pdf');
 
     expect(mockListCategoryFolders).toHaveBeenCalledWith(
-      mockAuthClient,
+      mockGoogleAuth,
       'root-folder-id'
     );
     expect(mockClassifyWithGemini).toHaveBeenCalledWith(
@@ -116,7 +114,7 @@ describe('fileClassifier', () => {
       ]
     );
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockAuthClient,
+      mockGoogleAuth,
       'file-123',
       'folder-invoices'
     );
@@ -170,7 +168,7 @@ describe('fileClassifier', () => {
     expect(result.confidence).toBe(0.3);
 
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockAuthClient,
+      mockGoogleAuth,
       'file-456',
       'uncategorized-folder-id'
     );
@@ -282,7 +280,7 @@ describe('fileClassifier', () => {
 
     expect(result.category).toBeNull();
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockAuthClient,
+      mockGoogleAuth,
       'file-empty',
       'uncategorized-folder-id'
     );
@@ -353,7 +351,7 @@ describe('fileClassifier', () => {
     expect(result.category).toBe('契約書');
     expect(result.fileName).toBe('complex-doc.pdf');
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockAuthClient,
+      mockGoogleAuth,
       'file-789',
       'folder-contracts'
     );
