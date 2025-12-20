@@ -12,7 +12,7 @@ HOOKS_DIR="${PROJECT_ROOT}/.git/hooks"
 echo "Setting up Git hooks for AutoNyan..."
 
 # Create pre-push hook
-cat > "${HOOKS_DIR}/pre-push" << 'EOF'
+cat >"${HOOKS_DIR}/pre-push" <<'EOF'
 #!/bin/bash
 
 # Pre-push hook: Run TypeScript lint and tests before pushing
