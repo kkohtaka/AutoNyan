@@ -53,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build shared library
+        run: npm run build --workspace=src/shared
+
       - name: Build ${{ matrix.function }}
         run: npm run build --workspace=src/functions/${{ matrix.function }}
 
