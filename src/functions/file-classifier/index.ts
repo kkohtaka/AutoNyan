@@ -65,7 +65,10 @@ export const fileClassifier = async (
     // Get category folders from Google Drive
     // eslint-disable-next-line no-console
     console.log(`Fetching category folders from: ${categoryRootFolderId}`);
-    const categoryFolders = await listCategoryFolders(auth, categoryRootFolderId);
+    const categoryFolders = await listCategoryFolders(
+      auth,
+      categoryRootFolderId
+    );
 
     if (categoryFolders.length === 0) {
       // eslint-disable-next-line no-console
