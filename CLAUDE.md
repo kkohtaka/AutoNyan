@@ -526,7 +526,8 @@ const topicName = process.env.TOPIC_NAME || 'default-topic';
 **PR Author-Based Permissions:**
 - **Repository Owner PRs**: Full pipeline access (test → plan → build)
 - **Renovate PRs**: Auto-triggered with smart detection (skips Terraform if only docs/workflows changed)
-  - Renovate runs with Personal Access Token (PAT), so PRs are created by repository owner
+  - Renovate uses GitHub App token generated via `actions/create-github-app-token`
+  - PRs are created by the GitHub App bot user
 - **External PRs**: Testing only (no infrastructure access)
 - **Manual Override**: Comment `/terraform plan` to trigger infrastructure validation (owners only)
 
