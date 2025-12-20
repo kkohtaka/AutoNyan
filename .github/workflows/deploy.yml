@@ -63,6 +63,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build shared library
+        run: npm run build --workspace=src/shared
+
+      - name: Build all functions
+        run: npm run build
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
