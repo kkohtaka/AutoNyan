@@ -1,5 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
-import { GoogleAuth, OAuth2Client } from 'google-auth-library';
+import { GoogleAuth } from 'google-auth-library';
 import { createErrorResponse, getProjectId } from 'autonyan-shared';
 import { listCategoryFolders, moveFileInDrive } from './drive-operations';
 import { classifyWithGemini } from './classification';
@@ -61,15 +61,11 @@ export const fileClassifier = async (
     const auth = new GoogleAuth({
       scopes: ['https://www.googleapis.com/auth/drive'],
     });
-    const authClient = (await auth.getClient()) as OAuth2Client;
 
     // Get category folders from Google Drive
     // eslint-disable-next-line no-console
     console.log(`Fetching category folders from: ${categoryRootFolderId}`);
-    const categoryFolders = await listCategoryFolders(
-      authClient,
-      categoryRootFolderId
-    );
+    const categoryFolders = await listCategoryFolders(auth, categoryRootFolderId);
 
     if (categoryFolders.length === 0) {
       // eslint-disable-next-line no-console
@@ -106,7 +102,7 @@ export const fileClassifier = async (
     console.log(
       `Moving file to folder: ${targetFolderName} (${targetFolderId})`
     );
-    await moveFileInDrive(authClient, documentData.fileId, targetFolderId);
+    await moveFileInDrive(auth, documentData.fileId, targetFolderId);
 
     // Update Firestore document with classification results
     const firestore = new Firestore();

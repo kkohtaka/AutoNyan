@@ -53,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build ${{ matrix.function }}
+        run: npm run build --workspace=src/functions/${{ matrix.function }}
+
       - name: Run TypeScript linter for ${{ matrix.function }}
         run: npm run lint --workspace=src/functions/${{ matrix.function }}
 
