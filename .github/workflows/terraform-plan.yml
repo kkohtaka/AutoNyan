@@ -249,8 +249,6 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const fs = require('fs');
-            const planOutput = fs.readFileSync('plan_output.txt', 'utf8');
             const exitCode = '${{ steps.plan.outputs.plan_exit_code || steps.skip.outputs.plan_exit_code }}';
             const wasSkipped = '${{ steps.detect.outputs.needs_terraform }}' === 'false';
 
@@ -265,23 +263,17 @@ jobs:
             const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
             const issueNumber = prDetails.number;
 
+            const workflowUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
             const body = wasSkipped
               ? `## ${emoji} Terraform Plan (Staging) ${status}
 
             No infrastructure-related files were changed in this PR.
 
-            ${planOutput}
-
             ${triggerInfo}`
               : `## ${emoji} Terraform Plan (Staging) ${status}
 
-            <details>
-            <summary>Click to expand plan output</summary>
-
-            \`\`\`
-            ${planOutput}
-            \`\`\`
-            </details>
+            📊 View full plan output in the [workflow run](${workflowUrl})
 
             ${triggerInfo}`;
 
