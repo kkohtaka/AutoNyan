@@ -6,7 +6,8 @@
   },
   "mounts": [
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.config/gcloud,target=/home/vscode/.config/gcloud,type=bind,consistency=cached",
-    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached"
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.serena,target=/home/vscode/.serena,type=bind,consistency=cached"
   ],
   "features": {
     "ghcr.io/devcontainers/features/terraform:1": {
@@ -19,7 +20,7 @@
     "NODE_OPTIONS": "--max-old-space-size=4096"
   },
   "postCreateCommand": "bash -c 'export NVM_DIR=\"$HOME/.nvm\" && [ -s \"$NVM_DIR/nvm.sh\" ] && source \"$NVM_DIR/nvm.sh\" && nvm use && npm install'",
-  "postStartCommand": "mkdir -p ${containerWorkspaceFolder}/.serena/cache",
+  "postStartCommand": "${containerWorkspaceFolder}/.devcontainer/setup-serena.sh",
   "customizations": {
     "vscode": {
       "extensions": [
