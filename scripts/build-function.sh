@@ -20,41 +20,67 @@ done
 echo "Building shared module..."
 npm run build --workspace=src/shared
 
-# Build TypeScript
+# Build TypeScript (compiles to .js files)
 echo "Building TypeScript..."
 npm run build
 
-# Copy function source files for Cloud Functions to compile
+# Prepare function packages with compiled JavaScript
 echo "Preparing function packages..."
 for FUNCTION in "${FUNCTIONS[@]}"; do
 	echo "  - Preparing $FUNCTION function package..."
 	mkdir -p "dist/functions/$FUNCTION"
-	cp "src/functions/$FUNCTION/package.json" "dist/functions/$FUNCTION/"
-	# Copy and modify tsconfig.json to include shared files for cloud deployment
-	sed 's/"include": \["index.ts", "index.test.ts"\]/"include": ["index.ts", "shared\/**\/*"]/' "src/functions/$FUNCTION/tsconfig.json" |
-		sed '/^[[:space:]]*"references":/,/^[[:space:]]*\]/d' >"dist/functions/$FUNCTION/tsconfig.json"
 
-	# Copy and transform TypeScript files to use relative imports
-	for ts_file in "src/functions/$FUNCTION"/*.ts; do
-		if [ -f "$ts_file" ]; then
-			filename=$(basename "$ts_file")
-			# Transform 'autonyan-shared' imports to './shared' for cloud deployment
-			sed "s/from 'autonyan-shared'/from '.\/shared'/g" "$ts_file" >"dist/functions/$FUNCTION/$filename"
+	# Copy package.json and modify to remove workspace dependency
+	cp "src/functions/$FUNCTION/package.json" "dist/functions/$FUNCTION/"
+
+	# Copy compiled JavaScript files (from src/functions/$FUNCTION/*.js)
+	for js_file in "src/functions/$FUNCTION"/*.js; do
+		if [ -f "$js_file" ]; then
+			filename=$(basename "$js_file")
+			# Skip test files
+			if [[ ! "$filename" =~ \.test\.js$ ]] && [[ ! "$filename" =~ \.spec\.js$ ]]; then
+				# Transform 'autonyan-shared' and "autonyan-shared" imports to './shared' for deployment
+				sed "s/from ['\"]autonyan-shared['\"]/from '.\/shared'/g; s/require(['\"]autonyan-shared['\"])/require('.\/shared')/g" "$js_file" >"dist/functions/$FUNCTION/$filename"
+			fi
 		fi
 	done
 
-	# Copy shared utilities
+	# Copy compiled shared utilities (.js files from src/shared/dist)
 	mkdir -p "dist/functions/$FUNCTION/shared"
-	cp "src/functions/$FUNCTION/shared"/*.ts "dist/functions/$FUNCTION/shared/"
+	if [ -d "src/shared/dist" ]; then
+		for shared_js in src/shared/dist/*.js; do
+			if [ -f "$shared_js" ] && [[ ! "$(basename "$shared_js")" =~ \.test\.js$ ]] && [[ ! "$(basename "$shared_js")" =~ \.spec\.js$ ]]; then
+				cp "$shared_js" "dist/functions/$FUNCTION/shared/"
+			fi
+		done
+	fi
+
+	# Install production dependencies in the function directory
+	echo "  - Installing production dependencies for $FUNCTION..."
+	pushd "dist/functions/$FUNCTION" >/dev/null
+	# Modify package.json for Cloud Functions deployment:
+	# - Remove autonyan-shared workspace dependency
+	# - Remove devDependencies
+	# - Remove scripts (prevent Cloud Functions from running build commands)
+	node -e "
+    const pkg = require('./package.json');
+    delete pkg.dependencies['autonyan-shared'];
+    delete pkg.devDependencies;
+    delete pkg.scripts;
+    require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+  "
+	npm install --omit=dev --silent --no-audit --no-fund
+	popd >/dev/null
 done
 
-# Create function zips (TypeScript source files for Cloud Functions to compile)
+# Create function zips (compiled JavaScript + node_modules)
 echo "Creating function zips..."
 for FUNCTION in "${FUNCTIONS[@]}"; do
 	echo "  - Creating $FUNCTION function zip..."
 	pushd "dist/functions/$FUNCTION" >/dev/null
 	rm -f "../$FUNCTION.zip"
-	zip -r "../$FUNCTION.zip" . -x "*test.ts" "node_modules/*"
+	# Include compiled .js files and node_modules, exclude source and test files
+	zip -r "../$FUNCTION.zip" . -x "*.ts" "*.test.js" "*.spec.js" "*.map" "tsconfig.json"
 	popd >/dev/null
 done
 
@@ -66,5 +92,6 @@ done
 
 echo "Build complete! Function zips created:"
 for FUNCTION in "${FUNCTIONS[@]}"; do
-	echo "  - dist/functions/$FUNCTION.zip"
+	ZIP_SIZE=$(du -h "dist/functions/$FUNCTION.zip" | cut -f1)
+	echo "  - dist/functions/$FUNCTION.zip ($ZIP_SIZE)"
 done

@@ -5,6 +5,7 @@
   "scripts": {
     "build": "npm run build --workspaces",
     "build:function": "./scripts/build-function.sh",
+    "validate:function": "./scripts/validate-function-packages.sh",
     "clean": "rm -rf dist/ && npm run clean --workspaces",
     "terraform:init": "terraform -chdir=terraform init -backend-config=environments/${ENVIRONMENT:-staging}.backend.hcl -upgrade -lock-timeout=5m",
     "terraform:apply": "npm run build:function && terraform -chdir=terraform apply -auto-approve -lock-timeout=5m",
