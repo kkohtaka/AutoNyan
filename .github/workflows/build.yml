@@ -32,3 +32,6 @@ jobs:
 
       - name: Build function package
         run: npm run build:function
+
+      - name: Validate function packages
+        run: npm run validate:function
