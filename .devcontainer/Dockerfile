@@ -11,7 +11,8 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | b
     && NODE_VERSION=$(cat /tmp/.nvmrc | tr -d '\n\r') \
     && nvm install $NODE_VERSION \
     && nvm use $NODE_VERSION \
-    && nvm alias default $NODE_VERSION
+    && nvm alias default $NODE_VERSION \
+    && npm install -g typescript typescript-language-server
 
 # Set environment variables using Node version from .nvmrc
 USER root
