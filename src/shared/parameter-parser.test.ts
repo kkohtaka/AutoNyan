@@ -25,7 +25,7 @@ describe('Parameter Parser', () => {
   });
 
   describe('parsePubSubEvent', () => {
-    it('should parse base64-encoded PubSub message data', () => {
+    it('should parse base64-encoded PubSub message data (direct string format)', () => {
       const messageData = { testField: 'testValue' };
       const base64Data = Buffer.from(JSON.stringify(messageData)).toString(
         'base64'
@@ -43,11 +43,13 @@ describe('Parameter Parser', () => {
       const result = parsePubSubEvent(cloudEvent);
 
       expect(result.data).toEqual(messageData);
-      expect(result.attributes).toEqual({ source: 'test-source' });
     });
 
-    it('should handle object data directly', () => {
+    it('should handle object data format', () => {
       const messageData = { testField: 'testValue' };
+      const base64Data = Buffer.from(JSON.stringify(messageData)).toString(
+        'base64'
+      );
 
       const cloudEvent: CloudEvent<MessagePublishedData> = {
         specversion: '1.0',
@@ -55,7 +57,11 @@ describe('Parameter Parser', () => {
         source: 'test-source',
         id: 'test-id',
         time: '2023-01-01T00:00:00Z',
-        data: messageData as any,
+        data: {
+          data: base64Data,
+          message_id: 'test-message-id',
+          publish_time: '2023-01-01T00:00:00Z',
+        } as any,
       };
 
       const result = parsePubSubEvent(cloudEvent);

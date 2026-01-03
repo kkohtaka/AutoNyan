@@ -32,10 +32,12 @@ describe('textVisionProcessor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.PROJECT_ID = 'test-project';
+    process.env.ENVIRONMENT = 'staging';
   });
 
   afterEach(() => {
     delete process.env.PROJECT_ID;
+    delete process.env.ENVIRONMENT;
   });
 
   const createCloudEvent = (
@@ -84,7 +86,7 @@ describe('textVisionProcessor', () => {
     expect(result.message).toContain(
       'Successfully processed test.pdf with Vision API'
     );
-    expect(result.outputBucket).toBe('test-project-vision-results');
+    expect(result.outputBucket).toBe('test-project-staging-vision-results');
     expect(result.outputPath).toBe('results/abc123/');
     expect(mockVision.asyncBatchAnnotateFiles).toHaveBeenCalledWith({
       requests: [
@@ -96,7 +98,7 @@ describe('textVisionProcessor', () => {
           features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
           outputConfig: {
             gcsDestination: {
-              uri: 'gs://test-project-vision-results/results/abc123/',
+              uri: 'gs://test-project-staging-vision-results/results/abc123/',
             },
             batchSize: 20,
           },

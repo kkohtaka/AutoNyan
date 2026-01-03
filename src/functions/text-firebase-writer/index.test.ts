@@ -5,6 +5,7 @@ import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObject
 // Mock the Google Cloud clients
 jest.mock('@google-cloud/firestore');
 jest.mock('@google-cloud/storage');
+jest.mock('@google-cloud/pubsub');
 
 const mockFirestore = {
   collection: jest.fn().mockReturnValue({
@@ -21,20 +22,34 @@ const mockStorage = {
   }),
 };
 
+const mockPublishMessage = jest.fn().mockResolvedValue('message-id-1');
+const mockTopic = jest.fn().mockReturnValue({
+  publishMessage: mockPublishMessage,
+});
+const mockPubSubInstance = {
+  topic: mockTopic,
+};
+
 // Mock the constructors
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 require('@google-cloud/firestore').Firestore = jest.fn(() => mockFirestore);
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 require('@google-cloud/storage').Storage = jest.fn(() => mockStorage);
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+require('@google-cloud/pubsub').PubSub = jest.fn(() => mockPubSubInstance);
 
 describe('textFirebaseWriter', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.PROJECT_ID = 'test-project';
+    process.env.ENVIRONMENT = 'staging';
+    process.env.FILE_CLASSIFIER_TOPIC = 'file-classification-trigger';
   });
 
   afterEach(() => {
     delete process.env.PROJECT_ID;
+    delete process.env.ENVIRONMENT;
+    delete process.env.FILE_CLASSIFIER_TOPIC;
   });
 
   const createCloudEvent = (
@@ -107,6 +122,7 @@ describe('textFirebaseWriter', () => {
     expect(result.textLength).toBe('Page 1 textPage 2 text\n'.length);
     expect(result.confidence).toBe(0.925); // Average of 0.95 and 0.90
     expect(result.pages).toBe(2);
+    expect(result.classificationTriggered).toBe(true);
 
     expect(mockFirestore.collection).toHaveBeenCalledWith('extracted_texts');
     expect(mockFirestore.collection().add).toHaveBeenCalledWith({
@@ -126,6 +142,10 @@ describe('textFirebaseWriter', () => {
       visionResultPath:
         'gs://test-vision-results/results/abc123/output-1-to-1.json',
     });
+
+    // Verify PubSub was called
+    expect(mockPublishMessage).toHaveBeenCalled();
+    expect(mockTopic).toHaveBeenCalledWith('file-classification-trigger');
   });
 
   it('should handle empty text pages gracefully', async () => {
@@ -267,5 +287,60 @@ describe('textFirebaseWriter', () => {
     await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
       'No responses found in Vision API result'
     );
+  });
+
+  it('should skip classification trigger when FILE_CLASSIFIER_TOPIC is not set', async () => {
+    // Unset the environment variable
+    delete process.env.FILE_CLASSIFIER_TOPIC;
+
+    const cloudEvent = createCloudEvent({});
+
+    const mockMetadata = {
+      metadata: {
+        originalFileId: 'file123',
+        originalFileName: 'test.pdf',
+        originalMimeType: 'application/pdf',
+        contentHash: 'abc123',
+        processedAt: '2023-01-01T00:00:00Z',
+      },
+    };
+
+    const visionResult = {
+      responses: [
+        {
+          fullTextAnnotation: {
+            text: 'Test text',
+            pages: [{ confidence: 0.95 }],
+          },
+        },
+      ],
+    };
+
+    const originalFileMetadata = {
+      size: '1024',
+    };
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValueOnce([mockMetadata])
+      .mockResolvedValueOnce([originalFileMetadata]);
+
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.message).toContain(
+      'Successfully stored extracted text from test.pdf'
+    );
+    expect(result.firestoreDocId).toBe('doc123');
+    expect(result.classificationTriggered).toBe(false); // Not triggered
+
+    // Verify PubSub was not called
+    expect(mockPublishMessage).not.toHaveBeenCalled();
+    expect(mockTopic).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,10 @@
     "deploy": "timeout 600 npm run terraform:apply",
     "test": "npm run test --workspaces",
     "test:coverage": "npm run test:coverage --workspaces",
+    "test:e2e": "tsx tests/e2e/scripts/test-drive-access.ts && NODE_OPTIONS='--experimental-vm-modules' ENVIRONMENT=staging jest --config=tests/e2e/jest.config.e2e.js --runInBand",
+    "test:e2e:check-auth": "tsx tests/e2e/scripts/check-auth.ts",
+    "test:e2e:check-drive": "tsx tests/e2e/scripts/test-drive-access.ts",
+    "test:e2e:cleanup": "tsx tests/e2e/scripts/cleanup-orphaned-resources.ts",
     "lint": "npm run lint:ts && npm run lint:yaml && npm run lint:json && npm run lint:terraform && npm run lint:sh",
     "lint:ts": "npm run lint --workspaces",
     "lint:yaml": "yamllint .github/ -c .yamllint.yml",
@@ -31,7 +35,8 @@
     "setup:git-hooks": "./scripts/setup-git-hooks.sh",
     "setup:terraform-backend": "./scripts/setup-backend.sh",
     "setup:terraform-variables": "./scripts/setup-terraform-variables.sh",
-    "setup:github-actions": "./scripts/setup-github-actions.sh"
+    "setup:github-actions": "./scripts/setup-github-actions.sh",
+    "setup:share-drive-folders": "tsx scripts/share-drive-folders.ts"
   },
   "workspaces": [
     "src/functions/*",
@@ -49,6 +54,7 @@
     "jest": "^30.2.0",
     "prettier": "^3.7.4",
     "ts-jest": "^29.4.6",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

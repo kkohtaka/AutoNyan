@@ -7,3 +7,8 @@ output "function_name" {
   description = "Name of the file-classifier function"
   value       = google_cloudfunctions2_function.file_classifier.name
 }
+
+output "topic_name" {
+  description = "Name of the file classification trigger PubSub topic"
+  value       = google_pubsub_topic.file_classification_trigger.name
+}

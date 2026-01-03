@@ -56,7 +56,13 @@ export const docProcessor = async (
     // Initialize Cloud Storage client
     const storage = new Storage();
     const projectId = getProjectId();
-    const bucketName = `${projectId}-document-storage`;
+    const environment = process.env.ENVIRONMENT;
+    if (!environment) {
+      throw new Error(
+        'ENVIRONMENT environment variable is required but not set'
+      );
+    }
+    const bucketName = `${projectId}-${environment}-document-storage`;
     const bucket = storage.bucket(bucketName);
 
     // Get file metadata from Google Drive

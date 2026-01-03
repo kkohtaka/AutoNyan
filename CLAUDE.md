@@ -116,9 +116,10 @@ npm run deploy             # Full deployment: build + terraform apply
 
 ### Setup Workflow
 ```bash
-npm run setup:terraform-backend  # Create GCS bucket for Terraform state
-npm run setup:github-actions     # Configure Workload Identity Federation
-npm run setup:terraform-variables # Interactive variable configuration
+npm run setup:terraform-backend    # Create GCS bucket for Terraform state
+npm run setup:github-actions       # Configure Workload Identity Federation
+npm run setup:terraform-variables  # Interactive variable configuration
+npm run setup:share-drive-folders  # Share Drive folders with service accounts (post-deployment)
 ```
 
 ## Development Patterns
@@ -663,11 +664,13 @@ unzip -p logs.zip "*{job-name}*" | grep -E "(FAIL|Error|heap out of memory)"
 - Service account must be explicitly granted access to folders
 - Ensures least-privilege access (only shared folders accessible)
 
-**Setup workflow:**
+**Initial setup workflow:**
 1. Deploy infrastructure: `npm run deploy`
-2. Get service account email: `terraform output service_account_email`
-3. Share Drive folder(s) with service account as "Editor"
-4. Test access via manual PubSub trigger
+2. Share Drive folders with service accounts (one-time setup): `npm run setup:share-drive-folders`
+   - Alternatively, manually share folders with each service account as "Editor"
+   - **Note**: This is a one-time setup. Once shared, permissions persist across deployments
+   - Not required in CI/CD (manual setup only)
+3. Test access via Drive check: `npm run test:e2e:check-drive`
 
 **Permission model:**
 - ✅ Can access: Explicitly shared folders and files

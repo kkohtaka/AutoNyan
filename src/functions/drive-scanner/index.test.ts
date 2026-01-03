@@ -43,6 +43,9 @@ describe('driveScanner', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // Set default environment variable for topic
+    process.env.DOC_PROCESS_TRIGGER_TOPIC = 'doc-process-trigger';
+
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const { google } = require('googleapis');
 
@@ -176,6 +179,56 @@ describe('driveScanner', () => {
       await expect(driveScanner(cloudEvent)).rejects.toThrow(
         'Drive document scanner failed: Drive API error'
       );
+    });
+
+    it('should skip PubSub publishing when DOC_PROCESS_TRIGGER_TOPIC is not set', async () => {
+      // Unset the environment variable
+      delete process.env.DOC_PROCESS_TRIGGER_TOPIC;
+
+      const cloudEvent = buildEvent({
+        folderId: 'test-folder-id',
+      });
+
+      const mockFiles = [
+        {
+          id: 'file1',
+          name: 'document1.pdf',
+          mimeType: 'application/pdf',
+          size: '1024',
+          modifiedTime: '2023-01-01T00:00:00.000Z',
+          webViewLink: 'https://drive.google.com/file/d/file1/view',
+        },
+      ];
+
+      mockDriveGet.mockResolvedValue({
+        data: {
+          id: 'test-folder-id',
+          name: 'Test Folder',
+          mimeType: 'application/vnd.google-apps.folder',
+        },
+      });
+
+      mockDriveList.mockResolvedValue({
+        data: {
+          files: mockFiles,
+          nextPageToken: undefined,
+        },
+      });
+
+      const result = await driveScanner(cloudEvent);
+
+      expect(result).toBeDefined();
+      expect(result.message).toContain(
+        'Successfully scanned folder test-folder-id and found 1 document files'
+      );
+      expect(result.filesFound).toBe(1);
+      expect(result.files).toHaveLength(1);
+      expect(result.publishedMessages).toBe(0); // No messages published
+      expect(result.topicName).toBeNull(); // Topic is null
+
+      // Verify PubSub was not called
+      expect(mockPublishMessage).not.toHaveBeenCalled();
+      expect(mockTopic).not.toHaveBeenCalled();
     });
   });
 

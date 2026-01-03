@@ -41,6 +41,7 @@ describe('docProcessor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.PROJECT_ID = 'test-project';
+    process.env.ENVIRONMENT = 'staging';
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const { google } = require('googleapis');
     mockDrive = google.drive();
@@ -48,6 +49,7 @@ describe('docProcessor', () => {
 
   afterEach(() => {
     delete process.env.PROJECT_ID;
+    delete process.env.ENVIRONMENT;
   });
 
   test('should process CloudEvent and copy file to Cloud Storage', async () => {
@@ -117,7 +119,7 @@ describe('docProcessor', () => {
     );
     expect(result.fileId).toBe('file123');
     expect(result.fileName).toBe('test-document.pdf');
-    expect(result.bucketName).toBe('test-project-document-storage');
+    expect(result.bucketName).toBe('test-project-staging-document-storage');
     expect(result.contentType).toBe('application/pdf');
     expect(result.size).toBe(1024);
     expect(result.objectName).toMatch(/^documents\/[a-f0-9]{64}$/); // SHA256 hash

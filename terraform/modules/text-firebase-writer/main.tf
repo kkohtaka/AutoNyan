@@ -25,6 +25,13 @@ resource "google_storage_bucket_iam_member" "text_firebase_writer_document_stora
   member = "serviceAccount:${google_service_account.text_firebase_writer.email}"
 }
 
+# IAM binding for PubSub publisher (to trigger file classifier)
+resource "google_project_iam_member" "text_firebase_writer_pubsub" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${google_service_account.text_firebase_writer.email}"
+}
+
 # Source code archive for the function
 resource "google_storage_bucket_object" "text_firebase_writer_zip" {
   name   = "text-firebase-writer.zip"
@@ -56,7 +63,9 @@ resource "google_cloudfunctions2_function" "text_firebase_writer" {
     available_memory   = "512Mi"
     timeout_seconds    = 300
     environment_variables = {
-      PROJECT_ID = var.project_id
+      PROJECT_ID            = var.project_id
+      ENVIRONMENT           = var.environment
+      FILE_CLASSIFIER_TOPIC = var.file_classifier_trigger_topic
     }
     service_account_email = google_service_account.text_firebase_writer.email
   }

@@ -66,8 +66,8 @@ resource "google_cloudfunctions2_function" "doc_processor" {
     available_memory   = "512M"
     timeout_seconds    = 540
     environment_variables = {
-      NODE_ENV   = "production"
-      PROJECT_ID = var.project_id
+      PROJECT_ID  = var.project_id
+      ENVIRONMENT = var.environment
     }
     service_account_email = google_service_account.doc_processor_sa.email
   }

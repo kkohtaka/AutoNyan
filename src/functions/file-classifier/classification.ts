@@ -29,13 +29,16 @@ export async function classifyWithGemini(
   text: string,
   categories: CategoryFolder[]
 ): Promise<ClassificationResult> {
+  // Use region from environment variable, fallback to us-central1 if not set
+  const location = process.env.VERTEX_AI_LOCATION || 'us-central1';
+
   const vertexAI = new VertexAI({
     project: projectId,
-    location: 'us-central1',
+    location: location,
   });
 
   const model = vertexAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
   });
 
   const categoriesList = categories

@@ -56,7 +56,8 @@ resource "google_cloudfunctions2_function" "text_vision_processor" {
     available_memory   = "1Gi"
     timeout_seconds    = 540
     environment_variables = {
-      PROJECT_ID = var.project_id
+      PROJECT_ID  = var.project_id
+      ENVIRONMENT = var.environment
     }
     service_account_email = google_service_account.text_vision_processor.email
   }

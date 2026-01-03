@@ -76,7 +76,6 @@ resource "google_cloudfunctions2_function" "drive_scanner" {
     available_memory   = "512M"
     timeout_seconds    = 300
     environment_variables = {
-      NODE_ENV                  = "production"
       DOC_PROCESS_TRIGGER_TOPIC = var.doc_process_trigger_topic_name
     }
     service_account_email = google_service_account.drive_scanner_sa.email

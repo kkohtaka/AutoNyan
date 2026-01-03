@@ -27,3 +27,8 @@ variable "document_storage_bucket_name" {
   description = "The name of the document storage bucket for file size lookup"
   type        = string
 }
+
+variable "file_classifier_trigger_topic" {
+  description = "The name of the PubSub topic to trigger file classification"
+  type        = string
+}
