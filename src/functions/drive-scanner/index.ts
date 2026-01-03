@@ -35,7 +35,7 @@ interface Result {
   filesFound: number;
   files: drive_v3.Schema$File[];
   publishedMessages: number;
-  topicName: string;
+  topicName: string | null;
 }
 
 export const driveScanner = async (
@@ -58,7 +58,7 @@ export const driveScanner = async (
     // eslint-disable-next-line no-console
     console.log('Parsed message data:', JSON.stringify(messageData, null, 2));
 
-    const topicName = 'doc-process-trigger';
+    const topicName = process.env.DOC_PROCESS_TRIGGER_TOPIC;
 
     // Initialize Google Drive API with default credentials
     const auth = new google.auth.GoogleAuth({
@@ -99,41 +99,56 @@ export const driveScanner = async (
       nextPageToken = response.data.nextPageToken || undefined;
     } while (nextPageToken);
 
-    // Publish each document file to PubSub for document scan preparation
-    const pubsub = new PubSub();
-    const topic = pubsub.topic(topicName);
+    // Publish each document file to PubSub for document scan preparation (if topic is configured)
+    let publishedMessages = 0;
 
-    const publishPromises = allFiles.map(async (file) => {
-      const messageData = {
-        fileId: file.id,
-        fileName: file.name,
-        mimeType: file.mimeType,
-        size: file.size,
-        modifiedTime: file.modifiedTime,
-        webViewLink: file.webViewLink,
-        folderId: folderId,
-        scanTimestamp: new Date().toISOString(),
-      };
+    if (topicName) {
+      const pubsub = new PubSub();
+      const topic = pubsub.topic(topicName);
 
-      const dataBuffer = Buffer.from(JSON.stringify(messageData));
-      return topic.publishMessage({
-        data: dataBuffer,
-        attributes: {
-          fileId: file.id || '',
-          mimeType: file.mimeType || '',
-          operation: 'document-classification',
-        },
+      const publishPromises = allFiles.map(async (file) => {
+        const messageData = {
+          fileId: file.id,
+          fileName: file.name,
+          mimeType: file.mimeType,
+          size: file.size,
+          modifiedTime: file.modifiedTime,
+          webViewLink: file.webViewLink,
+          folderId: folderId,
+          scanTimestamp: new Date().toISOString(),
+        };
+
+        const dataBuffer = Buffer.from(JSON.stringify(messageData));
+        return topic.publishMessage({
+          data: dataBuffer,
+          attributes: {
+            fileId: file.id || '',
+            mimeType: file.mimeType || '',
+            operation: 'document-classification',
+          },
+        });
       });
-    });
 
-    const messageIds = await Promise.all(publishPromises);
+      const messageIds = await Promise.all(publishPromises);
+      publishedMessages = messageIds.length;
+
+      // eslint-disable-next-line no-console
+      console.log(
+        `Published ${publishedMessages} messages to topic ${topicName}`
+      );
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(
+        'DOC_PROCESS_TRIGGER_TOPIC environment variable not set, skipping PubSub publishing'
+      );
+    }
 
     const result = {
       message: `Successfully scanned folder ${folderId} and found ${allFiles.length} document files`,
       filesFound: allFiles.length,
       files: allFiles,
-      publishedMessages: messageIds.length,
-      topicName: topicName,
+      publishedMessages: publishedMessages,
+      topicName: topicName || null,
     };
 
     // Log completion for CloudEvent processing

@@ -174,20 +174,7 @@ module "text_vision_processor" {
   vision_results_bucket_name   = google_storage_bucket.vision_results.name
 }
 
-# Text Firebase Writer Module
-# Stores Vision API text extraction results to Firestore
-module "text_firebase_writer" {
-  source = "./modules/text-firebase-writer"
-
-  project_id                   = var.project_id
-  environment                  = var.environment
-  region                       = var.region
-  function_bucket_name         = google_storage_bucket.function_bucket.name
-  vision_results_bucket_name   = google_storage_bucket.vision_results.name
-  document_storage_bucket_name = google_storage_bucket.document_storage.name
-}
-
-# File Classifier Module
+# File Classifier Module (must be defined before text_firebase_writer to reference topic)
 # Classifies documents using AI and moves them to categorized folders in Google Drive
 module "file_classifier" {
   source = "./modules/file-classifier"
@@ -199,8 +186,22 @@ module "file_classifier" {
   category_root_folder_id = var.category_root_folder_id
   uncategorized_folder_id = var.uncategorized_folder_id
 
-  # Firestore database must exist before creating Firestore triggers
+  # Firestore database must exist before creating documents
   depends_on = [google_firestore_database.default]
+}
+
+# Text Firebase Writer Module
+# Stores Vision API text extraction results to Firestore and triggers classification
+module "text_firebase_writer" {
+  source = "./modules/text-firebase-writer"
+
+  project_id                    = var.project_id
+  environment                   = var.environment
+  region                        = var.region
+  function_bucket_name          = google_storage_bucket.function_bucket.name
+  vision_results_bucket_name    = google_storage_bucket.vision_results.name
+  document_storage_bucket_name  = google_storage_bucket.document_storage.name
+  file_classifier_trigger_topic = module.file_classifier.topic_name
 }
 
 # Note: Service accounts, IAM bindings, and storage bucket objects
@@ -215,6 +216,11 @@ output "service_account_email" {
 output "doc_processor_service_account_email" {
   description = "Email of the document processor service account that needs Drive folder access"
   value       = module.doc_processor.service_account_email
+}
+
+output "drive_scan_trigger_topic" {
+  description = "PubSub topic for drive scanner trigger"
+  value       = module.drive_scanner.topic_name
 }
 
 output "doc_process_trigger_topic" {

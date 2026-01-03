@@ -81,8 +81,14 @@ export const textVisionProcessor = async (
 
     // Setup output bucket and path
     const projectId = getProjectId();
+    const environment = process.env.ENVIRONMENT;
+    if (!environment) {
+      throw new Error(
+        'ENVIRONMENT environment variable is required but not set'
+      );
+    }
 
-    const outputBucket = `${projectId}-vision-results`;
+    const outputBucket = `${projectId}-${environment}-vision-results`;
     const outputPath = `results/${contentHash}/`;
 
     // Handle text files separately - no need for Vision API

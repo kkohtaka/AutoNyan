@@ -1,5 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
+import { PubSub } from '@google-cloud/pubsub';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
 import {
   createErrorResponse,
@@ -36,6 +37,7 @@ interface Result {
   confidence: number;
   pages: number;
   originalFileName: string;
+  classificationTriggered: boolean;
 }
 
 interface VisionApiResponse {
@@ -147,8 +149,14 @@ export const textFirebaseWriter = async (
 
     // Get file size from the original document storage
     const projectId = getProjectId();
+    const environment = process.env.ENVIRONMENT;
+    if (!environment) {
+      throw new Error(
+        'ENVIRONMENT environment variable is required but not set'
+      );
+    }
 
-    const documentBucket = `${projectId}-document-storage`;
+    const documentBucket = `${projectId}-${environment}-document-storage`;
     const originalObjectName = `documents/${contentHash}`;
 
     let fileSize = 0;
@@ -182,6 +190,53 @@ export const textFirebaseWriter = async (
     const collection = firestore.collection('extracted_texts');
     const docRef = await collection.add(extractedTextDoc);
 
+    // Trigger file classification via PubSub (if topic is configured)
+    const classifierTopicName = process.env.FILE_CLASSIFIER_TOPIC;
+    let classificationTriggered = false;
+
+    if (classifierTopicName) {
+      const pubsub = new PubSub();
+
+      try {
+        const classificationData = {
+          firestoreDocId: docRef.id,
+          fileId: originalFileId,
+          fileName: originalFileName,
+          extractedText: extractedText,
+          confidence: overallConfidence,
+        };
+
+        const topic = pubsub.topic(classifierTopicName);
+        await topic.publishMessage({
+          json: classificationData,
+          attributes: {
+            operation: 'file-classification',
+            fileId: originalFileId,
+            mimeType: originalMimeType || 'unknown',
+          },
+        });
+
+        classificationTriggered = true;
+
+        // eslint-disable-next-line no-console
+        console.log(
+          `Published classification trigger for ${originalFileName} to topic ${classifierTopicName}`
+        );
+      } catch (pubsubError) {
+        // Log PubSub error but don't fail the function
+        // eslint-disable-next-line no-console
+        console.warn(
+          `Failed to publish classification trigger: ${pubsubError}`,
+          pubsubError
+        );
+      }
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(
+        'FILE_CLASSIFIER_TOPIC environment variable not set, skipping classification trigger'
+      );
+    }
+
     const result = {
       message: `Successfully stored extracted text from ${originalFileName}`,
       firestoreDocId: docRef.id,
@@ -189,6 +244,7 @@ export const textFirebaseWriter = async (
       confidence: overallConfidence,
       pages: pages.length,
       originalFileName: originalFileName,
+      classificationTriggered: classificationTriggered,
     };
 
     // eslint-disable-next-line no-console

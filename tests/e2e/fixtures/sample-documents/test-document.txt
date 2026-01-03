@@ -1,0 +1,17 @@
+E2E Test Document
+
+This is a sample text document for end-to-end testing of the AutoNyan pipeline.
+
+Invoice Details:
+- Invoice Number: INV-2024-001
+- Date: January 15, 2024
+- Amount: $1,234.56
+
+This document will be processed through:
+1. Drive Scanner - Discovers the document
+2. Doc Processor - Downloads and uploads to Storage
+3. Vision Processor - Extracts text via OCR
+4. Firebase Writer - Stores in Firestore
+5. File Classifier - Categorizes using AI
+
+Test completed successfully.

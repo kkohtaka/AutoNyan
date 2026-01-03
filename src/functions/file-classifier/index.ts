@@ -1,19 +1,23 @@
 import { Firestore } from '@google-cloud/firestore';
-import { GoogleAuth } from 'google-auth-library';
-import { createErrorResponse, getProjectId } from 'autonyan-shared';
+import { google } from 'googleapis';
+import {
+  createErrorResponse,
+  getProjectId,
+  parsePubSubEvent,
+  validateRequiredFields,
+} from 'autonyan-shared';
+import { CloudEvent } from '@google-cloud/functions-framework';
+import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { listCategoryFolders, moveFileInDrive } from './drive-operations';
 import { classifyWithGemini } from './classification';
-import {
-  parseDocumentData,
-  updateDocumentWithClassification,
-} from './firestore-operations';
+import { updateDocumentWithClassification } from './firestore-operations';
 
-interface FirestoreEvent {
-  data: {
-    value?: {
-      fields?: Record<string, unknown>;
-    };
-  };
+interface ClassificationEventData extends Record<string, unknown> {
+  firestoreDocId: string;
+  fileId: string;
+  fileName: string;
+  extractedText: string;
+  confidence: number;
 }
 
 interface Result {
@@ -25,15 +29,27 @@ interface Result {
 }
 
 /**
- * Cloud Function triggered by Firestore document creation
+ * Cloud Function triggered by PubSub message after Firestore document creation
  * Classifies documents using AI and moves them to appropriate folders in Google Drive
  */
 export const fileClassifier = async (
-  event: FirestoreEvent
+  cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   try {
     // eslint-disable-next-line no-console
-    console.log('Received Firestore event:', JSON.stringify(event, null, 2));
+    console.log('Received PubSub event:', JSON.stringify(cloudEvent, null, 2));
+
+    // Parse PubSub event data
+    const { data: eventData } =
+      parsePubSubEvent<ClassificationEventData>(cloudEvent);
+
+    // Validate required fields
+    validateRequiredFields(eventData, [
+      'firestoreDocId',
+      'fileId',
+      'fileName',
+      'extractedText',
+    ]);
 
     // Get environment variables
     const projectId = getProjectId();
@@ -46,19 +62,13 @@ export const fileClassifier = async (
       );
     }
 
-    // Parse Firestore event data
-    const documentSnapshot = convertFirestoreFields(
-      event.data.value?.fields || {}
-    );
-    const documentData = parseDocumentData(documentSnapshot);
-
     // eslint-disable-next-line no-console
     console.log(
-      `Processing classification for file: ${documentData.fileName} (${documentData.fileId})`
+      `Processing classification for file: ${eventData.fileName} (${eventData.fileId})`
     );
 
     // Initialize Google Auth for Drive API
-    const auth = new GoogleAuth({
+    const auth = new google.auth.GoogleAuth({
       scopes: ['https://www.googleapis.com/auth/drive'],
     });
 
@@ -88,7 +98,7 @@ export const fileClassifier = async (
     console.log('Classifying document with Gemini AI...');
     const classification = await classifyWithGemini(
       projectId,
-      documentData.extractedText,
+      eventData.extractedText,
       categoryFolders
     );
 
@@ -105,11 +115,11 @@ export const fileClassifier = async (
     console.log(
       `Moving file to folder: ${targetFolderName} (${targetFolderId})`
     );
-    await moveFileInDrive(auth, documentData.fileId, targetFolderId);
+    await moveFileInDrive(auth, eventData.fileId, targetFolderId);
 
     // Update Firestore document with classification results
     const firestore = new Firestore();
-    const documentPath = getDocumentPathFromEvent(event);
+    const documentPath = `extracted_texts/${eventData.firestoreDocId}`;
 
     // eslint-disable-next-line no-console
     console.log(`Updating Firestore document: ${documentPath}`);
@@ -123,11 +133,11 @@ export const fileClassifier = async (
     });
 
     const result = {
-      message: `Successfully classified and moved file: ${documentData.fileName}`,
+      message: `Successfully classified and moved file: ${eventData.fileName}`,
       category: classification.categoryName,
       confidence: classification.confidence,
-      fileId: documentData.fileId,
-      fileName: documentData.fileName,
+      fileId: eventData.fileId,
+      fileName: eventData.fileName,
     };
 
     // eslint-disable-next-line no-console
@@ -143,66 +153,3 @@ export const fileClassifier = async (
     throw new Error(`File classification failed: ${errorResponse.error}`);
   }
 };
-
-/**
- * Convert Firestore field format to plain JavaScript object
- * Firestore events encode values in a specific format (e.g., {stringValue: "..."})
- */
-function convertFirestoreFields(
-  fields: Record<string, unknown>
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(fields)) {
-    if (typeof value === 'object' && value !== null) {
-      const fieldValue = value as Record<string, unknown>;
-
-      if ('stringValue' in fieldValue) {
-        result[key] = fieldValue.stringValue;
-      } else if ('integerValue' in fieldValue) {
-        result[key] = parseInt(String(fieldValue.integerValue), 10);
-      } else if ('doubleValue' in fieldValue) {
-        result[key] = parseFloat(String(fieldValue.doubleValue));
-      } else if ('arrayValue' in fieldValue) {
-        const arrayValue = fieldValue.arrayValue as { values?: unknown[] };
-        result[key] = arrayValue.values || [];
-      } else if ('mapValue' in fieldValue) {
-        const mapValue = fieldValue.mapValue as {
-          fields?: Record<string, unknown>;
-        };
-        result[key] = convertFirestoreFields(mapValue.fields || {});
-      } else {
-        result[key] = value;
-      }
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
-}
-
-/**
- * Extract document path from Firestore event
- * Event format: projects/{project}/databases/{database}/documents/{collection}/{docId}
- */
-function getDocumentPathFromEvent(event: FirestoreEvent): string {
-  // In Firestore trigger events, the document path is available in event metadata
-  // For now, we'll use a simple approach and construct it from the collection name
-  // This should be adjusted based on actual event structure
-  const eventData = event as unknown as {
-    document?: string;
-  };
-
-  if (eventData.document) {
-    // Extract the collection/docId part from the full path
-    const match = eventData.document.match(/documents\/(.+)/);
-    if (match) {
-      return match[1];
-    }
-  }
-
-  // Fallback: assume the collection is "extracted_texts"
-  // This is a temporary solution and should be improved with proper event parsing
-  throw new Error('Cannot determine document path from event');
-}

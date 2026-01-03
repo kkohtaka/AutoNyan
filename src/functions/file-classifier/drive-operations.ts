@@ -1,6 +1,4 @@
-import { google } from 'googleapis';
-import { GoogleAuth } from 'google-auth-library';
-import { drive_v3 } from 'googleapis';
+import { google, drive_v3 } from 'googleapis';
 
 export interface CategoryFolder {
   id: string;
@@ -14,7 +12,7 @@ export interface CategoryFolder {
  * @returns Array of category folders
  */
 export async function listCategoryFolders(
-  auth: GoogleAuth,
+  auth: InstanceType<typeof google.auth.GoogleAuth>,
   rootFolderId: string
 ): Promise<CategoryFolder[]> {
   const drive = google.drive({ version: 'v3', auth });
@@ -40,7 +38,7 @@ export async function listCategoryFolders(
  * @param targetFolderId Destination folder ID
  */
 export async function moveFileInDrive(
-  auth: GoogleAuth,
+  auth: InstanceType<typeof google.auth.GoogleAuth>,
   fileId: string,
   targetFolderId: string
 ): Promise<void> {

@@ -14,6 +14,10 @@ build/
 src/functions/**/*.js
 src/functions/**/*.js.map
 
+# Compiled JavaScript in E2E test scripts
+tests/e2e/scripts/**/*.js
+tests/e2e/scripts/**/*.js.map
+
 # Environment variables
 .env
 .env.local

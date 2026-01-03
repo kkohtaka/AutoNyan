@@ -5,7 +5,6 @@ import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObject
 // Common interfaces for different event types
 export interface PubSubMessage<T = Record<string, unknown>> {
   data: T;
-  attributes?: Record<string, string>;
 }
 
 export interface StorageEventData {
@@ -56,29 +55,41 @@ export function parsePubSubEvent<T = Record<string, unknown>>(
       throw new ValidationError('CloudEvent data is required');
     }
 
-    const rawData = cloudEvent.data;
+    // Extract base64 data from CloudEvent
+    // PubSub events can have two formats:
+    // 1. Direct string: cloudEvent.data is base64 string (from Cloud Scheduler)
+    // 2. Object format: cloudEvent.data is { data: string, message_id: string, publish_time: string } (from Functions Framework)
+    let base64Data: string;
 
-    // Handle different data formats
-    let decodedData: string;
-
-    if (typeof rawData === 'string') {
-      // PubSub messages are typically base64-encoded
-      try {
-        decodedData = Buffer.from(rawData, 'base64').toString('utf-8');
-      } catch {
-        // If base64 decode fails, treat as plain string
-        decodedData = rawData;
-      }
-    } else if (typeof rawData === 'object') {
-      // Handle object data directly
-      return {
-        data: rawData as T,
-        attributes: cloudEvent.source
-          ? { source: cloudEvent.source }
-          : undefined,
-      };
+    if (typeof cloudEvent.data === 'string') {
+      // Format 1: Direct string
+      base64Data = cloudEvent.data;
     } else {
-      throw new ValidationError(`Unsupported data type: ${typeof rawData}`);
+      // Format 2: Object with data property
+      const eventData = cloudEvent.data as unknown as {
+        data: string;
+        message_id?: string;
+        publish_time?: string;
+      };
+
+      if (!eventData.data || typeof eventData.data !== 'string') {
+        throw new ValidationError(
+          'Message data field must be a base64-encoded string'
+        );
+      }
+
+      base64Data = eventData.data;
+    }
+
+    // Decode base64 data
+    let decodedData: string;
+    try {
+      decodedData = Buffer.from(base64Data, 'base64').toString('utf-8');
+    } catch (decodeError) {
+      throw new ParameterParsingError(
+        'Failed to decode base64 message data',
+        decodeError
+      );
     }
 
     // Parse JSON data
@@ -94,7 +105,6 @@ export function parsePubSubEvent<T = Record<string, unknown>>(
 
     return {
       data: parsedData,
-      attributes: cloudEvent.source ? { source: cloudEvent.source } : undefined,
     };
   } catch (error) {
     if (

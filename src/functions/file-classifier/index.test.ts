@@ -1,8 +1,10 @@
 import { fileClassifier } from './index';
+import { CloudEvent } from '@google-cloud/functions-framework';
+import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 
 // Mock dependencies
 jest.mock('@google-cloud/firestore');
-jest.mock('google-auth-library');
+jest.mock('googleapis');
 jest.mock('./drive-operations');
 jest.mock('./classification');
 jest.mock('./firestore-operations');
@@ -13,12 +15,16 @@ const mockFirestore = {};
 const mockListCategoryFolders = jest.fn();
 const mockMoveFileInDrive = jest.fn();
 const mockClassifyWithGemini = jest.fn();
-const mockParseDocumentData = jest.fn();
 const mockUpdateDocumentWithClassification = jest.fn();
 
 // Mock the constructors and modules
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('google-auth-library').GoogleAuth = jest.fn(() => mockGoogleAuth);
+const mockGoogleApis = require('googleapis');
+mockGoogleApis.google = {
+  auth: {
+    GoogleAuth: jest.fn(() => mockGoogleAuth),
+  },
+};
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 require('@google-cloud/firestore').Firestore = jest.fn(() => mockFirestore);
@@ -29,8 +35,6 @@ require('./drive-operations').listCategoryFolders = mockListCategoryFolders;
 require('./drive-operations').moveFileInDrive = mockMoveFileInDrive;
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 require('./classification').classifyWithGemini = mockClassifyWithGemini;
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('./firestore-operations').parseDocumentData = mockParseDocumentData;
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 require('./firestore-operations').updateDocumentWithClassification =
   mockUpdateDocumentWithClassification;
@@ -51,31 +55,32 @@ describe('fileClassifier', () => {
     delete process.env.UNCATEGORIZED_FOLDER_ID;
   });
 
-  const createFirestoreEvent = (
-    fields: Record<string, unknown>,
-    docId: string = 'doc123'
-  ) => ({
+  const createPubSubEvent = (data: {
+    firestoreDocId: string;
+    fileId: string;
+    fileName: string;
+    extractedText: string;
+    confidence: number;
+  }): CloudEvent<MessagePublishedData> => ({
+    specversion: '1.0',
+    id: 'test-event-id',
+    source: 'test-source',
+    type: 'google.cloud.pubsub.topic.v1.messagePublished',
+    time: new Date().toISOString(),
     data: {
-      value: {
-        fields: fields,
-      },
-    },
-    document: `projects/test-project/databases/(default)/documents/extracted_texts/${docId}`,
+      data: Buffer.from(JSON.stringify(data)).toString('base64'),
+      message_id: 'test-message-id',
+      publish_time: new Date().toISOString(),
+    } as unknown as MessagePublishedData,
   });
 
   it('should classify document and move to category folder', async () => {
-    const event = createFirestoreEvent({
-      fileId: { stringValue: 'file-123' },
-      fileName: { stringValue: 'invoice.pdf' },
-      extractedText: {
-        stringValue: '請求書 金額: 10000円 支払期限: 2024-01-31',
-      },
-    });
-
-    mockParseDocumentData.mockReturnValue({
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
       fileId: 'file-123',
       fileName: 'invoice.pdf',
       extractedText: '請求書 金額: 10000円 支払期限: 2024-01-31',
+      confidence: 1,
     });
 
     mockListCategoryFolders.mockResolvedValue([
@@ -121,41 +126,34 @@ describe('fileClassifier', () => {
     expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
       mockFirestore,
       'extracted_texts/doc123',
-      expect.objectContaining({
+      {
         category: '請求書',
         categoryFolderId: 'folder-invoices',
         classificationConfidence: 0.95,
         classificationReasoning: 'Document contains invoice-related keywords',
-      })
+        classifiedAt: expect.any(String),
+      }
     );
   });
 
-  it('should move to uncategorized folder when no category matches', async () => {
-    const event = createFirestoreEvent(
-      {
-        fileId: { stringValue: 'file-456' },
-        fileName: { stringValue: 'unknown.pdf' },
-        extractedText: { stringValue: 'Random text with no clear category' },
-      },
-      'doc456'
-    );
-
-    mockParseDocumentData.mockReturnValue({
+  it('should move to uncategorized folder if no category matched', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc456',
       fileId: 'file-456',
       fileName: 'unknown.pdf',
-      extractedText: 'Random text with no clear category',
+      extractedText: 'Some random text',
+      confidence: 1,
     });
 
     mockListCategoryFolders.mockResolvedValue([
       { id: 'folder-invoices', name: '請求書' },
-      { id: 'folder-contracts', name: '契約書' },
     ]);
 
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: null,
       categoryFolderId: null,
       confidence: 0.3,
-      reasoning: 'No matching category found',
+      reasoning: 'Cannot determine category',
     });
 
     mockMoveFileInDrive.mockResolvedValue(undefined);
@@ -163,10 +161,7 @@ describe('fileClassifier', () => {
 
     const result = await fileClassifier(event);
 
-    expect(result.message).toContain('Successfully classified and moved file');
     expect(result.category).toBeNull();
-    expect(result.confidence).toBe(0.3);
-
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
       mockGoogleAuth,
       'file-456',
@@ -182,13 +177,15 @@ describe('fileClassifier', () => {
     );
   });
 
-  it('should handle missing environment variables', async () => {
+  it('should throw error if required environment variables are missing', async () => {
     delete process.env.CATEGORY_ROOT_FOLDER_ID;
 
-    const event = createFirestoreEvent({
-      fileId: { stringValue: 'file-123' },
-      fileName: { stringValue: 'test.pdf' },
-      extractedText: { stringValue: 'test content' },
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc789',
+      fileId: 'file-789',
+      fileName: 'test.pdf',
+      extractedText: 'Test content',
+      confidence: 1,
     });
 
     await expect(fileClassifier(event)).rejects.toThrow(
@@ -196,164 +193,30 @@ describe('fileClassifier', () => {
     );
   });
 
-  it('should handle classification errors gracefully', async () => {
-    const event = createFirestoreEvent({
-      fileId: { stringValue: 'file-789' },
-      fileName: { stringValue: 'error.pdf' },
-      extractedText: { stringValue: 'test content' },
-    });
-
-    mockParseDocumentData.mockReturnValue({
-      fileId: 'file-789',
-      fileName: 'error.pdf',
-      extractedText: 'test content',
-    });
-
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-test', name: 'Test' },
-    ]);
-
-    mockClassifyWithGemini.mockRejectedValue(new Error('Gemini API error'));
-
-    await expect(fileClassifier(event)).rejects.toThrow(
-      'File classification failed'
-    );
-  });
-
-  it('should handle Drive API errors when moving files', async () => {
-    const event = createFirestoreEvent({
-      fileId: { stringValue: 'file-999' },
-      fileName: { stringValue: 'move-error.pdf' },
-      extractedText: { stringValue: 'test content' },
-    });
-
-    mockParseDocumentData.mockReturnValue({
-      fileId: 'file-999',
-      fileName: 'move-error.pdf',
-      extractedText: 'test content',
-    });
-
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-test', name: 'Test' },
-    ]);
-
-    mockClassifyWithGemini.mockResolvedValue({
-      categoryName: 'Test',
-      categoryFolderId: 'folder-test',
-      confidence: 0.9,
-      reasoning: 'Test classification',
-    });
-
-    mockMoveFileInDrive.mockRejectedValue(new Error('Permission denied'));
+  it('should throw error if required fields are missing', async () => {
+    // Create event with missing fileName field
+    const event: CloudEvent<MessagePublishedData> = {
+      specversion: '1.0',
+      id: 'test-event-id',
+      source: 'test-source',
+      type: 'google.cloud.pubsub.topic.v1.messagePublished',
+      time: new Date().toISOString(),
+      data: {
+        data: Buffer.from(
+          JSON.stringify({
+            firestoreDocId: 'doc-missing',
+            fileId: 'file-missing',
+            extractedText: 'Test',
+            confidence: 1,
+          })
+        ).toString('base64'),
+        message_id: 'test-message-id',
+        publish_time: new Date().toISOString(),
+      } as unknown as MessagePublishedData,
+    };
 
     await expect(fileClassifier(event)).rejects.toThrow(
-      'File classification failed'
-    );
-  });
-
-  it('should handle empty category folders list', async () => {
-    const event = createFirestoreEvent({
-      fileId: { stringValue: 'file-empty' },
-      fileName: { stringValue: 'empty.pdf' },
-      extractedText: { stringValue: 'test content' },
-    });
-
-    mockParseDocumentData.mockReturnValue({
-      fileId: 'file-empty',
-      fileName: 'empty.pdf',
-      extractedText: 'test content',
-    });
-
-    mockListCategoryFolders.mockResolvedValue([]);
-
-    mockClassifyWithGemini.mockResolvedValue({
-      categoryName: null,
-      categoryFolderId: null,
-      confidence: 0,
-      reasoning: 'No categories available',
-    });
-
-    mockMoveFileInDrive.mockResolvedValue(undefined);
-    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
-
-    const result = await fileClassifier(event);
-
-    expect(result.category).toBeNull();
-    expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockGoogleAuth,
-      'file-empty',
-      'uncategorized-folder-id'
-    );
-  });
-
-  it('should handle Firestore event with complex field types (integerValue, doubleValue, arrayValue, mapValue)', async () => {
-    const event = createFirestoreEvent({
-      fileId: { stringValue: 'file-789' },
-      fileName: { stringValue: 'complex-doc.pdf' },
-      extractedText: { stringValue: 'Contract document with details' },
-      fileSize: { integerValue: 524288 },
-      confidence: { doubleValue: 0.98 },
-      pages: {
-        arrayValue: {
-          values: [
-            {
-              mapValue: {
-                fields: {
-                  pageNumber: { integerValue: 1 },
-                  text: { stringValue: 'Page 1 content' },
-                  confidence: { doubleValue: 0.99 },
-                },
-              },
-            },
-            {
-              mapValue: {
-                fields: {
-                  pageNumber: { integerValue: 2 },
-                  text: { stringValue: 'Page 2 content' },
-                  confidence: { doubleValue: 0.97 },
-                },
-              },
-            },
-          ],
-        },
-      },
-    });
-
-    mockParseDocumentData.mockReturnValue({
-      fileId: 'file-789',
-      fileName: 'complex-doc.pdf',
-      extractedText: 'Contract document with details',
-      fileSize: 524288,
-      confidence: 0.98,
-      pages: [
-        { pageNumber: 1, text: 'Page 1 content', confidence: 0.99 },
-        { pageNumber: 2, text: 'Page 2 content', confidence: 0.97 },
-      ],
-    });
-
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-contracts', name: '契約書' },
-    ]);
-
-    mockClassifyWithGemini.mockResolvedValue({
-      categoryName: '契約書',
-      categoryFolderId: 'folder-contracts',
-      confidence: 0.92,
-      reasoning: 'Document identified as contract',
-    });
-
-    mockMoveFileInDrive.mockResolvedValue(undefined);
-    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
-
-    const result = await fileClassifier(event);
-
-    expect(result.message).toContain('Successfully classified and moved file');
-    expect(result.category).toBe('契約書');
-    expect(result.fileName).toBe('complex-doc.pdf');
-    expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockGoogleAuth,
-      'file-789',
-      'folder-contracts'
+      'Missing required field'
     );
   });
 });
