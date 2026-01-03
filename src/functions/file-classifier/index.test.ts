@@ -3,45 +3,45 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 
 // Mock dependencies
-jest.mock('@google-cloud/firestore');
-jest.mock('googleapis');
+jest.mock('@google-cloud/firestore', () => ({
+  Firestore: jest.fn(() => ({})),
+}));
+
+jest.mock('googleapis', () => ({
+  google: {
+    auth: {
+      GoogleAuth: jest.fn(() => ({ mockGoogleAuthInstance: true })),
+    },
+  },
+}));
+
 jest.mock('./drive-operations');
 jest.mock('./classification');
 jest.mock('./firestore-operations');
-
-const mockGoogleAuth = { mockGoogleAuthInstance: true };
-const mockFirestore = {};
 
 const mockListCategoryFolders = jest.fn();
 const mockMoveFileInDrive = jest.fn();
 const mockClassifyWithGemini = jest.fn();
 const mockUpdateDocumentWithClassification = jest.fn();
 
-// Mock the constructors and modules
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-const mockGoogleApis = require('googleapis');
-mockGoogleApis.google = {
-  auth: {
-    GoogleAuth: jest.fn(() => mockGoogleAuth),
-  },
-};
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('@google-cloud/firestore').Firestore = jest.fn(() => mockFirestore);
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('./drive-operations').listCategoryFolders = mockListCategoryFolders;
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('./drive-operations').moveFileInDrive = mockMoveFileInDrive;
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('./classification').classifyWithGemini = mockClassifyWithGemini;
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-require('./firestore-operations').updateDocumentWithClassification =
-  mockUpdateDocumentWithClassification;
-
 describe('fileClassifier', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Set up mock implementations for imported functions
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+    const driveOps = require('./drive-operations');
+    driveOps.listCategoryFolders = mockListCategoryFolders;
+    driveOps.moveFileInDrive = mockMoveFileInDrive;
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+    const classification = require('./classification');
+    classification.classifyWithGemini = mockClassifyWithGemini;
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+    const firestoreOps = require('./firestore-operations');
+    firestoreOps.updateDocumentWithClassification =
+      mockUpdateDocumentWithClassification;
 
     // Set up environment variables
     process.env.PROJECT_ID = 'test-project';
@@ -107,7 +107,7 @@ describe('fileClassifier', () => {
     expect(result.fileName).toBe('invoice.pdf');
 
     expect(mockListCategoryFolders).toHaveBeenCalledWith(
-      mockGoogleAuth,
+      expect.objectContaining({ mockGoogleAuthInstance: true }),
       'root-folder-id'
     );
     expect(mockClassifyWithGemini).toHaveBeenCalledWith(
@@ -119,12 +119,12 @@ describe('fileClassifier', () => {
       ]
     );
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockGoogleAuth,
+      expect.objectContaining({ mockGoogleAuthInstance: true }),
       'file-123',
       'folder-invoices'
     );
     expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
-      mockFirestore,
+      expect.any(Object),
       'extracted_texts/doc123',
       {
         category: '請求書',
@@ -163,12 +163,12 @@ describe('fileClassifier', () => {
 
     expect(result.category).toBeNull();
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      mockGoogleAuth,
+      expect.objectContaining({ mockGoogleAuthInstance: true }),
       'file-456',
       'uncategorized-folder-id'
     );
     expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
-      mockFirestore,
+      expect.any(Object),
       'extracted_texts/doc456',
       expect.objectContaining({
         category: null,
