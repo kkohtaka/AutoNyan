@@ -103,6 +103,8 @@ jobs:
           npm run terraform:init
           npm run terraform:apply 2>&1 | tee deploy_output.txt
           echo "deploy_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        env:
+          ENVIRONMENT: ${{ env.DEPLOY_ENV }}
 
       - name: Report deployment status
         if: always()
