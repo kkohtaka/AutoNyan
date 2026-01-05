@@ -1,15 +1,15 @@
 import { Firestore } from '@google-cloud/firestore';
-import { google } from 'googleapis';
+import { CloudEvent } from '@google-cloud/functions-framework';
+import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
   createErrorResponse,
   getProjectId,
   parsePubSubEvent,
   validateRequiredFields,
 } from 'autonyan-shared';
-import { CloudEvent } from '@google-cloud/functions-framework';
-import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { listCategoryFolders, moveFileInDrive } from './drive-operations';
+import { google } from 'googleapis';
 import { classifyWithGemini } from './classification';
+import { listCategoryFolders, moveFileInDrive } from './drive-operations';
 import { updateDocumentWithClassification } from './firestore-operations';
 
 interface ClassificationEventData extends Record<string, unknown> {
@@ -118,7 +118,10 @@ export const fileClassifier = async (
     await moveFileInDrive(auth, eventData.fileId, targetFolderId);
 
     // Update Firestore document with classification results
-    const firestore = new Firestore();
+    const databaseId = process.env.FIRESTORE_DATABASE_ID || '(default)';
+    const firestore = new Firestore({
+      databaseId,
+    });
     const documentPath = `extracted_texts/${eventData.firestoreDocId}`;
 
     // eslint-disable-next-line no-console

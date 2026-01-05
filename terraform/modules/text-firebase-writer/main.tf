@@ -66,6 +66,7 @@ resource "google_cloudfunctions2_function" "text_firebase_writer" {
       PROJECT_ID            = var.project_id
       ENVIRONMENT           = var.environment
       FILE_CLASSIFIER_TOPIC = var.file_classifier_trigger_topic
+      FIRESTORE_DATABASE_ID = var.environment
     }
     service_account_email = google_service_account.text_firebase_writer.email
   }

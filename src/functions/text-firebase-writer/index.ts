@@ -1,6 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
-import { Storage } from '@google-cloud/storage';
 import { PubSub } from '@google-cloud/pubsub';
+import { Storage } from '@google-cloud/storage';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
 import {
   createErrorResponse,
@@ -83,7 +83,10 @@ export const textFirebaseWriter = async (
 
     // Initialize clients
     const storage = new Storage();
-    const firestore = new Firestore();
+    const databaseId = process.env.FIRESTORE_DATABASE_ID || '(default)';
+    const firestore = new Firestore({
+      databaseId,
+    });
 
     // Get the Vision API result file
     const file = storage.bucket(bucket).file(objectName);
