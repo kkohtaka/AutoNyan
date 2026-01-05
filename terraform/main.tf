@@ -48,10 +48,10 @@ resource "google_project_service" "firestore_api" {
 
 # Firestore database for storing extracted document text and metadata
 # Uses Native mode for real-time sync and flexible queries
-# Note: Default database is shared across environments in the same project
+# Note: Uses environment-specific named databases for complete data isolation
 resource "google_firestore_database" "default" {
   project     = var.project_id
-  name        = "(default)"
+  name        = var.environment
   location_id = var.region
   type        = "FIRESTORE_NATIVE"
 

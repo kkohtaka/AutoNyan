@@ -60,6 +60,7 @@ resource "google_cloudfunctions2_function" "file_classifier" {
       UNCATEGORIZED_FOLDER_ID = var.uncategorized_folder_id
       ENVIRONMENT             = var.environment
       VERTEX_AI_LOCATION      = var.region
+      FIRESTORE_DATABASE_ID   = var.environment
     }
     service_account_email = google_service_account.file_classifier.email
   }
