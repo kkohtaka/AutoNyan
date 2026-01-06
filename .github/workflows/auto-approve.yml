@@ -14,11 +14,9 @@ permissions:
 jobs:
   auto-approve:
     runs-on: ubuntu-latest
-    # Only auto-approve PRs created by the repository owner or Renovate Bot
+    # Only auto-approve PRs created by the repository owner
     # Test status verification is delegated to branch protection rules
-    if: |
-      github.event.pull_request.user.login == github.repository_owner ||
-      github.event.pull_request.user.login == 'kohtaka-bot[bot]'
+    if: github.event.pull_request.user.login == github.repository_owner
 
     steps:
       # Generate authentication token using GitHub App credentials
