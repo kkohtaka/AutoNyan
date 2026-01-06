@@ -62,6 +62,13 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Setup Terraform backend
+        run: npm run setup:terraform-backend
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
+          ENVIRONMENT: staging
+
       - name: Initialize Terraform backend
         run: npm run terraform:init
         env:
