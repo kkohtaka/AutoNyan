@@ -15,7 +15,7 @@
     "@google-cloud/functions-framework": "^5.0.0",
     "@google-cloud/firestore": "^8.1.0",
     "@google-cloud/pubsub": "^5.2.0",
-    "@google-cloud/storage": "^7.18.0",
+    "@google-cloud/storage": "^7.19.0",
     "@google/events": "^5.4.0",
     "autonyan-shared": "file:../../shared"
   },
