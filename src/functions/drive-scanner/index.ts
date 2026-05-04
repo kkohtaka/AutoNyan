@@ -70,6 +70,7 @@ export const driveScanner = async (
     const folderResponse = await drive.files.get({
       fileId: folderId,
       fields: 'id,name,mimeType',
+      supportsAllDrives: true,
     });
 
     // eslint-disable-next-line no-console
@@ -92,6 +93,8 @@ export const driveScanner = async (
           'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
         pageSize: 100,
         pageToken: nextPageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       });
 
       const files = response.data.files || [];

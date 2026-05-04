@@ -69,6 +69,7 @@ async function testDriveAccess(): Promise<void> {
     const folderMetadata = await drive.files.get({
       fileId: folderId,
       fields: 'id,name,permissions',
+      supportsAllDrives: true,
     });
 
     console.log('✅ Successfully accessed folder');
@@ -81,6 +82,8 @@ async function testDriveAccess(): Promise<void> {
       q: `'${folderId}' in parents and trashed=false`,
       fields: 'files(id,name)',
       pageSize: 5,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
     });
 
     console.log('✅ Successfully listed files');

@@ -11,6 +11,7 @@ export interface TerraformOutputs {
   category_root_folder_id: string;
   uncategorized_folder_id: string;
   project_id: string;
+  file_classifier_service_account_email: string;
 }
 
 interface TerraformOutput {
@@ -124,6 +125,8 @@ export async function getTerraformOutputs(
         process.env.UNCATEGORIZED_FOLDER_ID ||
         tfVars.uncategorized_folder_id ||
         '',
+      file_classifier_service_account_email:
+        outputs.file_classifier_service_account_email?.value || '',
     };
 
     cachedOutputs[environment] = result;

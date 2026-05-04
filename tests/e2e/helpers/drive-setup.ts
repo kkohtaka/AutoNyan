@@ -8,12 +8,14 @@ import * as path from 'path';
  * @param drive - Drive API client
  * @param folderId - Parent folder ID
  * @param filePath - Local file path
+ * @param serviceAccountEmails - Optional service account emails to share file with
  * @returns Uploaded file metadata
  */
 export async function uploadTestFile(
   drive: drive_v3.Drive,
   folderId: string,
-  filePath: string
+  filePath: string,
+  serviceAccountEmails?: string[]
 ): Promise<drive_v3.Schema$File> {
   const fileName = path.basename(filePath);
 
@@ -33,7 +35,37 @@ export async function uploadTestFile(
         body: fileStream,
       },
       fields: 'id,name,mimeType',
+      supportsAllDrives: true,
     });
+
+    const fileId = response.data.id!;
+
+    // Share file with service accounts if provided
+    if (serviceAccountEmails && serviceAccountEmails.length > 0) {
+      console.log(
+        `Sharing file ${fileId} with ${serviceAccountEmails.length} service account(s)...`
+      );
+      for (const email of serviceAccountEmails) {
+        try {
+          await drive.permissions.create({
+            fileId: fileId,
+            requestBody: {
+              type: 'user',
+              role: 'writer',
+              emailAddress: email,
+            },
+            sendNotificationEmail: false,
+            supportsAllDrives: true,
+          });
+          console.log(`  ✅ Successfully shared file with ${email}`);
+        } catch (error) {
+          console.warn(
+            `  ❌ Failed to share file ${fileId} with ${email}:`,
+            error
+          );
+        }
+      }
+    }
 
     return response.data;
   } catch (error) {
@@ -75,7 +107,7 @@ export async function cleanupDriveFiles(
 ): Promise<void> {
   for (const fileId of fileIds) {
     try {
-      await drive.files.delete({ fileId });
+      await drive.files.delete({ fileId, supportsAllDrives: true });
     } catch (error) {
       console.warn(`Failed to delete Drive file ${fileId}:`, error);
     }
@@ -93,7 +125,8 @@ export async function cleanupDriveFiles(
 export async function createTestFolder(
   drive: drive_v3.Drive,
   parentFolderId: string,
-  folderName: string
+  folderName: string,
+  serviceAccountEmails?: string[]
 ): Promise<string> {
   const response = await drive.files.create({
     requestBody: {
@@ -102,7 +135,39 @@ export async function createTestFolder(
       parents: [parentFolderId],
     },
     fields: 'id',
+    supportsAllDrives: true,
   });
 
-  return response.data.id!;
+  const folderId = response.data.id!;
+
+  // Share folder with service accounts if provided
+  if (serviceAccountEmails && serviceAccountEmails.length > 0) {
+    console.log(
+      `Sharing folder ${folderId} with ${serviceAccountEmails.length} service account(s)...`
+    );
+    for (const email of serviceAccountEmails) {
+      try {
+        await drive.permissions.create({
+          fileId: folderId,
+          requestBody: {
+            type: 'user',
+            role: 'writer',
+            emailAddress: email,
+          },
+          sendNotificationEmail: false,
+          supportsAllDrives: true,
+        });
+        console.log(`  ✅ Successfully shared with ${email}`);
+      } catch (error) {
+        console.warn(
+          `  ❌ Failed to share folder ${folderId} with ${email}:`,
+          error
+        );
+      }
+    }
+  } else {
+    console.log('No service accounts to share folder with');
+  }
+
+  return folderId;
 }

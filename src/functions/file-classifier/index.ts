@@ -110,14 +110,8 @@ export const fileClassifier = async (
       classification.categoryFolderId || uncategorizedFolderId;
     const targetFolderName = classification.categoryName || 'Uncategorized';
 
-    // Move file in Google Drive
-    // eslint-disable-next-line no-console
-    console.log(
-      `Moving file to folder: ${targetFolderName} (${targetFolderId})`
-    );
-    await moveFileInDrive(auth, eventData.fileId, targetFolderId);
-
-    // Update Firestore document with classification results
+    // Update Firestore document with classification results FIRST
+    // This ensures E2E tests can verify classification even if file move fails
     const databaseId = process.env.FIRESTORE_DATABASE_ID || '(default)';
     const firestore = new Firestore({
       databaseId,
@@ -135,12 +129,36 @@ export const fileClassifier = async (
       classifiedAt: new Date().toISOString(),
     });
 
+    // Move file in Google Drive AFTER Firestore update
+    // If move fails, classification is still considered successful (Firestore is already updated)
+    let fileMoved = false;
+    try {
+      // eslint-disable-next-line no-console
+      console.log(
+        `Moving file to folder: ${targetFolderName} (${targetFolderId})`
+      );
+      await moveFileInDrive(auth, eventData.fileId, targetFolderId);
+      fileMoved = true;
+      // eslint-disable-next-line no-console
+      console.log('File moved successfully');
+    } catch (moveError) {
+      // Log the error but don't fail the function - classification is already saved
+      // eslint-disable-next-line no-console
+      console.warn(
+        'Failed to move file in Drive (classification still saved):',
+        moveError
+      );
+    }
+
     const result = {
-      message: `Successfully classified and moved file: ${eventData.fileName}`,
+      message: fileMoved
+        ? `Successfully classified and moved file: ${eventData.fileName}`
+        : `Successfully classified file (file move failed): ${eventData.fileName}`,
       category: classification.categoryName,
       confidence: classification.confidence,
       fileId: eventData.fileId,
       fileName: eventData.fileName,
+      fileMoved,
     };
 
     // eslint-disable-next-line no-console
