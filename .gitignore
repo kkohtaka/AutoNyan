@@ -63,5 +63,4 @@ src/functions/*/shared/
 .cache/
 
 # Serena AI assistant
-.serena/cache/
-.serena/*.log 
+.serena/
