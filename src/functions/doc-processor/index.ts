@@ -69,6 +69,7 @@ export const docProcessor = async (
     const fileResponse = await drive.files.get({
       fileId: fileId,
       fields: 'id,name,mimeType,size,modifiedTime',
+      supportsAllDrives: true,
     });
 
     const file = fileResponse.data;
@@ -81,6 +82,7 @@ export const docProcessor = async (
       {
         fileId: fileId,
         alt: 'media',
+        supportsAllDrives: true,
       },
       {
         responseType: 'stream',

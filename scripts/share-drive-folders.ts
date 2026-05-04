@@ -112,6 +112,7 @@ async function shareFolderWithServiceAccount(
     const existingPermissions = await drive.permissions.list({
       fileId: folderId,
       fields: 'permissions(id,emailAddress,role)',
+      supportsAllDrives: true,
     });
 
     const alreadyShared = existingPermissions.data.permissions?.some(
@@ -132,6 +133,7 @@ async function shareFolderWithServiceAccount(
         emailAddress: email,
       },
       sendNotificationEmail: false,
+      supportsAllDrives: true,
     });
 
     console.log(`  ✅ Shared with ${email}`);
@@ -190,6 +192,11 @@ async function shareDriveFolder(): Promise<void> {
       console.warn('  - etc.\n');
       process.exit(1);
     }
+
+    // Always include GitHub Actions service account for E2E tests in CI
+    const githubActionsEmail = `github-actions-terraform@${projectId}.iam.gserviceaccount.com`;
+    serviceAccounts.push(githubActionsEmail);
+    console.log('Including GitHub Actions service account for E2E tests\n');
 
     console.log(`Found ${serviceAccounts.length} service accounts:\n`);
     serviceAccounts.forEach((email) => console.log(`  - ${email}`));

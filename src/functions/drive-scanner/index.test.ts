@@ -132,6 +132,7 @@ describe('driveScanner', () => {
       expect(mockDriveGet).toHaveBeenCalledWith({
         fileId: 'test-folder-id',
         fields: 'id,name,mimeType',
+        supportsAllDrives: true,
       });
 
       // Verify Drive API was called correctly with pagination fields
@@ -143,6 +144,8 @@ describe('driveScanner', () => {
           'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
         pageSize: 100,
         pageToken: undefined,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       });
 
       // Verify PubSub messages were published
@@ -349,6 +352,8 @@ describe('driveScanner', () => {
           'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
         pageSize: 100,
         pageToken: undefined,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       });
       expect(mockDriveList).toHaveBeenNthCalledWith(2, {
         q: expect.stringContaining(
@@ -358,6 +363,8 @@ describe('driveScanner', () => {
           'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)',
         pageSize: 100,
         pageToken: 'next-page-token',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       });
     });
   });

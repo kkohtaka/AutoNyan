@@ -8,7 +8,7 @@ resource "google_service_account" "text_firebase_writer" {
 # IAM binding for Firestore access
 resource "google_project_iam_member" "text_firebase_writer_firestore" {
   project = var.project_id
-  role    = "roles/datastore.user"
+  role    = "roles/datastore.owner"
   member  = "serviceAccount:${google_service_account.text_firebase_writer.email}"
 }
 

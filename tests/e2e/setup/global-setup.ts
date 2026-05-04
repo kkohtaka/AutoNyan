@@ -1,3 +1,6 @@
+import { Storage } from '@google-cloud/storage';
+import { google } from 'googleapis';
+import { GoogleAuth } from 'google-auth-library';
 import { getTerraformOutputs } from '../helpers/terraform-outputs';
 
 export default async function globalSetup(): Promise<void> {
@@ -11,6 +14,57 @@ export default async function globalSetup(): Promise<void> {
   try {
     // Get configuration from Terraform outputs and tfvars
     const config = await getTerraformOutputs(process.env.ENVIRONMENT);
+
+    // Clean up old Drive test files before running tests
+    console.log('Cleaning up old Drive test files...');
+    try {
+      const auth = new GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      });
+      const drive = google.drive({ version: 'v3', auth });
+
+      const response = await drive.files.list({
+        q: `'${config.drive_folder_id}' in parents and name contains 'e2e-test' and trashed=false`,
+        fields: 'files(id,name)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+
+      const files = response.data.files || [];
+      for (const file of files) {
+        await drive.files.delete({
+          fileId: file.id!,
+          supportsAllDrives: true,
+        });
+      }
+      console.log(`  ✅ Deleted ${files.length} old test file(s) from Drive`);
+    } catch (error) {
+      console.warn(`  ⚠️  Failed to clean Drive files:`, error);
+    }
+
+    // Clean up old Storage objects before running tests
+    console.log('Cleaning up old Storage objects...');
+    const storage = new Storage();
+
+    try {
+      await storage
+        .bucket(config.document_storage_bucket)
+        .deleteFiles({ prefix: 'documents/' });
+      console.log(
+        `  ✅ Cleaned documents from ${config.document_storage_bucket}`
+      );
+    } catch (error) {
+      console.warn(`  ⚠️  Failed to clean documents bucket:`, error);
+    }
+
+    try {
+      await storage
+        .bucket(config.vision_results_bucket)
+        .deleteFiles({ prefix: 'results/' });
+      console.log(`  ✅ Cleaned results from ${config.vision_results_bucket}`);
+    } catch (error) {
+      console.warn(`  ⚠️  Failed to clean results bucket:`, error);
+    }
 
     // Set environment variables from Terraform configuration if not already set
     if (!process.env.PROJECT_ID && config.project_id) {

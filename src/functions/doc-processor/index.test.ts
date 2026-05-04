@@ -128,12 +128,14 @@ describe('docProcessor', () => {
     expect(mockDrive.files.get).toHaveBeenCalledWith({
       fileId: 'file123',
       fields: 'id,name,mimeType,size,modifiedTime',
+      supportsAllDrives: true,
     });
 
     expect(mockDrive.files.get).toHaveBeenCalledWith(
       {
         fileId: 'file123',
         alt: 'media',
+        supportsAllDrives: true,
       },
       {
         responseType: 'stream',

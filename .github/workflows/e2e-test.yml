@@ -75,6 +75,16 @@ jobs:
           TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
           TF_STATE_LOCATION: ${{ vars.TF_STATE_LOCATION }}
 
+      - name: Generate terraform.tfvars
+        run: npm run setup:terraform-variables
+        env:
+          ENVIRONMENT: staging
+          GCP_REGION: ${{ vars.TF_STATE_LOCATION }}
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+          DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
+          CATEGORY_ROOT_FOLDER_ID: ${{ secrets.CATEGORY_ROOT_FOLDER_ID }}
+          UNCATEGORIZED_FOLDER_ID: ${{ secrets.UNCATEGORIZED_FOLDER_ID }}
+
       - name: Set environment variables
         run: |
           echo "PROJECT_ID=$(gcloud config get-value project)" >> $GITHUB_ENV

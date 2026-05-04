@@ -32,7 +32,10 @@ export interface StorageObjectInfo {
 export async function pollForStorageObject(
   storage: Storage,
   bucketName: string,
-  predicate: (fileName: string) => boolean,
+  predicate: (
+    fileName: string,
+    metadata?: { [key: string]: string | number | boolean | null }
+  ) => boolean,
   options: Partial<PollOptions> = {}
 ): Promise<StorageObjectInfo | null> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -42,16 +45,16 @@ export async function pollForStorageObject(
     const bucket = storage.bucket(bucketName);
     const [files] = await bucket.getFiles();
 
-    const matchingFile = files.find((file) => predicate(file.name));
-
-    if (matchingFile) {
-      const [metadata] = await matchingFile.getMetadata();
-      return {
-        name: matchingFile.name,
-        metadata: metadata.metadata,
-        contentType: metadata.contentType,
-        size: metadata.size ? parseInt(String(metadata.size), 10) : undefined,
-      };
+    for (const file of files) {
+      const [metadata] = await file.getMetadata();
+      if (predicate(file.name, metadata.metadata)) {
+        return {
+          name: file.name,
+          metadata: metadata.metadata,
+          contentType: metadata.contentType,
+          size: metadata.size ? parseInt(String(metadata.size), 10) : undefined,
+        };
+      }
     }
 
     await new Promise((resolve) => setTimeout(resolve, opts.interval));
@@ -139,4 +142,50 @@ export async function waitForVisionCompletion(
   }
 
   throw new Error(`Vision API processing timeout after ${timeout}ms`);
+}
+
+/**
+ * Poll for a Google Drive file to be in a specific folder
+ *
+ * @param drive - Drive API client
+ * @param fileId - File ID to check
+ * @param expectedFolderId - Expected parent folder ID
+ * @param options - Polling options
+ * @returns True if file is in expected folder
+ */
+export async function pollForDriveFileLocation(
+  drive: any,
+  fileId: string,
+  expectedFolderId: string,
+  options: Partial<PollOptions> = {}
+): Promise<boolean> {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < opts.timeout) {
+    try {
+      const fileMetadata = await drive.files.get({
+        fileId,
+        fields: 'parents',
+        supportsAllDrives: true,
+      });
+
+      if (fileMetadata.data.parents?.includes(expectedFolderId)) {
+        return true;
+      }
+    } catch (error) {
+      // File might be temporarily inaccessible during move operation
+      // Continue polling
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, opts.interval));
+  }
+
+  if (opts.errorOnTimeout) {
+    throw new Error(
+      `Timeout waiting for file ${fileId} to be moved to folder ${expectedFolderId} after ${opts.timeout}ms`
+    );
+  }
+
+  return false;
 }
