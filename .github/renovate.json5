@@ -9,6 +9,10 @@
   prHourlyLimit: 0,
   prConcurrentLimit: 10,
   platformAutomerge: true,
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["before 3am on Monday"],
+  },
   packageRules: [
     {
       matchUpdateTypes: ["major", "minor", "patch"],
@@ -66,7 +70,7 @@
       matchManagers: ["npm"],
       addLabels: ["npm"],
       commitMessagePrefix: "chore(deps-npm):",
-      rangeStrategy: "bump",
+      rangeStrategy: "update-lockfile",
       semanticCommitType: "chore",
       semanticCommitScope: "deps",
     },
@@ -75,7 +79,7 @@
       matchDepTypes: ["devDependencies"],
       addLabels: ["npm"],
       commitMessagePrefix: "npm(deps-dev):",
-      rangeStrategy: "bump",
+      rangeStrategy: "update-lockfile",
     },
     {
       matchManagers: ["github-actions"],
