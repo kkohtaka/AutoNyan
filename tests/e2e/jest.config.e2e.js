@@ -9,8 +9,8 @@ module.exports = {
   maxWorkers: 1,
   maxConcurrency: 1,
 
-  // Longer timeouts for E2E tests (10 minutes for full pipeline)
-  testTimeout: 600000,
+  // Longer timeouts for E2E tests (25 minutes for full pipeline with cold starts)
+  testTimeout: 1500000,
 
   // Setup and teardown
   globalSetup: '<rootDir>/setup/global-setup.ts',
