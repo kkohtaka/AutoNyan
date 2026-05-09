@@ -35,7 +35,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
   let categoryFolderId: string; // Test category folder (e.g., "請求書")
 
   const logger = new E2ELogger('full-pipeline');
-  const TEST_TIMEOUT = 600000; // 10 minutes for full pipeline
+  const TEST_TIMEOUT = 1500000; // 25 minutes: stage2(5m) + stage3(9m) + stage4(1m) + stage5(5m) + buffer
   const testStartTime = new Date();
 
   beforeAll(async () => {
@@ -182,7 +182,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           (fileName, metadata) =>
             fileName.startsWith('documents/') &&
             metadata?.originalFileId === testFileId,
-          { timeout: 120000, interval: 5000 }
+          { timeout: 300000, interval: 5000 } // 5 minutes to account for cold starts
         );
 
         expect(docObject).toBeDefined();
@@ -205,7 +205,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           visionBucket,
           (fileName) =>
             fileName.includes(contentHash) && fileName.endsWith('.json'),
-          { timeout: 300000, interval: 10000 } // 5 minutes for Vision API
+          { timeout: 540000, interval: 10000 } // 9 minutes to match text-vision-processor Cloud Function timeout
         );
 
         expect(visionResult).toBeDefined();
@@ -273,7 +273,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           'Polling for file to be moved to target folder...',
           {
             expectedFolderId,
-            timeout: '90 seconds',
+            timeout: '150 seconds',
           }
         );
 
@@ -281,7 +281,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           drive,
           testFileId,
           expectedFolderId,
-          { timeout: 90000, interval: 5000, errorOnTimeout: false }
+          { timeout: 150000, interval: 5000, errorOnTimeout: false } // 150s to cover 5-retry linear backoff in file-classifier
         );
 
         if (fileMoved) {
