@@ -28,6 +28,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
   let drive: drive_v3.Drive;
 
   let testFolderId: string;
+  let testSubFolderId: string; // Isolated subfolder per test run to avoid Drive scan picking up accumulated files
   let testFileId: string;
   let testFileName: string;
   let contentHash: string;
@@ -67,6 +68,17 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     testFolderId = outputs.drive_folder_id;
     categoryRootFolderId = outputs.category_root_folder_id;
 
+    // Create isolated subfolder for this test run to avoid Drive Scanner picking up
+    // accumulated files from previous runs (which would create a large PubSub backlog)
+    logger.log('setup', 'Creating isolated test subfolder');
+    testSubFolderId = await createTestFolder(
+      drive,
+      testFolderId,
+      `e2e-run-${Date.now()}`,
+      [outputs.file_classifier_service_account_email]
+    );
+    logger.log('setup', 'Isolated test subfolder created', { testSubFolderId });
+
     // Create test category folder for classification
     logger.log('setup', 'Creating test category folder');
     categoryFolderId = await createTestFolder(
@@ -102,6 +114,25 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       contentHash,
     });
 
+    // Cleanup isolated test subfolder (deleting the folder removes the test file inside it too)
+    if (testSubFolderId) {
+      try {
+        await drive.files.delete({
+          fileId: testSubFolderId,
+          supportsAllDrives: true,
+        });
+        logger.log('teardown', 'Isolated test subfolder deleted', {
+          testSubFolderId,
+        });
+      } catch (error) {
+        logger.log(
+          'teardown',
+          'Failed to delete isolated test subfolder (may not exist)',
+          { error }
+        );
+      }
+    }
+
     // Cleanup test category folder
     if (categoryFolderId) {
       try {
@@ -134,9 +165,10 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         logger.log('stage-1', 'Uploading test file to Google Drive');
 
         const outputs = await getTerraformOutputs('staging');
+        // Upload to isolated subfolder so Drive Scanner only finds this one file
         const testFile = await uploadTestFile(
           drive,
-          testFolderId,
+          testSubFolderId,
           './tests/e2e/fixtures/sample-documents/test-document.txt',
           [outputs.file_classifier_service_account_email]
         );
@@ -161,11 +193,12 @@ describe('AutoNyan E2E - Full Pipeline', () => {
 
         logger.log('stage-1', 'Publishing PubSub message to trigger scanner', {
           topic: outputs.drive_scan_trigger_topic,
-          folderId: testFolderId,
+          folderId: testSubFolderId,
         });
 
+        // Scan the isolated subfolder so Drive Scanner only finds this test's file
         await topic.publishMessage({
-          data: Buffer.from(JSON.stringify({ folderId: testFolderId })),
+          data: Buffer.from(JSON.stringify({ folderId: testSubFolderId })),
         });
 
         logger.log('stage-1', 'Drive Scanner triggered successfully');

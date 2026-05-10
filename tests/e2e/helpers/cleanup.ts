@@ -27,7 +27,7 @@ export async function cleanupTestResources(
   if (testFileId) {
     cleanupTasks.push(
       drive.files
-        .delete({ fileId: testFileId })
+        .delete({ fileId: testFileId, supportsAllDrives: true })
         .then(() => undefined)
         .catch((err) =>
           console.warn(`Failed to cleanup Drive file ${testFileId}:`, err)
