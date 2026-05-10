@@ -15,8 +15,10 @@ export default async function globalSetup(): Promise<void> {
     // Get configuration from Terraform outputs and tfvars
     const config = await getTerraformOutputs(process.env.ENVIRONMENT);
 
-    // Clean up old Drive test files before running tests
-    console.log('Cleaning up old Drive test files...');
+    // Clean up old Drive test artifacts before running tests
+    // This covers both legacy e2e-test-* files (direct children) and
+    // isolated e2e-run-* subfolders from the current approach
+    console.log('Cleaning up old Drive test artifacts...');
     try {
       const auth = new GoogleAuth({
         scopes: ['https://www.googleapis.com/auth/drive'],
@@ -24,7 +26,7 @@ export default async function globalSetup(): Promise<void> {
       const drive = google.drive({ version: 'v3', auth });
 
       const response = await drive.files.list({
-        q: `'${config.drive_folder_id}' in parents and name contains 'e2e-test' and trashed=false`,
+        q: `'${config.drive_folder_id}' in parents and (name contains 'e2e-test' or name contains 'e2e-run') and trashed=false`,
         fields: 'files(id,name)',
         supportsAllDrives: true,
         includeItemsFromAllDrives: true,
@@ -32,14 +34,23 @@ export default async function globalSetup(): Promise<void> {
 
       const files = response.data.files || [];
       for (const file of files) {
-        await drive.files.delete({
-          fileId: file.id!,
-          supportsAllDrives: true,
-        });
+        try {
+          await drive.files.delete({
+            fileId: file.id!,
+            supportsAllDrives: true,
+          });
+        } catch (err) {
+          console.warn(
+            `  ⚠️  Failed to delete ${file.name} (${file.id}):`,
+            err
+          );
+        }
       }
-      console.log(`  ✅ Deleted ${files.length} old test file(s) from Drive`);
+      console.log(
+        `  ✅ Deleted ${files.length} old test artifact(s) from Drive`
+      );
     } catch (error) {
-      console.warn(`  ⚠️  Failed to clean Drive files:`, error);
+      console.warn(`  ⚠️  Failed to clean Drive artifacts:`, error);
     }
 
     // Clean up old Storage objects before running tests
