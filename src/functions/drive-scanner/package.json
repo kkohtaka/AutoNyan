@@ -12,7 +12,7 @@
     "format": "prettier --write '**/*.ts'"
   },
   "engines": {
-    "node": "24.15.0"
+    "node": "24.16.0"
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^5.0.0",
