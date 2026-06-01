@@ -17,7 +17,7 @@
   "dependencies": {
     "@google-cloud/functions-framework": "^5.0.0",
     "@google-cloud/pubsub": "^5.3.0",
-    "googleapis": "^171.4.0",
+    "googleapis": "^173.0.0",
     "@google/events": "^5.4.0",
     "autonyan-shared": "file:../../shared"
   },
