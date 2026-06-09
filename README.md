@@ -109,20 +109,23 @@ npm run terraform:init
 
 #### 2. Project Variables
 
-Copy the example configuration file:
+Create an environment-specific variables file (gitignored):
 
 ```bash
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+cp terraform/terraform.tfvars.example terraform/environments/staging.tfvars
 ```
 
-Edit `terraform/terraform.tfvars` with your values:
+Edit `terraform/environments/staging.tfvars` with your values:
 
 ```hcl
 project_id              = "your-gcp-project-id"
+environment             = "staging"
 region                  = "us-central1"
 drive_folder_id         = "your-google-drive-folder-id"
-drive_scanner_schedule  = "0 9 * * 1"  # Weekly on Mondays at 9 AM UTC
+drive_scanner_schedule  = "0 9 * * *"  # Daily at 9 AM UTC
 ```
+
+For production, create a separate `terraform/environments/production.tfvars` with `environment = "production"` and production-specific values. Select the environment with the `ENVIRONMENT` variable (defaults to `staging`).
 
 **Finding Your Drive Folder ID:**
 - Open Google Drive in your browser
@@ -140,19 +143,25 @@ This command builds the functions and deploys all infrastructure via Terraform.
 
 #### 4. Configure Google Drive Access
 
-Google Drive requires **manual folder sharing** with the service account:
+Google Drive requires **manual folder sharing** with the service account. Use the automated setup script:
 
-1. Get the service account email:
+1. Authenticate with Drive API scope (required once per machine):
    ```bash
-   terraform output service_account_email
+   gcloud auth login --enable-gdrive-access
    ```
 
-2. Share your Google Drive folders:
-   - Open [Google Drive](https://drive.google.com)
-   - Right-click the folder(s) to share
-   - Click "Share"
-   - Add the service account email as "Editor"
-   - Click "Send"
+2. Run the sharing script:
+   ```bash
+   # For staging (default)
+   npm run setup:share-drive-folders
+
+   # For production
+   ENVIRONMENT=production \
+     DRIVE_FOLDER_ID=your-production-folder-id \
+     CATEGORY_ROOT_FOLDER_ID=your-category-root-id \
+     UNCATEGORIZED_FOLDER_ID=your-uncategorized-id \
+     npm run setup:share-drive-folders
+   ```
 
 3. Test the setup:
    ```bash

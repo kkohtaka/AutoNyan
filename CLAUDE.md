@@ -102,12 +102,15 @@ npm run lint:terraform     # Terraform validation and linting
 # Set environment (staging is default)
 export ENVIRONMENT=staging  # or 'production'
 
-npm run terraform:init     # Initialize backend (first time or after changes)
+npm run terraform:init     # Initialize backend (-reconfigure switches environments automatically)
 npm run terraform:plan     # Preview infrastructure changes
 npm run terraform:apply    # Apply changes to GCP
 npm run terraform:validate # Validate configuration without backend
 npm run terraform:destroy  # Destroy all infrastructure (caution)
 ```
+
+Each command reads `terraform/environments/${ENVIRONMENT}.tfvars` (gitignored).
+Create this file from `terraform/terraform.tfvars.example` for each environment.
 
 ### Deployment Workflow
 ```bash
@@ -666,11 +669,24 @@ unzip -p logs.zip "*{job-name}*" | grep -E "(FAIL|Error|heap out of memory)"
 
 **Initial setup workflow:**
 1. Deploy infrastructure: `npm run deploy`
-2. Share Drive folders with service accounts (one-time setup): `npm run setup:share-drive-folders`
-   - Alternatively, manually share folders with each service account as "Editor"
+2. Authenticate with Drive scope (required once per machine):
+   ```bash
+   gcloud auth login --enable-gdrive-access
+   ```
+   Note: `gcloud auth application-default login` does NOT work for Drive API — Google blocks unverified apps requesting Drive scope via ADC.
+3. Share Drive folders with service accounts (one-time setup):
+   ```bash
+   # staging uses values from terraform/environments/staging.tfvars
+   npm run setup:share-drive-folders
+
+   # production requires explicit folder IDs (not in local tfvars)
+   ENVIRONMENT=production \
+     DRIVE_FOLDER_ID=xxx CATEGORY_ROOT_FOLDER_ID=xxx UNCATEGORIZED_FOLDER_ID=xxx \
+     npm run setup:share-drive-folders
+   ```
    - **Note**: This is a one-time setup. Once shared, permissions persist across deployments
    - Not required in CI/CD (manual setup only)
-3. Test access via Drive check: `npm run test:e2e:check-drive`
+4. Test access via Drive check: `npm run test:e2e:check-drive`
 
 **Permission model:**
 - ✅ Can access: Explicitly shared folders and files
