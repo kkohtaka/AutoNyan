@@ -4,7 +4,7 @@
 set -e
 
 # Configuration
-TFVARS_FILE="terraform/terraform.tfvars"
+TFVARS_FILE="terraform/environments/${ENVIRONMENT}.tfvars"
 ENVIRONMENT=${ENVIRONMENT:-"staging"}
 
 echo "Setting up terraform.tfvars for GitHub Actions..."

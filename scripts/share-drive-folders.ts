@@ -43,11 +43,19 @@ interface ShareResult {
  * Get Terraform variables from terraform.tfvars
  */
 function getTerraformVariables(): TerraformVariables {
+  const environment = process.env.ENVIRONMENT || 'staging';
   const terraformDir = path.join(process.cwd(), 'terraform');
-  const tfvarsPath = path.join(terraformDir, 'terraform.tfvars');
+  const tfvarsPath = path.join(
+    terraformDir,
+    'environments',
+    `${environment}.tfvars`
+  );
 
   if (!fs.existsSync(tfvarsPath)) {
-    throw new Error(`terraform.tfvars not found at ${tfvarsPath}`);
+    throw new Error(
+      `terraform.tfvars not found at ${tfvarsPath}\n` +
+        `Run: npm run setup:terraform-variables with ENVIRONMENT=${environment}`
+    );
   }
 
   const content = fs.readFileSync(tfvarsPath, 'utf-8');
@@ -155,15 +163,19 @@ async function shareDriveFolder(): Promise<void> {
   console.log(`Environment: ${environment}\n`);
 
   try {
-    // Get configuration
+    // Get configuration - env vars take precedence over tfvars to support multi-environment runs
     const tfvars = getTerraformVariables();
-    const folderId = tfvars.drive_folder_id;
+    const folderId = process.env.DRIVE_FOLDER_ID || tfvars.drive_folder_id;
     const projectId = tfvars.project_id;
-    const categoryRootFolderId = tfvars.category_root_folder_id;
-    const uncategorizedFolderId = tfvars.uncategorized_folder_id;
+    const categoryRootFolderId =
+      process.env.CATEGORY_ROOT_FOLDER_ID || tfvars.category_root_folder_id;
+    const uncategorizedFolderId =
+      process.env.UNCATEGORIZED_FOLDER_ID || tfvars.uncategorized_folder_id;
 
     if (!folderId) {
-      throw new Error('drive_folder_id not found in terraform.tfvars');
+      throw new Error(
+        'drive_folder_id not found. Set DRIVE_FOLDER_ID env var or add it to terraform.tfvars'
+      );
     }
 
     console.log(`Project: ${projectId}`);
@@ -202,12 +214,23 @@ async function shareDriveFolder(): Promise<void> {
     serviceAccounts.forEach((email) => console.log(`  - ${email}`));
     console.log();
 
-    // Initialize Drive API with user credentials
-    const auth = new google.auth.GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    });
+    // Initialize Drive API using gcloud user credentials (supports --enable-gdrive-access)
+    // ADC with Drive scope is blocked by Google for unverified apps, so we use the gcloud token directly
+    let accessToken: string;
+    try {
+      accessToken = execSync('gcloud auth print-access-token', {
+        encoding: 'utf-8',
+      }).trim();
+    } catch {
+      throw new Error(
+        'Failed to get gcloud access token.\n' +
+          'Run: gcloud auth login --enable-gdrive-access'
+      );
+    }
 
-    const drive = google.drive({ version: 'v3', auth });
+    const oauth2Client = new google.auth.OAuth2();
+    oauth2Client.setCredentials({ access_token: accessToken });
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
     // Share main folder
     console.log('Sharing main Drive folder...\n');
@@ -270,13 +293,12 @@ async function shareDriveFolder(): Promise<void> {
 
     if (
       errorMessage.includes('insufficient authentication scopes') ||
+      errorMessage.includes('gcloud access token') ||
       errorCode === 403
     ) {
-      console.error('\n⚠️  Authentication scope issue detected!\n');
-      console.error('Re-authenticate with Drive API scope to share folders:\n');
-      console.error(
-        '  gcloud auth application-default login --scopes=https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/drive\n'
-      );
+      console.error('\n⚠️  Authentication issue detected!\n');
+      console.error('Re-authenticate with Drive access enabled:\n');
+      console.error('  gcloud auth login --enable-gdrive-access\n');
     }
 
     process.exit(1);
