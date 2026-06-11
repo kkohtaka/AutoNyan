@@ -41,23 +41,36 @@ Collect the information needed to create the PR.
 
 Follow these steps in order. Stop and ask the user if anything is unclear.
 
-### Step 1 — Create a branch (if still on master)
+### Step 1 — Ensure the work is on a properly named branch
 
-If the current branch is `master`, create a new branch before committing:
-
-- Branch naming convention:
-  - `feature/<description>` or `feat/<description>` — new functionality
-  - `fix/<description>` — bug fix
-  - `refactor/<description>` — code restructuring without behavior change
-  - `docs/<description>` — documentation only
-  - `ci/<description>` — CI/CD pipeline changes
-  - `chore/<description>` — maintenance (deps, config)
-- Use lowercase kebab-case for the description
-- If the user passed `$ARGUMENTS`, use it as the branch name suffix (e.g. `fix/$ARGUMENTS`)
+First, fetch the latest remote state:
 
 ```bash
-git checkout -b <branch-name>
+git fetch origin
 ```
+
+**Case A — current branch is NOT suitable** (it is `master`, or its name does not describe the work):
+
+Create a new branch from the remote default branch and move the relevant changes there:
+
+```bash
+git checkout -b <branch-name> origin/master
+```
+
+- Derive the branch name from the actual diff/changes — specific enough to convey purpose at a glance
+- Convention: `feat/`, `fix/`, `refactor/`, `docs/`, `ci/`, `chore/` + lowercase kebab-case description
+- If the user passed `$ARGUMENTS`, use it as the branch name (adjusted to fit the convention if needed)
+- Cherry-pick any commits from the previous branch that belong to this PR, or re-stage uncommitted changes
+
+**Case B — current branch is already a suitable work branch**:
+
+Stay on the current branch. Rebase onto the remote default branch so the PR has a clean, up-to-date base:
+
+```bash
+git rebase origin/master
+```
+
+Resolve any conflicts before continuing.
 
 ### Step 2 — Commit uncommitted changes
 
