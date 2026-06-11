@@ -14,8 +14,13 @@ interface TerraformVariables {
 }
 
 function getTerraformVariables(): TerraformVariables {
+  const environment = process.env.ENVIRONMENT || 'staging';
   const terraformDir = path.join(process.cwd(), 'terraform');
-  const tfvarsPath = path.join(terraformDir, 'terraform.tfvars');
+  const tfvarsPath = path.join(
+    terraformDir,
+    'environments',
+    `${environment}.tfvars`
+  );
 
   if (!fs.existsSync(tfvarsPath)) {
     throw new Error(`terraform.tfvars not found at ${tfvarsPath}`);

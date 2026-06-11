@@ -16,11 +16,16 @@ interface TerraformVariables {
 }
 
 /**
- * Get Terraform variables from terraform.tfvars
+ * Get Terraform variables from per-environment tfvars file
  */
 function getTerraformVariables(): TerraformVariables {
+  const environment = process.env.ENVIRONMENT || 'staging';
   const terraformDir = path.join(process.cwd(), 'terraform');
-  const tfvarsPath = path.join(terraformDir, 'terraform.tfvars');
+  const tfvarsPath = path.join(
+    terraformDir,
+    'environments',
+    `${environment}.tfvars`
+  );
 
   if (!fs.existsSync(tfvarsPath)) {
     throw new Error(`terraform.tfvars not found at ${tfvarsPath}`);
@@ -51,7 +56,7 @@ async function testDriveAccess(): Promise<void> {
     const projectId = tfvars.project_id;
 
     if (!folderId) {
-      throw new Error('drive_folder_id not found in terraform.tfvars');
+      throw new Error('drive_folder_id not found in tfvars');
     }
 
     console.log(`Project: ${projectId}`);

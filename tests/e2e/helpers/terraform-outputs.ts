@@ -38,8 +38,13 @@ function parseTerraformVariables(): TerraformVariables {
     return cachedVariables;
   }
 
+  const environment = process.env.ENVIRONMENT || 'staging';
   const terraformDir = path.join(process.cwd(), 'terraform');
-  const tfvarsPath = path.join(terraformDir, 'terraform.tfvars');
+  const tfvarsPath = path.join(
+    terraformDir,
+    'environments',
+    `${environment}.tfvars`
+  );
 
   if (!fs.existsSync(tfvarsPath)) {
     cachedVariables = {};
@@ -70,7 +75,7 @@ function parseTerraformVariables(): TerraformVariables {
     cachedVariables = variables;
     return variables;
   } catch (error) {
-    console.warn('Failed to parse terraform.tfvars:', error);
+    console.warn('Failed to parse terraform tfvars:', error);
     cachedVariables = {};
     return cachedVariables;
   }
