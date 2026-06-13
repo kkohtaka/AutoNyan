@@ -198,4 +198,102 @@ describe('docProcessor', () => {
       'Document scan preparation failed: Drive API error'
     );
   });
+
+  test('should ACK (skip) when Drive returns invalid file data', async () => {
+    // Drive returns a file with neither id nor name -> permanent failure
+    mockDrive.files.get.mockResolvedValueOnce({
+      data: {
+        mimeType: 'application/pdf',
+      },
+    });
+
+    const cloudEvent: CloudEvent<MessagePublishedData> = {
+      id: 'test-event-id',
+      source: 'test-source',
+      specversion: '1.0',
+      type: 'google.cloud.pubsub.topic.v1.messagePublished',
+      time: '2023-01-01T00:00:00.000Z',
+      data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
+        'base64'
+      ) as any,
+    };
+
+    const result = await docProcessor(cloudEvent);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
+      'Invalid file data received for fileId: file123'
+    );
+  });
+
+  test('should throw (retry) when ENVIRONMENT is not set', async () => {
+    delete process.env.ENVIRONMENT;
+
+    const cloudEvent: CloudEvent<MessagePublishedData> = {
+      id: 'test-event-id',
+      source: 'test-source',
+      specversion: '1.0',
+      type: 'google.cloud.pubsub.topic.v1.messagePublished',
+      time: '2023-01-01T00:00:00.000Z',
+      data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
+        'base64'
+      ) as any,
+    };
+
+    await expect(docProcessor(cloudEvent)).rejects.toThrow(
+      'ENVIRONMENT environment variable is required'
+    );
+  });
+
+  test('should skip upload when object already exists in Cloud Storage', async () => {
+    // Self-referencing stream mock so chained .on('data').on('end') both fire
+    const mockStream: any = {
+      on: jest.fn().mockImplementation((event, callback) => {
+        if (event === 'data') {
+          process.nextTick(() => callback(Buffer.from('test file content')));
+        } else if (event === 'end') {
+          process.nextTick(() => callback());
+        }
+        return mockStream;
+      }),
+    };
+
+    mockDrive.files.get
+      .mockResolvedValueOnce({
+        data: {
+          id: 'file123',
+          name: 'test-document.pdf',
+          mimeType: 'application/pdf',
+          size: '1024',
+          modifiedTime: '2023-01-01T00:00:00.000Z',
+        },
+      })
+      .mockResolvedValueOnce({
+        data: mockStream,
+      });
+
+    // Object already exists in the bucket
+    mockStorage.bucket().file().exists.mockResolvedValueOnce([true]);
+
+    const cloudEvent: CloudEvent<MessagePublishedData> = {
+      id: 'test-event-id',
+      source: 'test-source',
+      specversion: '1.0',
+      type: 'google.cloud.pubsub.topic.v1.messagePublished',
+      time: '2023-01-01T00:00:00.000Z',
+      data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
+        'base64'
+      ) as any,
+    };
+
+    const result = await docProcessor(cloudEvent);
+
+    expect(result.message).toContain(
+      'already exists in Cloud Storage, skipped upload'
+    );
+    expect(result.fileId).toBe('file123');
+    expect(
+      mockStorage.bucket().file().createWriteStream
+    ).not.toHaveBeenCalled();
+  }, 20000);
 });
