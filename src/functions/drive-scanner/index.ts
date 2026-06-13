@@ -3,10 +3,9 @@ import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
   createErrorResponse,
-  ParameterParsingError,
+  isPermanentError,
   parsePubSubEvent,
   validateRequiredFields,
-  ValidationError,
 } from 'autonyan-shared';
 import { drive_v3, google } from 'googleapis';
 
@@ -36,6 +35,7 @@ interface Result {
   files: drive_v3.Schema$File[];
   publishedMessages: number;
   topicName: string | null;
+  skipped?: boolean;
 }
 
 export const driveScanner = async (
@@ -165,14 +165,23 @@ export const driveScanner = async (
     // eslint-disable-next-line no-console
     console.error('Drive document scanner error:', errorResponse);
 
-    // Re-throw with proper error type
-    if (
-      error instanceof ParameterParsingError ||
-      error instanceof ValidationError
-    ) {
-      throw error;
+    // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
+    if (isPermanentError(error)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
+      );
+      return {
+        message: `Skipped (permanent failure): ${errorResponse.error}`,
+        filesFound: 0,
+        files: [],
+        publishedMessages: 0,
+        topicName: process.env.DOC_PROCESS_TRIGGER_TOPIC || null,
+        skipped: true,
+      };
     }
 
+    // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
     throw new Error(`Drive document scanner failed: ${errorResponse.error}`);
   }
 };

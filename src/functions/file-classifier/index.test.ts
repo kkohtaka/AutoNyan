@@ -193,7 +193,7 @@ describe('fileClassifier', () => {
     );
   });
 
-  it('should throw error if required fields are missing', async () => {
+  it('should ACK (skip) if required fields are missing without retrying', async () => {
     // Create event with missing fileName field
     const event: CloudEvent<MessagePublishedData> = {
       specversion: '1.0',
@@ -215,8 +215,9 @@ describe('fileClassifier', () => {
       } as unknown as MessagePublishedData,
     };
 
-    await expect(fileClassifier(event)).rejects.toThrow(
-      'Missing required field'
-    );
+    const result = await fileClassifier(event);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain('Missing required field');
   });
 });

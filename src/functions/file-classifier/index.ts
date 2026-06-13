@@ -4,6 +4,7 @@ import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePubl
 import {
   createErrorResponse,
   getProjectId,
+  isPermanentError,
   parsePubSubEvent,
   validateRequiredFields,
 } from 'autonyan-shared';
@@ -26,6 +27,7 @@ interface Result {
   confidence: number;
   fileId: string;
   fileName: string;
+  skipped?: boolean;
 }
 
 /**
@@ -171,6 +173,23 @@ export const fileClassifier = async (
     // eslint-disable-next-line no-console
     console.error('File classification error:', errorResponse);
 
+    // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
+    if (isPermanentError(error)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
+      );
+      return {
+        message: `Skipped (permanent failure): ${errorResponse.error}`,
+        category: null,
+        confidence: 0,
+        fileId: '',
+        fileName: '',
+        skipped: true,
+      };
+    }
+
+    // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
     throw new Error(`File classification failed: ${errorResponse.error}`);
   }
 };

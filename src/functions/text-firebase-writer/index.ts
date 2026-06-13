@@ -5,9 +5,9 @@ import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObject
 import {
   createErrorResponse,
   getProjectId,
-  ParameterParsingError,
+  isPermanentError,
   parseStorageEvent,
-  ValidationError,
+  PermanentError,
 } from 'autonyan-shared';
 
 interface PageText {
@@ -38,6 +38,7 @@ interface Result {
   pages: number;
   originalFileName: string;
   classificationTriggered: boolean;
+  skipped?: boolean;
 }
 
 interface VisionApiResponse {
@@ -78,7 +79,7 @@ export const textFirebaseWriter = async (
     ) {
       // eslint-disable-next-line no-console
       console.log(`Skipping non-JSON file: ${objectName}`);
-      throw new Error(`Unsupported file type: ${contentType}`);
+      throw new PermanentError(`Unsupported file type: ${contentType}`);
     }
 
     // Initialize clients
@@ -100,7 +101,9 @@ export const textFirebaseWriter = async (
     const processedAt = String(metadata.metadata?.processedAt || '');
 
     if (!originalFileId || !originalFileName || !contentHash) {
-      throw new Error('Missing required metadata from Vision API result file');
+      throw new PermanentError(
+        'Missing required metadata from Vision API result file'
+      );
     }
 
     // eslint-disable-next-line no-console
@@ -115,7 +118,7 @@ export const textFirebaseWriter = async (
     );
 
     if (!visionResult.responses || visionResult.responses.length === 0) {
-      throw new Error('No responses found in Vision API result');
+      throw new PermanentError('No responses found in Vision API result');
     }
 
     // Aggregate text from all pages
@@ -260,14 +263,25 @@ export const textFirebaseWriter = async (
     // eslint-disable-next-line no-console
     console.error('Firebase storage error:', errorResponse);
 
-    // Re-throw with proper error type
-    if (
-      error instanceof ParameterParsingError ||
-      error instanceof ValidationError
-    ) {
-      throw error;
+    // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
+    if (isPermanentError(error)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
+      );
+      return {
+        message: `Skipped (permanent failure): ${errorResponse.error}`,
+        firestoreDocId: '',
+        textLength: 0,
+        confidence: 0,
+        pages: 0,
+        originalFileName: '',
+        classificationTriggered: false,
+        skipped: true,
+      };
     }
 
+    // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
     throw new Error(`Firebase storage failed: ${errorResponse.error}`);
   }
 };

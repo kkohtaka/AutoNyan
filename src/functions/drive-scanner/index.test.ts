@@ -74,12 +74,16 @@ describe('driveScanner', () => {
   });
 
   describe('CloudEvent request', () => {
-    it('should throw error when folderId is missing', async () => {
+    it('should ACK (skip) when folderId is missing without retrying', async () => {
       const cloudEvent = buildEvent({});
 
-      await expect(driveScanner(cloudEvent)).rejects.toThrow(
-        'Missing required fields: folderId'
-      );
+      const result = await driveScanner(cloudEvent);
+
+      expect(result.skipped).toBe(true);
+      expect(result.filesFound).toBe(0);
+      expect(result.publishedMessages).toBe(0);
+      expect(result.message).toContain('Missing required fields: folderId');
+      expect(mockDriveGet).not.toHaveBeenCalled();
     });
 
     it('should successfully process CloudEvent and return result', async () => {

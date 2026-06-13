@@ -38,6 +38,23 @@ export class ValidationError extends Error {
 }
 
 /**
+ * Marks a failure as PERMANENT (non-retryable). Handlers should ACK
+ * (return normally) on permanent failures so the message is NOT redelivered,
+ * preventing repeated billable-API invocations ("Denial of Wallet").
+ * Use for unsupported input, missing required metadata, and other conditions
+ * that cannot succeed on retry.
+ */
+export class PermanentError extends Error {
+  constructor(
+    message: string,
+    public readonly cause?: unknown
+  ) {
+    super(message);
+    this.name = 'PermanentError';
+  }
+}
+
+/**
  * Parses PubSub CloudEvent data and returns typed message data
  * @param cloudEvent - The CloudEvent from PubSub trigger
  * @returns Parsed message data with optional attributes
@@ -228,6 +245,23 @@ export function getProjectId(): string {
 }
 
 /**
+ * Determines whether an error represents a PERMANENT (non-retryable) failure.
+ * Permanent failures should be ACKed by the handler (return a skipped result)
+ * rather than thrown, so Eventarc/PubSub does not redeliver the message.
+ * Transient failures (everything else) should be thrown so RETRY_POLICY_RETRY
+ * retries them.
+ * @param error - The error to classify
+ * @returns true if the error is permanent and the message should be ACKed
+ */
+export function isPermanentError(error: unknown): boolean {
+  return (
+    error instanceof PermanentError ||
+    error instanceof ValidationError ||
+    error instanceof ParameterParsingError
+  );
+}
+
+/**
  * Creates a standardized error response for Cloud Functions
  * @param error - The error that occurred
  * @param context - Additional context about where the error occurred
@@ -240,7 +274,10 @@ export function createErrorResponse(
   let errorMessage: string;
   let errorType: string;
 
-  if (error instanceof ParameterParsingError) {
+  if (error instanceof PermanentError) {
+    errorMessage = error.message;
+    errorType = 'PermanentError';
+  } else if (error instanceof ParameterParsingError) {
     errorMessage = error.message;
     errorType = 'ParameterParsingError';
   } else if (error instanceof ValidationError) {

@@ -5,9 +5,11 @@ import {
   createErrorResponse,
   getEnvironmentVariables,
   getProjectId,
+  isPermanentError,
   ParameterParsingError,
   parsePubSubEvent,
   parseStorageEvent,
+  PermanentError,
   validateRequiredFields,
   ValidationError,
 } from './index';
@@ -258,6 +260,56 @@ describe('Parameter Parser', () => {
         context: 'testContext',
         type: 'UnknownError',
       });
+    });
+
+    it('should create error response for PermanentError', () => {
+      const error = new PermanentError('Test permanent error');
+      const result = createErrorResponse(error, 'testContext');
+
+      expect(result).toEqual({
+        error: 'Test permanent error',
+        context: 'testContext',
+        type: 'PermanentError',
+      });
+    });
+  });
+
+  describe('PermanentError', () => {
+    it('should set the name to PermanentError', () => {
+      const error = new PermanentError('boom');
+      expect(error.name).toBe('PermanentError');
+      expect(error.message).toBe('boom');
+      expect(error).toBeInstanceOf(Error);
+    });
+
+    it('should expose the optional cause', () => {
+      const cause = new Error('underlying');
+      const error = new PermanentError('boom', cause);
+      expect(error.cause).toBe(cause);
+    });
+  });
+
+  describe('isPermanentError', () => {
+    it('should treat PermanentError as permanent', () => {
+      expect(isPermanentError(new PermanentError('x'))).toBe(true);
+    });
+
+    it('should treat ValidationError as permanent', () => {
+      expect(isPermanentError(new ValidationError('x'))).toBe(true);
+    });
+
+    it('should treat ParameterParsingError as permanent', () => {
+      expect(isPermanentError(new ParameterParsingError('x'))).toBe(true);
+    });
+
+    it('should treat a generic Error as transient', () => {
+      expect(isPermanentError(new Error('x'))).toBe(false);
+    });
+
+    it('should treat non-Error values as transient', () => {
+      expect(isPermanentError('string error')).toBe(false);
+      expect(isPermanentError(undefined)).toBe(false);
+      expect(isPermanentError(null)).toBe(false);
     });
   });
 });
