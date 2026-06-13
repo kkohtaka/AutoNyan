@@ -142,17 +142,22 @@ describe('textVisionProcessor', () => {
     );
   });
 
-  it('should reject unsupported file types', async () => {
+  it('should ACK (skip) unsupported file types without retrying', async () => {
     const cloudEvent = createCloudEvent({
       contentType: 'application/zip',
     });
 
-    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.operationId).toBe('skipped');
+    expect(result.message).toContain(
       'Unsupported file type for text extraction: application/zip'
     );
+    expect(mockVision.asyncBatchAnnotateFiles).not.toHaveBeenCalled();
   });
 
-  it('should require PROJECT_ID environment variable', async () => {
+  it('should ACK (skip) when PROJECT_ID environment variable is missing', async () => {
     delete process.env.PROJECT_ID;
 
     const cloudEvent = createCloudEvent({
@@ -169,12 +174,15 @@ describe('textVisionProcessor', () => {
 
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
 
-    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
       'PROJECT_ID environment variable is required'
     );
   });
 
-  it('should require original file metadata', async () => {
+  it('should ACK (skip) when original file metadata is missing', async () => {
     const cloudEvent = createCloudEvent({
       contentType: 'application/pdf',
     });
@@ -185,8 +193,34 @@ describe('textVisionProcessor', () => {
 
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
 
-    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
       'Missing required metadata from uploaded file'
+    );
+  });
+
+  it('should throw (retry) on transient Vision API failures', async () => {
+    const cloudEvent = createCloudEvent({
+      contentType: 'application/pdf',
+    });
+
+    const mockMetadata = {
+      metadata: {
+        originalFileId: 'file123',
+        originalFileName: 'test.pdf',
+        contentHash: 'abc123',
+      },
+    };
+
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockRejectedValue(
+      new Error('Vision API temporarily unavailable')
+    );
+
+    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
+      'Vision API processing failed: Vision API temporarily unavailable'
     );
   });
 });

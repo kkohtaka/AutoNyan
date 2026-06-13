@@ -4,9 +4,9 @@ import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObject
 import {
   createErrorResponse,
   getProjectId,
-  ParameterParsingError,
+  isPermanentError,
   parseStorageEvent,
-  ValidationError,
+  PermanentError,
 } from 'autonyan-shared';
 
 interface Result {
@@ -15,6 +15,7 @@ interface Result {
   outputBucket: string;
   outputPath: string;
   operationId: string;
+  skipped?: boolean;
 }
 
 // Supported file types for text extraction (texts, PDFs, and images)
@@ -53,7 +54,7 @@ export const textVisionProcessor = async (
       console.log(
         `Skipping text extraction for unsupported file type: ${contentType}`
       );
-      throw new Error(
+      throw new PermanentError(
         `Unsupported file type for text extraction: ${contentType}`
       );
     }
@@ -71,7 +72,7 @@ export const textVisionProcessor = async (
     const contentHash = metadata.metadata?.contentHash;
 
     if (!originalFileId || !originalFileName || !contentHash) {
-      throw new Error('Missing required metadata from uploaded file');
+      throw new PermanentError('Missing required metadata from uploaded file');
     }
 
     // eslint-disable-next-line no-console
@@ -192,14 +193,23 @@ export const textVisionProcessor = async (
     // eslint-disable-next-line no-console
     console.error('Vision API processing error:', errorResponse);
 
-    // Re-throw with proper error type
-    if (
-      error instanceof ParameterParsingError ||
-      error instanceof ValidationError
-    ) {
-      throw error;
+    // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
+    if (isPermanentError(error)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
+      );
+      return {
+        message: `Skipped (permanent failure): ${errorResponse.error}`,
+        objectName: '',
+        outputBucket: '',
+        outputPath: '',
+        operationId: 'skipped',
+        skipped: true,
+      };
     }
 
+    // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
     throw new Error(`Vision API processing failed: ${errorResponse.error}`);
   }
 };

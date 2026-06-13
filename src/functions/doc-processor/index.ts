@@ -4,10 +4,10 @@ import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePubl
 import {
   createErrorResponse,
   getProjectId,
-  ParameterParsingError,
+  isPermanentError,
   parsePubSubEvent,
+  PermanentError,
   validateRequiredFields,
-  ValidationError,
 } from 'autonyan-shared';
 import { createHash } from 'crypto';
 import { google } from 'googleapis';
@@ -25,6 +25,7 @@ interface Result {
   objectName: string;
   contentType: string;
   size: number;
+  skipped?: boolean;
 }
 
 export const docProcessor = async (
@@ -74,7 +75,9 @@ export const docProcessor = async (
 
     const file = fileResponse.data;
     if (!file.id || !file.name) {
-      throw new Error(`Invalid file data received for fileId: ${fileId}`);
+      throw new PermanentError(
+        `Invalid file data received for fileId: ${fileId}`
+      );
     }
 
     // Download file content from Google Drive to calculate hash
@@ -180,14 +183,25 @@ export const docProcessor = async (
     // eslint-disable-next-line no-console
     console.error('Document scan preparation error:', errorResponse);
 
-    // Re-throw with proper error type
-    if (
-      error instanceof ParameterParsingError ||
-      error instanceof ValidationError
-    ) {
-      throw error;
+    // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
+    if (isPermanentError(error)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
+      );
+      return {
+        message: `Skipped (permanent failure): ${errorResponse.error}`,
+        fileId: '',
+        fileName: '',
+        bucketName: '',
+        objectName: '',
+        contentType: '',
+        size: 0,
+        skipped: true,
+      };
     }
 
+    // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
     throw new Error(`Document scan preparation failed: ${errorResponse.error}`);
   }
 };

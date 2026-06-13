@@ -143,7 +143,7 @@ describe('docProcessor', () => {
     );
   }, 20000);
 
-  test('should throw error when no fileId is provided', async () => {
+  test('should ACK (skip) when no fileId is provided', async () => {
     const messageData = {};
 
     const cloudEvent: CloudEvent<MessagePublishedData> = {
@@ -155,12 +155,14 @@ describe('docProcessor', () => {
       data: Buffer.from(JSON.stringify(messageData)).toString('base64') as any,
     };
 
-    await expect(docProcessor(cloudEvent)).rejects.toThrow(
-      'Missing required fields: fileId'
-    );
+    const result = await docProcessor(cloudEvent);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain('Missing required fields: fileId');
+    expect(mockDrive.files.get).not.toHaveBeenCalled();
   });
 
-  test('should throw error when no message data is provided', async () => {
+  test('should ACK (skip) when no message data is provided', async () => {
     const cloudEvent: CloudEvent<MessagePublishedData> = {
       id: 'test-event-id',
       source: 'test-source',
@@ -170,9 +172,10 @@ describe('docProcessor', () => {
       data: undefined,
     };
 
-    await expect(docProcessor(cloudEvent)).rejects.toThrow(
-      'CloudEvent data is required'
-    );
+    const result = await docProcessor(cloudEvent);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain('CloudEvent data is required');
   });
 
   test('should handle Drive API errors gracefully', async () => {

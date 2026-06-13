@@ -202,17 +202,19 @@ describe('textFirebaseWriter', () => {
     expect(result.textLength).toBe('Valid textMore valid text\n'.length);
   });
 
-  it('should reject non-JSON files', async () => {
+  it('should ACK (skip) non-JSON files without retrying', async () => {
     const cloudEvent = createCloudEvent({
       contentType: 'text/plain',
     });
 
-    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
-      'Unsupported file type: text/plain'
-    );
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain('Unsupported file type: text/plain');
+    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
   });
 
-  it('should require PROJECT_ID environment variable', async () => {
+  it('should ACK (skip) when PROJECT_ID environment variable is missing', async () => {
     delete process.env.PROJECT_ID;
 
     const cloudEvent = createCloudEvent({});
@@ -243,12 +245,15 @@ describe('textFirebaseWriter', () => {
       .file()
       .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
 
-    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
       'PROJECT_ID environment variable is required'
     );
   });
 
-  it('should require original file metadata', async () => {
+  it('should ACK (skip) when original file metadata is missing', async () => {
     const cloudEvent = createCloudEvent({});
 
     const mockMetadata = {
@@ -257,12 +262,15 @@ describe('textFirebaseWriter', () => {
 
     mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
 
-    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
       'Missing required metadata from Vision API result file'
     );
   });
 
-  it('should handle missing Vision API responses', async () => {
+  it('should ACK (skip) when Vision API responses are missing', async () => {
     const cloudEvent = createCloudEvent({});
 
     const mockMetadata = {
@@ -284,8 +292,24 @@ describe('textFirebaseWriter', () => {
       .file()
       .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
 
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain('No responses found in Vision API result');
+  });
+
+  it('should throw (retry) on transient storage failures', async () => {
+    const cloudEvent = createCloudEvent({});
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockRejectedValue(
+        new Error('Storage temporarily unavailable')
+      );
+
     await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
-      'No responses found in Vision API result'
+      'Firebase storage failed: Storage temporarily unavailable'
     );
   });
 
