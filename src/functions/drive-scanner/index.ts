@@ -1,3 +1,4 @@
+import { Firestore } from '@google-cloud/firestore';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
@@ -7,7 +8,21 @@ import {
   parsePubSubEvent,
   validateRequiredFields,
 } from 'autonyan-shared';
+import { createHash } from 'crypto';
 import { drive_v3, google } from 'googleapis';
+
+// Firestore collection used to record which (fileId, modifiedTime) pairs have
+// already been published downstream. This makes scheduled scans idempotent:
+// without it, every scan re-publishes every file, causing the per-file pipeline
+// (Drive download, Vision API, Gemini classification) to run again and billing
+// to grow linearly with file count on every schedule tick.
+const SCANNED_FILES_COLLECTION = 'scanned_files';
+
+// Build a deterministic, Firestore-safe document ID from the file identity.
+// modifiedTime is included so that a genuinely updated file is reprocessed,
+// while an unchanged file is skipped on subsequent scans.
+const buildScannedFileId = (fileId: string, modifiedTime: string): string =>
+  createHash('sha256').update(`${fileId}:${modifiedTime}`).digest('hex');
 
 const DOCUMENT_MIME_TYPES = [
   'application/pdf',
@@ -34,6 +49,7 @@ interface Result {
   filesFound: number;
   files: drive_v3.Schema$File[];
   publishedMessages: number;
+  skippedMessages: number;
   topicName: string | null;
   skipped?: boolean;
 }
@@ -102,14 +118,38 @@ export const driveScanner = async (
       nextPageToken = response.data.nextPageToken || undefined;
     } while (nextPageToken);
 
-    // Publish each document file to PubSub for document scan preparation (if topic is configured)
+    // Publish each document file to PubSub for document scan preparation (if topic is configured).
+    // Files already recorded in the scanned_files collection (same fileId and
+    // modifiedTime) are skipped to keep scheduled scans idempotent and avoid
+    // re-running the billable downstream pipeline on every schedule tick.
     let publishedMessages = 0;
+    let skippedMessages = 0;
 
     if (topicName) {
       const pubsub = new PubSub();
       const topic = pubsub.topic(topicName);
 
-      const publishPromises = allFiles.map(async (file) => {
+      const databaseId = process.env.FIRESTORE_DATABASE_ID || '(default)';
+      const firestore = new Firestore({ databaseId });
+      const scannedCollection = firestore.collection(SCANNED_FILES_COLLECTION);
+
+      // Process files sequentially so the dedup check and record write stay
+      // consistent and we never publish a file we have already recorded.
+      for (const file of allFiles) {
+        const modifiedTime = file.modifiedTime || '';
+        const scannedFileId = buildScannedFileId(file.id || '', modifiedTime);
+        const scannedDocRef = scannedCollection.doc(scannedFileId);
+
+        const snapshot = await scannedDocRef.get();
+        if (snapshot.exists) {
+          skippedMessages++;
+          // eslint-disable-next-line no-console
+          console.log(
+            `Skipping already-scanned file ${file.name} (${file.id}) modified at ${modifiedTime}`
+          );
+          continue;
+        }
+
         const messageData = {
           fileId: file.id,
           fileName: file.name,
@@ -122,7 +162,7 @@ export const driveScanner = async (
         };
 
         const dataBuffer = Buffer.from(JSON.stringify(messageData));
-        return topic.publishMessage({
+        await topic.publishMessage({
           data: dataBuffer,
           attributes: {
             fileId: file.id || '',
@@ -130,14 +170,23 @@ export const driveScanner = async (
             operation: 'document-classification',
           },
         });
-      });
 
-      const messageIds = await Promise.all(publishPromises);
-      publishedMessages = messageIds.length;
+        // Record the file as scanned only after a successful publish so that a
+        // publish failure leaves it eligible for retry on the next scan.
+        await scannedDocRef.set({
+          fileId: file.id || '',
+          fileName: file.name || '',
+          modifiedTime: modifiedTime,
+          folderId: folderId,
+          publishedAt: new Date().toISOString(),
+        });
+
+        publishedMessages++;
+      }
 
       // eslint-disable-next-line no-console
       console.log(
-        `Published ${publishedMessages} messages to topic ${topicName}`
+        `Published ${publishedMessages} messages to topic ${topicName} (skipped ${skippedMessages} already-scanned files)`
       );
     } else {
       // eslint-disable-next-line no-console
@@ -151,6 +200,7 @@ export const driveScanner = async (
       filesFound: allFiles.length,
       files: allFiles,
       publishedMessages: publishedMessages,
+      skippedMessages: skippedMessages,
       topicName: topicName || null,
     };
 
@@ -176,6 +226,7 @@ export const driveScanner = async (
         filesFound: 0,
         files: [],
         publishedMessages: 0,
+        skippedMessages: 0,
         topicName: process.env.DOC_PROCESS_TRIGGER_TOPIC || null,
         skipped: true,
       };
