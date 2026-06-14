@@ -96,6 +96,8 @@ jobs:
           DRIVE_SCANNER_SCHEDULE: ${{ vars.DRIVE_SCANNER_SCHEDULE }}
           CATEGORY_ROOT_FOLDER_ID: ${{ secrets.CATEGORY_ROOT_FOLDER_ID }}
           UNCATEGORIZED_FOLDER_ID: ${{ secrets.UNCATEGORIZED_FOLDER_ID }}
+          BILLING_ACCOUNT_ID: ${{ secrets.BILLING_ACCOUNT_ID }}
+          BUDGET_AMOUNT: ${{ vars.BUDGET_AMOUNT }}
 
       - name: Deploy infrastructure
         id: deploy

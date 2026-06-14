@@ -11,3 +11,12 @@ drive_scanner_schedule = "0 * * * *"
 # uncategorized_folder_id: Google Drive folder for files that don't match any category
 category_root_folder_id = "your-category-root-folder-id"
 uncategorized_folder_id = "your-uncategorized-folder-id"
+
+# Cost guardrail configuration
+# billing_account_id: Cloud Billing account ID in the form XXXXXX-XXXXXX-XXXXXX
+# budget_amount: monthly budget in whole units of budget_currency_code
+# budget_currency_code / budget_alert_thresholds are optional (defaults: "USD", [0.5, 0.9, 1.0])
+billing_account_id = "XXXXXX-XXXXXX-XXXXXX"
+budget_amount = 50
+# budget_currency_code = "USD"
+# budget_alert_thresholds = [0.5, 0.9, 1.0]
