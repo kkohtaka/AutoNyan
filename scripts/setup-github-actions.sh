@@ -211,6 +211,22 @@ for ROLE in "${ROLES[@]}"; do
 		--condition=None
 done
 
+# Grant billing-account-level permission to manage the cost budget.
+# google_billing_budget is created under a Cloud Billing account, so the role
+# must be granted on the billing account (not the project). Set BILLING_ACCOUNT_ID
+# to enable this automatically; otherwise grant roles/billing.costsManager manually:
+#   gcloud billing accounts add-iam-policy-binding BILLING_ACCOUNT_ID \
+#     --member="serviceAccount:SERVICE_ACCOUNT_EMAIL" --role="roles/billing.costsManager"
+if [ -n "${BILLING_ACCOUNT_ID:-}" ]; then
+	log "Granting roles/billing.costsManager on billing account $BILLING_ACCOUNT_ID..."
+	gcloud billing accounts add-iam-policy-binding "$BILLING_ACCOUNT_ID" \
+		--member="$SERVICE_ACCOUNT_MEMBER" \
+		--role="roles/billing.costsManager"
+else
+	log "BILLING_ACCOUNT_ID not set; skipping billing IAM grant."
+	log "Grant roles/billing.costsManager on your billing account manually so Terraform can manage the budget."
+fi
+
 # Set GitHub repository secrets
 log "Setting GitHub repository secrets..."
 
