@@ -148,6 +148,9 @@ module "drive_scanner" {
   region                         = var.region
   function_bucket_name           = google_storage_bucket.function_bucket.name
   doc_process_trigger_topic_name = module.doc_processor.topic_name
+
+  # Firestore database must exist before the scanner records scanned files
+  depends_on = [google_firestore_database.default]
 }
 
 # Document Processor Module

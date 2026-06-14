@@ -1,3 +1,4 @@
+import { Firestore } from '@google-cloud/firestore';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
@@ -19,8 +20,10 @@ jest.mock('googleapis', () => ({
 }));
 
 jest.mock('@google-cloud/pubsub');
+jest.mock('@google-cloud/firestore');
 
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
+const mockFirestore = Firestore as jest.MockedClass<typeof Firestore>;
 
 describe('driveScanner', () => {
   let mockDriveList: jest.Mock;
@@ -29,6 +32,10 @@ describe('driveScanner', () => {
   let mockTopic: jest.Mock;
   let mockPubSubInstance: jest.Mocked<PubSub>;
   let mockDrive: any;
+  let mockDocGet: jest.Mock;
+  let mockDocSet: jest.Mock;
+  let mockDoc: jest.Mock;
+  let mockCollection: jest.Mock;
 
   const buildEvent = (payload: any): CloudEvent<MessagePublishedData> => {
     return {
@@ -71,6 +78,23 @@ describe('driveScanner', () => {
       topic: mockTopic,
     } as any;
     mockPubSub.mockImplementation(() => mockPubSubInstance);
+
+    // Mock Firestore: by default no file has been scanned before (exists=false)
+    mockDocGet = jest.fn().mockResolvedValue({ exists: false });
+    mockDocSet = jest.fn().mockResolvedValue(undefined);
+    mockDoc = jest.fn().mockReturnValue({
+      get: mockDocGet,
+      set: mockDocSet,
+    });
+    mockCollection = jest.fn().mockReturnValue({
+      doc: mockDoc,
+    });
+    mockFirestore.mockImplementation(
+      () =>
+        ({
+          collection: mockCollection,
+        }) as any
+    );
   });
 
   describe('CloudEvent request', () => {
@@ -130,7 +154,19 @@ describe('driveScanner', () => {
       expect(result.filesFound).toBe(1);
       expect(result.files).toHaveLength(1);
       expect(result.publishedMessages).toBe(1);
+      expect(result.skippedMessages).toBe(0);
       expect(result.topicName).toBe('doc-process-trigger');
+
+      // Verify the file was recorded as scanned after publishing
+      expect(mockCollection).toHaveBeenCalledWith('scanned_files');
+      expect(mockDocSet).toHaveBeenCalledTimes(1);
+      const recordedDoc = mockDocSet.mock.calls[0][0];
+      expect(recordedDoc).toMatchObject({
+        fileId: 'file1',
+        fileName: 'document1.pdf',
+        modifiedTime: '2023-01-01T00:00:00.000Z',
+        folderId: 'test-folder-id',
+      });
 
       // Verify folder get was called
       expect(mockDriveGet).toHaveBeenCalledWith({
@@ -236,6 +272,91 @@ describe('driveScanner', () => {
       // Verify PubSub was not called
       expect(mockPublishMessage).not.toHaveBeenCalled();
       expect(mockTopic).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Idempotent publishing', () => {
+    const folderEvent = (): CloudEvent<MessagePublishedData> =>
+      buildEvent({ folderId: 'test-folder-id' });
+
+    const singleFile = [
+      {
+        id: 'file1',
+        name: 'document1.pdf',
+        mimeType: 'application/pdf',
+        size: '1024',
+        modifiedTime: '2023-01-01T00:00:00.000Z',
+        webViewLink: 'https://drive.google.com/file/d/file1/view',
+      },
+    ];
+
+    beforeEach(() => {
+      mockDriveGet.mockResolvedValue({
+        data: {
+          id: 'test-folder-id',
+          name: 'Test Folder',
+          mimeType: 'application/vnd.google-apps.folder',
+        },
+      });
+      mockDriveList.mockResolvedValue({
+        data: { files: singleFile, nextPageToken: undefined },
+      });
+      mockPublishMessage.mockResolvedValue('message-id-1');
+    });
+
+    it('should skip files that were already scanned and not publish them', async () => {
+      // Simulate the file already existing in the scanned_files collection
+      mockDocGet.mockResolvedValue({ exists: true });
+
+      const result = await driveScanner(folderEvent());
+
+      expect(result.filesFound).toBe(1);
+      expect(result.publishedMessages).toBe(0);
+      expect(result.skippedMessages).toBe(1);
+
+      // No publish and no new record when the file was already scanned
+      expect(mockPublishMessage).not.toHaveBeenCalled();
+      expect(mockDocSet).not.toHaveBeenCalled();
+    });
+
+    it('should publish and record files that have not been scanned before', async () => {
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      const result = await driveScanner(folderEvent());
+
+      expect(result.publishedMessages).toBe(1);
+      expect(result.skippedMessages).toBe(0);
+      expect(mockPublishMessage).toHaveBeenCalledTimes(1);
+      expect(mockDocSet).toHaveBeenCalledTimes(1);
+    });
+
+    it('should key the dedup record on fileId and modifiedTime', async () => {
+      await driveScanner(folderEvent());
+
+      // Both the existence check and the record write target the same doc id,
+      // and the same file with a different modifiedTime yields a different id.
+      const firstDocId = mockDoc.mock.calls[0][0];
+      expect(typeof firstDocId).toBe('string');
+      expect(firstDocId).toHaveLength(64); // sha256 hex digest
+
+      jest.clearAllMocks();
+      mockDriveGet.mockResolvedValue({
+        data: { id: 'test-folder-id', name: 'Test Folder' },
+      });
+      mockDriveList.mockResolvedValue({
+        data: {
+          files: [
+            { ...singleFile[0], modifiedTime: '2024-12-31T23:59:59.000Z' },
+          ],
+          nextPageToken: undefined,
+        },
+      });
+      mockPublishMessage.mockResolvedValue('message-id-2');
+      mockDocGet.mockResolvedValue({ exists: false });
+
+      await driveScanner(folderEvent());
+      const secondDocId = mockDoc.mock.calls[0][0];
+      expect(secondDocId).not.toBe(firstDocId);
     });
   });
 
