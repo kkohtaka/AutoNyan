@@ -24,6 +24,15 @@ permissions:
   pull-requests: read
   actions: write
 
+# Cancel superseded runs to avoid piling up duplicate executions when a PR is
+# updated repeatedly (synchronize). The group is scoped per workflow and ref so
+# different PRs and the master branch never cancel each other. cancel-in-progress
+# is enabled for pull_request events only: master pushes drive the deploy chain
+# (terraform-plan -> build -> deploy) and must be allowed to finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint-functions:
     runs-on: ubuntu-latest
