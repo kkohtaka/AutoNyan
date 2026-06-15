@@ -47,13 +47,16 @@ concurrency:
 
 jobs:
   terraform-plan:
+    # Security: the issue_comment path checks out untrusted PR HEAD and runs it
+    # with privileged GCP (WIF) credentials. Restrict the `/terraform plan`
+    # command to the repository OWNER only. COLLABORATOR/MEMBER are intentionally
+    # excluded because those are broad categories that could allow a malicious or
+    # compromised account to execute PR-controlled code in the privileged context.
     if: |
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
        contains(github.event.comment.body, '/terraform plan') &&
-       (github.event.comment.author_association == 'OWNER' ||
-        github.event.comment.author_association == 'MEMBER' ||
-        github.event.comment.author_association == 'COLLABORATOR')) ||
+       github.event.comment.author_association == 'OWNER') ||
       (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -189,7 +192,12 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        # Security (defense in depth): --ignore-scripts disables dependency
+        # lifecycle scripts (preinstall/install/postinstall) and the repo's own
+        # `prepare` hook so that checking out untrusted PR HEAD cannot execute
+        # arbitrary code during install. The terraform plan path only relies on
+        # the TypeScript compiler (tsc), which does not need install scripts.
+        run: npm ci --ignore-scripts
 
       - name: Setup Terraform
         if: steps.detect.outputs.needs_terraform == 'true'
