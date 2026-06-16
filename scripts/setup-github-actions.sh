@@ -189,11 +189,15 @@ gcloud iam service-accounts add-iam-policy-binding \
 # Grant permissions for Terraform operations
 log "Granting IAM permissions for Terraform operations..."
 
-# Core Terraform permissions for AutoNyan project
+# Core Terraform permissions for AutoNyan project.
+# Least privilege: this list is intentionally scoped to the Google Cloud
+# resources this project's Terraform actually manages (Cloud Functions, Pub/Sub,
+# Cloud Scheduler, Cloud Storage, Firestore/Datastore, project services and the
+# IAM bindings between them). Compute Engine roles are deliberately NOT granted
+# because the configuration creates no compute resources; granting them would let
+# a leaked CI token spin up arbitrary (e.g. crypto-mining) VMs and explode billing.
+# Before adding a role here, confirm a matching `resource "google_..."` exists.
 ROLES=(
-	"roles/compute.networkAdmin"
-	"roles/compute.securityAdmin"
-	"roles/compute.instanceAdmin.v1"
 	"roles/iam.serviceAccountUser"
 	"roles/storage.admin"
 	"roles/resourcemanager.projectIamAdmin"
@@ -209,6 +213,24 @@ for ROLE in "${ROLES[@]}"; do
 		--member="$SERVICE_ACCOUNT_MEMBER" \
 		--role="$ROLE" \
 		--condition=None
+done
+
+# Revoke roles that were granted by earlier versions of this script but are no
+# longer required (defense in depth / least privilege). Re-running setup on an
+# existing project converges the SA to the minimal role set above. Removal is
+# best-effort: a missing binding is not an error.
+DEPRECATED_ROLES=(
+	"roles/compute.networkAdmin"
+	"roles/compute.securityAdmin"
+	"roles/compute.instanceAdmin.v1"
+)
+for ROLE in "${DEPRECATED_ROLES[@]}"; do
+	log "Ensuring deprecated role '$ROLE' is not bound to the CI service account..."
+	gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
+		--member="$SERVICE_ACCOUNT_MEMBER" \
+		--role="$ROLE" \
+		--condition=None \
+		--quiet >/dev/null 2>&1 || log "  (role '$ROLE' was not bound; nothing to remove)"
 done
 
 # Grant billing-account-level permission to manage the cost budget.

@@ -869,13 +869,18 @@ When working with this codebase:
    - Review GitHub Actions logs for permission errors
 
 **Services currently configured:**
-- Compute Engine (networking, security, instances)
 - IAM (service accounts)
 - Cloud Storage
 - Cloud Functions
 - Pub/Sub
 - Cloud Scheduler
 - Firestore/Datastore
+
+**Least privilege:** Only grant roles for services the Terraform configuration
+actually manages. Compute Engine roles are intentionally NOT granted — there are
+no compute resources, and those roles would let a leaked CI token create
+arbitrary (e.g. crypto-mining) VMs and run up the bill. `setup-github-actions.sh`
+also actively revokes deprecated `roles/compute.*` bindings on re-run.
 
 **When to update:** Add new roles whenever Terraform configuration introduces resources from a new Google Cloud service that requires special permissions beyond the basic roles already granted.
 
