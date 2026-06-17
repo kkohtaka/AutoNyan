@@ -189,14 +189,12 @@ gcloud iam service-accounts add-iam-policy-binding \
 # Grant permissions for Terraform operations
 log "Granting IAM permissions for Terraform operations..."
 
-# Core Terraform permissions for AutoNyan project.
-# Least privilege: this list is intentionally scoped to the Google Cloud
-# resources this project's Terraform actually manages (Cloud Functions, Pub/Sub,
-# Cloud Scheduler, Cloud Storage, Firestore/Datastore, project services and the
-# IAM bindings between them). Compute Engine roles are deliberately NOT granted
-# because the configuration creates no compute resources; granting them would let
-# a leaked CI token spin up arbitrary (e.g. crypto-mining) VMs and explode billing.
-# Before adding a role here, confirm a matching `resource "google_..."` exists.
+# IAM roles the CI service account needs for Terraform to manage this project's
+# resources: Cloud Functions, Pub/Sub, Cloud Scheduler, Cloud Storage,
+# Firestore/Datastore, project services, and the IAM bindings between them.
+# Least privilege: a role belongs here only when a managed
+# `resource "google_..."` requires it. Compute Engine roles are excluded because
+# the configuration manages no compute resources.
 ROLES=(
 	"roles/iam.serviceAccountUser"
 	"roles/storage.admin"
@@ -215,10 +213,15 @@ for ROLE in "${ROLES[@]}"; do
 		--condition=None
 done
 
-# Revoke roles that were granted by earlier versions of this script but are no
-# longer required (defense in depth / least privilege). Re-running setup on an
-# existing project converges the SA to the minimal role set above. Removal is
-# best-effort: a missing binding is not an error.
+# Roles that are not part of the least-privilege set above and must not remain
+# bound to the CI service account. The loop removes them when present so the live
+# bindings match ROLES. Best-effort: a missing binding is not an error.
+#
+# Removal plan: this block is transitional cleanup for projects that may still
+# carry these bindings. Once the staging and production projects have both been
+# re-run through this script and verified free of these roles (e.g. via
+# `gcloud projects get-iam-policy "$PROJECT_ID"`), delete the DEPRECATED_ROLES
+# array and the loop below.
 DEPRECATED_ROLES=(
 	"roles/compute.networkAdmin"
 	"roles/compute.securityAdmin"
