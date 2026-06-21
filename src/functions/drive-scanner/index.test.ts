@@ -110,6 +110,38 @@ describe('driveScanner', () => {
       expect(mockDriveGet).not.toHaveBeenCalled();
     });
 
+    it('should publish a failure notification on permanent failure when NOTIFICATION_TOPIC is set', async () => {
+      process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+      const cloudEvent = buildEvent({}); // missing folderId -> permanent failure
+
+      const result = await driveScanner(cloudEvent);
+
+      expect(result.skipped).toBe(true);
+      expect(mockPublishMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attributes: expect.objectContaining({
+            operation: 'failure-notification',
+          }),
+        })
+      );
+
+      delete process.env.NOTIFICATION_TOPIC;
+    });
+
+    it('should not fail when notification publishing throws', async () => {
+      process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+      mockPublishMessage.mockRejectedValueOnce(new Error('publish failed'));
+
+      const cloudEvent = buildEvent({}); // missing folderId -> permanent failure
+
+      const result = await driveScanner(cloudEvent);
+
+      expect(result.skipped).toBe(true);
+
+      delete process.env.NOTIFICATION_TOPIC;
+    });
+
     it('should successfully process CloudEvent and return result', async () => {
       const cloudEvent = buildEvent({
         folderId: 'test-folder-id',

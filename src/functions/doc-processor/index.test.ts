@@ -1,5 +1,6 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
+import { PubSub } from '@google-cloud/pubsub';
 import { docProcessor } from './index';
 
 // Mock dependencies
@@ -35,8 +36,12 @@ jest.mock('googleapis', () => ({
   },
 }));
 
+jest.mock('@google-cloud/pubsub');
+const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
+
 describe('docProcessor', () => {
   let mockDrive: any;
+  let mockPublishMessage: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -45,11 +50,23 @@ describe('docProcessor', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const { google } = require('googleapis');
     mockDrive = google.drive();
+
+    // Mock PubSub used for failure notifications
+    mockPublishMessage = jest.fn().mockResolvedValue('message-id');
+    mockPubSub.mockImplementation(
+      () =>
+        ({
+          topic: jest.fn().mockReturnValue({
+            publishMessage: mockPublishMessage,
+          }),
+        }) as any
+    );
   });
 
   afterEach(() => {
     delete process.env.PROJECT_ID;
     delete process.env.ENVIRONMENT;
+    delete process.env.NOTIFICATION_TOPIC;
   });
 
   test('should process CloudEvent and copy file to Cloud Storage', async () => {
@@ -224,6 +241,65 @@ describe('docProcessor', () => {
     expect(result.message).toContain(
       'Invalid file data received for fileId: file123'
     );
+  });
+
+  test('should publish a failure notification on permanent failure when NOTIFICATION_TOPIC is set', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    // Drive returns invalid file data -> permanent failure
+    mockDrive.files.get.mockResolvedValueOnce({
+      data: {
+        mimeType: 'application/pdf',
+      },
+    });
+
+    const cloudEvent: CloudEvent<MessagePublishedData> = {
+      id: 'test-event-id',
+      source: 'test-source',
+      specversion: '1.0',
+      type: 'google.cloud.pubsub.topic.v1.messagePublished',
+      time: '2023-01-01T00:00:00.000Z',
+      data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
+        'base64'
+      ) as any,
+    };
+
+    await docProcessor(cloudEvent);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+          fileId: 'file123',
+        }),
+      })
+    );
+  });
+
+  test('should not fail when notification publishing throws', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+    mockPublishMessage.mockRejectedValueOnce(new Error('publish failed'));
+
+    mockDrive.files.get.mockResolvedValueOnce({
+      data: {
+        mimeType: 'application/pdf',
+      },
+    });
+
+    const cloudEvent: CloudEvent<MessagePublishedData> = {
+      id: 'test-event-id',
+      source: 'test-source',
+      specversion: '1.0',
+      type: 'google.cloud.pubsub.topic.v1.messagePublished',
+      time: '2023-01-01T00:00:00.000Z',
+      data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
+        'base64'
+      ) as any,
+    };
+
+    const result = await docProcessor(cloudEvent);
+
+    expect(result.skipped).toBe(true);
   });
 
   test('should throw (retry) when ENVIRONMENT is not set', async () => {

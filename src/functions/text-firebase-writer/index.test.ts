@@ -50,6 +50,7 @@ describe('textFirebaseWriter', () => {
     delete process.env.PROJECT_ID;
     delete process.env.ENVIRONMENT;
     delete process.env.FILE_CLASSIFIER_TOPIC;
+    delete process.env.NOTIFICATION_TOPIC;
   });
 
   const createCloudEvent = (
@@ -250,6 +251,47 @@ describe('textFirebaseWriter', () => {
     expect(result.skipped).toBe(true);
     expect(result.message).toContain(
       'PROJECT_ID environment variable is required'
+    );
+  });
+
+  it('should publish a failure notification on permanent failure when NOTIFICATION_TOPIC is set', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+    delete process.env.PROJECT_ID; // triggers a permanent failure
+
+    const cloudEvent = createCloudEvent({});
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([
+        {
+          metadata: {
+            originalFileId: 'file123',
+            originalFileName: 'test.pdf',
+            originalMimeType: 'application/pdf',
+            contentHash: 'abc123',
+          },
+        },
+      ]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([
+        Buffer.from(
+          JSON.stringify({
+            responses: [{ fullTextAnnotation: { text: 'x', pages: [] } }],
+          })
+        ),
+      ]);
+
+    await textFirebaseWriter(cloudEvent.data!);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+          fileId: 'file123',
+        }),
+      })
     );
   });
 
