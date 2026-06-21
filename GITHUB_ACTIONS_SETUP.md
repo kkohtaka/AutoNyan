@@ -7,6 +7,8 @@ Configure these GitHub repository settings for Terraform deployment:
 - `TF_STATE_BUCKET` - GCS bucket name for Terraform state
 - `TF_STATE_LOCATION` - GCS bucket location (used for both state and region)
 - `DRIVE_SCANNER_SCHEDULE` - Cron schedule for production (e.g., `0 * * * *`)
+- `BUDGET_AMOUNT` - Monthly cost budget (whole units of the billing account's
+  currency; optional, defaults to `10000` when unset)
 
 **Environment-specific overrides:** Variables can be overridden per environment
 (Settings → Environments → staging/production → Variables). For example, set
@@ -22,6 +24,10 @@ Configure the following per environment (staging and production separately):
 - `DRIVE_FOLDER_ID` - Google Drive folder ID to scan
 - `CATEGORY_ROOT_FOLDER_ID` - Google Drive folder for category subfolders
 - `UNCATEGORIZED_FOLDER_ID` - Google Drive folder for uncategorized files
+- `BILLING_ACCOUNT_ID` - Cloud Billing account ID (format: `XXXXXX-XXXXXX-XXXXXX`)
+  used to create the cost budget
+- `NOTIFICATION_FROM_EMAIL` - Google Workspace sender address for processing
+  notification emails (requires Domain-Wide Delegation; see README)
 
 ## Local Development
 

@@ -4,7 +4,7 @@ A Google Cloud Functions project demonstrating serverless document processing wi
 
 ## Architecture Overview
 
-AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 4-stage pipeline:
+AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 5-stage pipeline:
 
 ```mermaid
 graph LR
@@ -12,10 +12,16 @@ graph LR
     B --> C[2. Document Preparation]
     C --> D[3. Text Extraction]
     D --> E[4. Data Persistence]
+    E --> G[5. Classification]
     E --> F[Firestore]
+    B -.-> N[Notifications]
+    C -.-> N
+    D -.-> N
+    E -.-> N
+    G -.-> N
 ```
 
-**Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database
+**Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database → Classification, with each stage publishing success/failure events to a notification dispatcher.
 
 ### Pipeline Stages
 
@@ -23,6 +29,11 @@ graph LR
 2. **Document Preparation**: Downloads and copies documents from Google Drive to Cloud Storage
 3. **Text Extraction**: Processes documents using Vision API for OCR and text extraction
 4. **Data Persistence**: Stores extracted text and metadata in Firestore database
+5. **Classification**: Classifies documents with AI and moves them to categorized Drive folders
+
+**Notifications (cross-cutting):** A notification dispatcher consumes success and
+failure events published by the pipeline stages and emails summaries to the
+relevant Drive folder owner via the Gmail API.
 
 ### Event Triggers
 
@@ -36,6 +47,8 @@ graph LR
 - **PubSub**: Asynchronous messaging between pipeline stages
 - **Cloud Storage**: Document staging and results storage
 - **Vision API**: OCR and text extraction from documents
+- **Vertex AI**: Document classification into categories
+- **Gmail API**: Email notifications via Domain-Wide Delegation
 - **Firestore**: NoSQL database for extracted text and metadata
 - **Terraform**: Infrastructure as Code for all cloud resources
 
@@ -46,6 +59,8 @@ graph LR
 - **Infrastructure as Code**: Terraform modules for reproducible deployments
 - **Google Drive Integration**: Advanced Drive API operations with pagination support
 - **Document Processing**: Automated scanning and text extraction from multiple file formats
+- **AI Classification**: Categorizes documents and files them into Drive folders
+- **Email Notifications**: Success/failure summaries delivered via the Gmail API
 - **Modular Design**: Each function is independently deployable and testable
 - **Security-First CI/CD**: GitHub Actions with Workload Identity Federation
 - **Dev Container**: Pre-configured development environment with all tools
@@ -123,11 +138,19 @@ environment             = "staging"
 region                  = "us-central1"
 drive_folder_id         = "your-google-drive-folder-id"
 drive_scanner_schedule  = "0 9 * * *"  # Daily at 9 AM UTC
+category_root_folder_id = "your-category-root-folder-id"
+uncategorized_folder_id = "your-uncategorized-folder-id"
+billing_account_id      = "XXXXXX-XXXXXX-XXXXXX"  # for the cost budget
+notification_from_email = "admin@your-workspace-domain.com"  # Gmail sender
 ```
+
+See `terraform/terraform.tfvars.example` for the full set of variables and
+their defaults (e.g., `budget_amount`, `budget_alert_thresholds`).
 
 For production, create a separate `terraform/environments/production.tfvars` with `environment = "production"` and production-specific values. Select the environment with the `ENVIRONMENT` variable (defaults to `staging`).
 
 **Finding Your Drive Folder ID:**
+
 - Open Google Drive in your browser
 - Navigate to the folder you want to scan
 - Copy the ID from the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
@@ -146,11 +169,13 @@ This command builds the functions and deploys all infrastructure via Terraform.
 Google Drive requires **manual folder sharing** with the service account. Use the automated setup script:
 
 1. Authenticate with Drive API scope (required once per machine):
+
    ```bash
    gcloud auth login --enable-gdrive-access
    ```
 
 2. Run the sharing script:
+
    ```bash
    # For staging (default)
    npm run setup:share-drive-folders
@@ -171,6 +196,30 @@ Google Drive requires **manual folder sharing** with the service account. Use th
 
 **Why Manual Sharing?**
 Drive API doesn't support project-level IAM roles. Service accounts can only access explicitly shared folders, ensuring least-privilege access and preventing accidental access to unintended files.
+
+#### 5. Configure Gmail Domain-Wide Delegation (for notifications)
+
+The notification dispatcher sends email as `notification_from_email` via the
+Gmail API, which requires **Domain-Wide Delegation (DWD)** authorized once in
+the Google Workspace Admin console. Without this step, notification sending
+fails and no emails are delivered.
+
+1. Get the dispatcher service account's client ID after deployment:
+
+   ```bash
+   terraform -chdir=terraform output notification_dispatcher_service_account_client_id
+   ```
+
+2. In the [Google Workspace Admin console](https://admin.google.com) → **Security
+   → Access and data control → API controls → Domain-wide delegation**, add a new
+   API client:
+   - **Client ID**: the value from step 1
+   - **OAuth scopes**: `https://www.googleapis.com/auth/gmail.send`
+
+3. Ensure `notification_from_email` is a real mailbox in that Workspace domain.
+
+> **Note:** DWD can only be configured for a Google Workspace domain. The sender
+> address must belong to that domain.
 
 ## Development Workflows
 
@@ -231,6 +280,7 @@ npm run terraform:destroy
 ```
 
 **Terraform workflow:**
+
 1. Modify infrastructure in `terraform/` or `terraform/modules/`
 2. Run `npm run terraform:plan` to preview changes
 3. Review the plan carefully
@@ -240,6 +290,7 @@ npm run terraform:destroy
 ### Deployment
 
 **Local Deployment:**
+
 ```bash
 npm run deploy
 ```
@@ -256,7 +307,9 @@ The project uses GitHub Actions for automated testing and validation. See [GitHu
 │   │   ├── drive-scanner/
 │   │   ├── doc-processor/
 │   │   ├── text-vision-processor/
-│   │   └── text-firebase-writer/
+│   │   ├── text-firebase-writer/
+│   │   ├── file-classifier/
+│   │   └── notification-dispatcher/
 │   └── shared/             # Shared utilities across functions
 ├── terraform/              # Infrastructure as Code
 │   ├── modules/            # Terraform modules (one per function)
@@ -279,6 +332,7 @@ Each Cloud Function is an independent npm workspace with its own dependencies, t
 
 **Terraform Modules:**
 Infrastructure is organized into modules matching the function structure. Each module manages:
+
 - Cloud Function resource
 - Service account with least-privilege IAM
 - Event triggers (PubSub or Storage)
@@ -292,6 +346,7 @@ Tests live alongside implementation code in each function directory, following t
 ### Supported File Types
 
 AutoNyan can process the following document types:
+
 - **PDF documents**: `.pdf`
 - **Microsoft Office**: Word (`.doc`, `.docx`), Excel (`.xls`, `.xlsx`), PowerPoint (`.ppt`, `.pptx`)
 - **Google Workspace**: Docs, Sheets, Slides
@@ -302,6 +357,7 @@ The system handles folders with unlimited files using pagination.
 ### Drive Operations
 
 The document pipeline provides these Drive API operations:
+
 - List files with pagination
 - Create folders in shared areas
 - Move files between folders
@@ -327,6 +383,7 @@ gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"root"}'
 ### Permissions Model
 
 **What the service account CAN do** (in shared folders only):
+
 - List files and folders
 - Read file metadata and content
 - Create new folders
@@ -334,6 +391,7 @@ gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"root"}'
 - Download documents for processing
 
 **What the service account CANNOT do:**
+
 - Access unshared folders or files
 - Delete files or folders
 - Modify sharing permissions
@@ -363,16 +421,24 @@ AutoNyan includes a security-first CI/CD pipeline with GitHub Actions.
 For detailed GitHub Actions setup instructions, see [GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md).
 
 **Required Variables** (Settings → Secrets and variables → Actions → Variables):
+
 - `TF_STATE_BUCKET`: Terraform state storage bucket
 - `TF_STATE_LOCATION`: Cloud Storage bucket location
-- `DRIVE_FOLDER_ID`: Google Drive folder ID for scanning
 - `DRIVE_SCANNER_SCHEDULE`: Cron schedule (e.g., `"0 9 * * 1"`)
+- `BUDGET_AMOUNT`: Monthly cost budget (optional)
 
 **Required Secrets**:
+
 - `WIF_PROVIDER`: Workload Identity Federation provider
 - `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions
+- `DRIVE_FOLDER_ID`, `CATEGORY_ROOT_FOLDER_ID`, `UNCATEGORIZED_FOLDER_ID`: Drive folder IDs
+- `BILLING_ACCOUNT_ID`: Cloud Billing account ID for the cost budget
+- `NOTIFICATION_FROM_EMAIL`: Gmail sender address for notifications
+
+See [GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md) for the complete list and descriptions.
 
 **Setup command:**
+
 ```bash
 npm run setup:github-actions
 ```
@@ -408,6 +474,7 @@ export const myNewFunction = async (
 ### 3. Add Tests
 
 Create `index.test.ts` following the existing test patterns:
+
 - Mock Google Cloud services
 - Test with sample CloudEvents
 - Achieve coverage thresholds
@@ -415,6 +482,7 @@ Create `index.test.ts` following the existing test patterns:
 ### 4. Create Terraform Module
 
 Create `terraform/modules/my-new-function/` with:
+
 - Service account and IAM bindings
 - Cloud Function resource
 - Event trigger configuration (PubSub or Storage)
@@ -435,12 +503,14 @@ npm run deploy
 ### Common Issues
 
 **Drive Access Errors:**
+
 - Verify the folder has been shared with the service account
 - Check the service account email from `terraform output service_account_email`
 - Ensure "Editor" permissions were granted
 - Wait a few minutes after sharing for permissions to propagate
 
 **Terraform State Lock:**
+
 - Another process may be running Terraform concurrently
 - Automatic cleanup on failure is built into CI/CD workflows
 - For manual unlock in emergencies, use the GitHub Actions workflow:
@@ -452,11 +522,13 @@ npm run deploy
 - The unlock workflow uses the same concurrency group as plan/deploy for safety
 
 **Function Timeout:**
+
 - Check Cloud Functions logs: `gcloud functions logs read FUNCTION_NAME`
 - Adjust timeout in the function's Terraform module
 - Consider batch size for processing operations
 
 **Build Failures:**
+
 - Ensure Node.js version matches `.nvmrc`
 - Run `npm clean` and rebuild
 - Check for TypeScript errors: `npm run lint:ts`
@@ -477,6 +549,7 @@ gcloud functions logs read FUNCTION_NAME --region=REGION --follow
 ### Monitoring
 
 Monitor your pipeline in Google Cloud Console:
+
 - **Cloud Functions**: View invocations, errors, and performance metrics
 - **Cloud Storage**: Monitor bucket usage and object counts
 - **PubSub**: Track message delivery and subscription backlogs
