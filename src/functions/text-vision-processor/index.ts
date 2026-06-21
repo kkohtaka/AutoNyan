@@ -1,5 +1,6 @@
 import { Storage } from '@google-cloud/storage';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
+import { PubSub } from '@google-cloud/pubsub';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
 import {
   createErrorResponse,
@@ -33,6 +34,9 @@ const SUPPORTED_MIME_TYPES = [
 export const textVisionProcessor = async (
   storageObjectData: StorageObjectData
 ): Promise<Result> => {
+  let originalFileId = '';
+  let originalFileName = '';
+
   try {
     // Log the incoming Storage object data for debugging
     // eslint-disable-next-line no-console
@@ -67,8 +71,8 @@ export const textVisionProcessor = async (
     const file = storage.bucket(bucket).file(objectName);
     const [metadata] = await file.getMetadata();
 
-    const originalFileId = metadata.metadata?.originalFileId;
-    const originalFileName = metadata.metadata?.originalFileName;
+    originalFileId = String(metadata.metadata?.originalFileId || '');
+    originalFileName = String(metadata.metadata?.originalFileName || '');
     const contentHash = metadata.metadata?.contentHash;
 
     if (!originalFileId || !originalFileName || !contentHash) {
@@ -199,6 +203,29 @@ export const textVisionProcessor = async (
       console.warn(
         `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
       );
+
+      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
+      if (notificationTopicName) {
+        try {
+          const pubsub = new PubSub();
+          await pubsub.topic(notificationTopicName).publishMessage({
+            json: {
+              fileId: originalFileId,
+              fileName: originalFileName,
+              stageName: 'text-vision-processor',
+              errorMessage: errorResponse.error,
+            },
+            attributes: {
+              operation: 'failure-notification',
+              fileId: originalFileId,
+            },
+          });
+        } catch (notifyError) {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to publish failure notification:', notifyError);
+        }
+      }
+
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
         objectName: '',

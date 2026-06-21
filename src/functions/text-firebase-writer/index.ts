@@ -57,6 +57,9 @@ interface VisionApiResult {
 export const textFirebaseWriter = async (
   storageObjectData: StorageObjectData
 ): Promise<Result> => {
+  let originalFileId = '';
+  let originalFileName = '';
+
   try {
     // Log the incoming Storage object data for debugging
     // eslint-disable-next-line no-console
@@ -94,8 +97,8 @@ export const textFirebaseWriter = async (
     const [metadata] = await file.getMetadata();
 
     // Extract metadata
-    const originalFileId = String(metadata.metadata?.originalFileId || '');
-    const originalFileName = String(metadata.metadata?.originalFileName || '');
+    originalFileId = String(metadata.metadata?.originalFileId || '');
+    originalFileName = String(metadata.metadata?.originalFileName || '');
     const originalMimeType = String(metadata.metadata?.originalMimeType || '');
     const contentHash = String(metadata.metadata?.contentHash || '');
     const processedAt = String(metadata.metadata?.processedAt || '');
@@ -269,6 +272,29 @@ export const textFirebaseWriter = async (
       console.warn(
         `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
       );
+
+      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
+      if (notificationTopicName) {
+        try {
+          const pubsub = new PubSub();
+          await pubsub.topic(notificationTopicName).publishMessage({
+            json: {
+              fileId: originalFileId,
+              fileName: originalFileName,
+              stageName: 'text-firebase-writer',
+              errorMessage: errorResponse.error,
+            },
+            attributes: {
+              operation: 'failure-notification',
+              fileId: originalFileId,
+            },
+          });
+        } catch (notifyError) {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to publish failure notification:', notifyError);
+        }
+      }
+
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
         firestoreDocId: '',

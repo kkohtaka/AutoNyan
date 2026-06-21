@@ -197,6 +197,7 @@ log "Granting IAM permissions for Terraform operations..."
 # the configuration manages no compute resources.
 ROLES=(
 	"roles/iam.serviceAccountUser"
+	"roles/iam.serviceAccountKeyAdmin"
 	"roles/storage.admin"
 	"roles/resourcemanager.projectIamAdmin"
 	"roles/cloudfunctions.admin"
@@ -204,6 +205,7 @@ ROLES=(
 	"roles/cloudscheduler.admin"
 	"roles/serviceusage.serviceUsageAdmin"
 	"roles/datastore.owner"
+	"roles/secretmanager.admin"
 )
 SERVICE_ACCOUNT_MEMBER="serviceAccount:$SERVICE_ACCOUNT_EMAIL"
 for ROLE in "${ROLES[@]}"; do

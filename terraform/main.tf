@@ -82,6 +82,18 @@ resource "google_project_service" "vertex_ai_api" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "secretmanager_api" {
+  service = "secretmanager.googleapis.com"
+
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "gmail_api" {
+  service = "gmail.googleapis.com"
+
+  disable_on_destroy = false
+}
+
 
 # Google Cloud Storage bucket for function source code archives
 # Stores zip files containing built function code for deployment
@@ -147,6 +159,23 @@ resource "google_cloud_scheduler_job" "drive_scan_schedule" {
   }
 }
 
+# Notification Dispatcher Module (must be defined before other modules to reference topic name)
+# Dispatches email notifications on document processing success and failure
+module "notification_dispatcher" {
+  source = "./modules/notification-dispatcher"
+
+  project_id              = var.project_id
+  environment             = var.environment
+  region                  = var.region
+  function_bucket_name    = google_storage_bucket.function_bucket.name
+  notification_from_email = var.notification_from_email
+
+  depends_on = [
+    google_project_service.secretmanager_api,
+    google_project_service.gmail_api,
+  ]
+}
+
 # Drive Scanner Module
 # Handles Google Drive folder scanning functionality
 module "drive_scanner" {
@@ -157,6 +186,7 @@ module "drive_scanner" {
   region                         = var.region
   function_bucket_name           = google_storage_bucket.function_bucket.name
   doc_process_trigger_topic_name = module.doc_processor.topic_name
+  notification_topic_name        = module.notification_dispatcher.topic_name
 
   # Firestore database must exist before the scanner records scanned files
   depends_on = [google_firestore_database.default]
@@ -167,10 +197,11 @@ module "drive_scanner" {
 module "doc_processor" {
   source = "./modules/doc-processor"
 
-  project_id           = var.project_id
-  environment          = var.environment
-  region               = var.region
-  function_bucket_name = google_storage_bucket.function_bucket.name
+  project_id              = var.project_id
+  environment             = var.environment
+  region                  = var.region
+  function_bucket_name    = google_storage_bucket.function_bucket.name
+  notification_topic_name = module.notification_dispatcher.topic_name
 }
 
 # Text Vision Processor Module
@@ -184,6 +215,7 @@ module "text_vision_processor" {
   function_bucket_name         = google_storage_bucket.function_bucket.name
   document_storage_bucket_name = google_storage_bucket.document_storage.name
   vision_results_bucket_name   = google_storage_bucket.vision_results.name
+  notification_topic_name      = module.notification_dispatcher.topic_name
 }
 
 # File Classifier Module (must be defined before text_firebase_writer to reference topic)
@@ -197,6 +229,7 @@ module "file_classifier" {
   function_bucket_name    = google_storage_bucket.function_bucket.name
   category_root_folder_id = var.category_root_folder_id
   uncategorized_folder_id = var.uncategorized_folder_id
+  notification_topic_name = module.notification_dispatcher.topic_name
 
   # Firestore database must exist before creating documents
   depends_on = [google_firestore_database.default]
@@ -214,6 +247,7 @@ module "text_firebase_writer" {
   vision_results_bucket_name    = google_storage_bucket.vision_results.name
   document_storage_bucket_name  = google_storage_bucket.document_storage.name
   file_classifier_trigger_topic = module.file_classifier.topic_name
+  notification_topic_name       = module.notification_dispatcher.topic_name
 }
 
 # Note: Service accounts, IAM bindings, and storage bucket objects
@@ -263,6 +297,16 @@ output "text_firebase_writer_service_account_email" {
 output "file_classifier_service_account_email" {
   description = "Email of the file classifier service account"
   value       = module.file_classifier.service_account_email
+}
+
+output "notification_dispatcher_service_account_email" {
+  description = "Email of the notification dispatcher service account"
+  value       = module.notification_dispatcher.service_account_email
+}
+
+output "notification_dispatcher_service_account_client_id" {
+  description = "OAuth2 client ID for Domain-Wide Delegation setup in Google Workspace Admin Console"
+  value       = module.notification_dispatcher.service_account_client_id
 }
 
 output "drive_folder_setup_instructions" {

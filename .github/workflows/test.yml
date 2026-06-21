@@ -46,6 +46,7 @@ jobs:
             doc-processor,
             drive-scanner,
             file-classifier,
+            notification-dispatcher,
             text-firebase-writer,
             text-vision-processor,
           ]
@@ -146,6 +147,7 @@ jobs:
             doc-processor,
             drive-scanner,
             file-classifier,
+            notification-dispatcher,
             text-firebase-writer,
             text-vision-processor,
           ]

@@ -6,6 +6,7 @@ export interface ClassificationUpdate {
   classificationConfidence: number;
   classificationReasoning: string;
   classifiedAt: string;
+  summary: string;
 }
 
 /**
@@ -27,5 +28,6 @@ export async function updateDocumentWithClassification(
     classificationConfidence: classification.classificationConfidence,
     classificationReasoning: classification.classificationReasoning,
     classifiedAt: classification.classifiedAt,
+    summary: classification.summary,
   });
 }

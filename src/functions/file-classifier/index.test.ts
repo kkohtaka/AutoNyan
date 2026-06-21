@@ -93,6 +93,7 @@ describe('fileClassifier', () => {
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'Document contains invoice-related keywords',
+      summary: '請求書に関する文書です。',
     });
 
     mockMoveFileInDrive.mockResolvedValue(undefined);
@@ -132,6 +133,7 @@ describe('fileClassifier', () => {
         classificationConfidence: 0.95,
         classificationReasoning: 'Document contains invoice-related keywords',
         classifiedAt: expect.any(String),
+        summary: '請求書に関する文書です。',
       }
     );
   });
@@ -154,6 +156,7 @@ describe('fileClassifier', () => {
       categoryFolderId: null,
       confidence: 0.3,
       reasoning: 'Cannot determine category',
+      summary: '不明なカテゴリの文書です。',
     });
 
     mockMoveFileInDrive.mockResolvedValue(undefined);

@@ -93,6 +93,7 @@ resource "google_cloudfunctions2_function" "drive_scanner" {
       PROJECT_ID                = var.project_id
       ENVIRONMENT               = var.environment
       FIRESTORE_DATABASE_ID     = var.environment
+      NOTIFICATION_TOPIC        = var.notification_topic_name
     }
     service_account_email = google_service_account.drive_scanner_sa.email
   }
