@@ -32,8 +32,12 @@ resource "google_billing_budget" "monthly_budget" {
 
   amount {
     specified_amount {
-      currency_code = var.budget_currency_code
-      units         = tostring(var.budget_amount)
+      # currency_code is intentionally omitted: the Cloud Billing Budgets API
+      # requires it to match the billing account's currency, and rejects any
+      # mismatch with "Error 400: invalid argument". Omitting it makes the API
+      # default to the billing account's own currency, so this stays correct
+      # regardless of which account (and currency) the project is linked to.
+      units = tostring(var.budget_amount)
     }
   }
 
