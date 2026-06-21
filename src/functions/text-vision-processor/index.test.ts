@@ -5,7 +5,9 @@ import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObject
 // Mock the Google Cloud clients
 jest.mock('@google-cloud/vision');
 jest.mock('@google-cloud/storage');
+jest.mock('@google-cloud/pubsub');
 
+const mockPublishMessage = jest.fn();
 const mockVision = {
   asyncBatchAnnotateFiles: jest.fn(),
 };
@@ -27,17 +29,23 @@ require('@google-cloud/vision').ImageAnnotatorClient = jest.fn(
 );
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 require('@google-cloud/storage').Storage = jest.fn(() => mockStorage);
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+require('@google-cloud/pubsub').PubSub = jest.fn(() => ({
+  topic: jest.fn().mockReturnValue({ publishMessage: mockPublishMessage }),
+}));
 
 describe('textVisionProcessor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.PROJECT_ID = 'test-project';
     process.env.ENVIRONMENT = 'staging';
+    mockPublishMessage.mockResolvedValue('message-id');
   });
 
   afterEach(() => {
     delete process.env.PROJECT_ID;
     delete process.env.ENVIRONMENT;
+    delete process.env.NOTIFICATION_TOPIC;
   });
 
   const createCloudEvent = (
@@ -199,6 +207,60 @@ describe('textVisionProcessor', () => {
     expect(result.message).toContain(
       'Missing required metadata from uploaded file'
     );
+  });
+
+  it('should publish a failure notification on permanent failure when NOTIFICATION_TOPIC is set', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+    delete process.env.PROJECT_ID; // triggers a permanent failure
+
+    const cloudEvent = createCloudEvent({ contentType: 'application/pdf' });
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([
+        {
+          metadata: {
+            originalFileId: 'file123',
+            originalFileName: 'test.pdf',
+            contentHash: 'abc123',
+          },
+        },
+      ]);
+
+    await textVisionProcessor(cloudEvent.data!);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+          fileId: 'file123',
+        }),
+      })
+    );
+  });
+
+  it('should not fail when notification publishing throws', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+    delete process.env.PROJECT_ID;
+    mockPublishMessage.mockRejectedValueOnce(new Error('publish failed'));
+
+    const cloudEvent = createCloudEvent({ contentType: 'application/pdf' });
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([
+        {
+          metadata: {
+            originalFileId: 'file123',
+            originalFileName: 'test.pdf',
+            contentHash: 'abc123',
+          },
+        },
+      ]);
+
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
   });
 
   it('should throw (retry) on transient Vision API failures', async () => {

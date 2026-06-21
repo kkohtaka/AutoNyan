@@ -1,11 +1,15 @@
 import { fileClassifier } from './index';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
+import { PubSub } from '@google-cloud/pubsub';
 
 // Mock dependencies
 jest.mock('@google-cloud/firestore', () => ({
   Firestore: jest.fn(() => ({})),
 }));
+
+jest.mock('@google-cloud/pubsub');
+const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 
 jest.mock('googleapis', () => ({
   google: {
@@ -25,8 +29,21 @@ const mockClassifyWithGemini = jest.fn();
 const mockUpdateDocumentWithClassification = jest.fn();
 
 describe('fileClassifier', () => {
+  let mockPublishMessage: jest.Mock;
+
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Mock PubSub used for success/failure notifications
+    mockPublishMessage = jest.fn().mockResolvedValue('message-id');
+    mockPubSub.mockImplementation(
+      () =>
+        ({
+          topic: jest.fn().mockReturnValue({
+            publishMessage: mockPublishMessage,
+          }),
+        }) as any
+    );
 
     // Set up mock implementations for imported functions
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
@@ -53,6 +70,7 @@ describe('fileClassifier', () => {
     delete process.env.PROJECT_ID;
     delete process.env.CATEGORY_ROOT_FOLDER_ID;
     delete process.env.UNCATEGORIZED_FOLDER_ID;
+    delete process.env.NOTIFICATION_TOPIC;
   });
 
   const createPubSubEvent = (data: {
@@ -135,6 +153,101 @@ describe('fileClassifier', () => {
         classifiedAt: expect.any(String),
         summary: '請求書に関する文書です。',
       }
+    );
+  });
+
+  it('should publish a success notification when NOTIFICATION_TOPIC is set', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書 金額: 10000円',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'success-notification',
+          fileId: 'file-123',
+        }),
+      })
+    );
+  });
+
+  it('should not fail when success notification publishing throws', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+    mockPublishMessage.mockRejectedValueOnce(new Error('publish failed'));
+
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    const result = await fileClassifier(event);
+
+    expect(result.category).toBe('請求書');
+  });
+
+  it('should publish a failure notification on permanent failure when NOTIFICATION_TOPIC is set', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    // Missing required fields -> permanent failure
+    const event: CloudEvent<MessagePublishedData> = {
+      specversion: '1.0',
+      id: 'test-event-id',
+      source: 'test-source',
+      type: 'google.cloud.pubsub.topic.v1.messagePublished',
+      time: new Date().toISOString(),
+      data: {
+        data: Buffer.from(JSON.stringify({})).toString('base64'),
+        message_id: 'test-message-id',
+        publish_time: new Date().toISOString(),
+      } as unknown as MessagePublishedData,
+    };
+
+    const result = await fileClassifier(event);
+
+    expect(result.skipped).toBe(true);
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+        }),
+      })
     );
   });
 
