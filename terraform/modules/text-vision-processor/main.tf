@@ -12,6 +12,13 @@ resource "google_project_iam_member" "text_vision_processor_vision" {
   member  = "serviceAccount:${google_service_account.text_vision_processor.email}"
 }
 
+# IAM binding for PubSub publisher (to publish failure notifications)
+resource "google_project_iam_member" "text_vision_processor_pubsub_publisher" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${google_service_account.text_vision_processor.email}"
+}
+
 # IAM binding for Cloud Storage access (read from document storage, write to vision results)
 resource "google_storage_bucket_iam_member" "text_vision_processor_document_storage" {
   bucket = var.document_storage_bucket_name
@@ -56,8 +63,9 @@ resource "google_cloudfunctions2_function" "text_vision_processor" {
     available_memory   = "1Gi"
     timeout_seconds    = 540
     environment_variables = {
-      PROJECT_ID  = var.project_id
-      ENVIRONMENT = var.environment
+      PROJECT_ID         = var.project_id
+      ENVIRONMENT        = var.environment
+      NOTIFICATION_TOPIC = var.notification_topic_name
     }
     service_account_email = google_service_account.text_vision_processor.email
   }

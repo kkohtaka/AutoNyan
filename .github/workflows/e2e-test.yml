@@ -86,6 +86,7 @@ jobs:
           UNCATEGORIZED_FOLDER_ID: ${{ secrets.UNCATEGORIZED_FOLDER_ID }}
           BILLING_ACCOUNT_ID: ${{ secrets.BILLING_ACCOUNT_ID }}
           BUDGET_AMOUNT: ${{ vars.BUDGET_AMOUNT }}
+          NOTIFICATION_FROM_EMAIL: ${{ secrets.NOTIFICATION_FROM_EMAIL }}
 
       - name: Set environment variables
         run: |

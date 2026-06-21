@@ -27,3 +27,8 @@ variable "uncategorized_folder_id" {
   description = "Google Drive folder ID for uncategorized files"
   type        = string
 }
+
+variable "notification_topic_name" {
+  description = "Name of the PubSub topic for notification messages"
+  type        = string
+}

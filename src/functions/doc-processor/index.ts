@@ -1,5 +1,6 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { GetFileMetadataResponse, Storage } from '@google-cloud/storage';
+import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
   createErrorResponse,
@@ -31,6 +32,8 @@ interface Result {
 export const docProcessor = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
+  let parsedFileId = '';
+
   try {
     // Log the incoming CloudEvent for debugging
     // eslint-disable-next-line no-console
@@ -44,6 +47,7 @@ export const docProcessor = async (
     validateRequiredFields(messageData, ['fileId']);
 
     const { fileId } = messageData;
+    parsedFileId = fileId;
 
     // eslint-disable-next-line no-console
     console.log('Parsed message data:', JSON.stringify(messageData, null, 2));
@@ -189,6 +193,29 @@ export const docProcessor = async (
       console.warn(
         `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
       );
+
+      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
+      if (notificationTopicName) {
+        try {
+          const pubsub = new PubSub();
+          await pubsub.topic(notificationTopicName).publishMessage({
+            json: {
+              fileId: parsedFileId,
+              fileName: '',
+              stageName: 'doc-processor',
+              errorMessage: errorResponse.error,
+            },
+            attributes: {
+              operation: 'failure-notification',
+              fileId: parsedFileId,
+            },
+          });
+        } catch (notifyError) {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to publish failure notification:', notifyError);
+        }
+      }
+
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
         fileId: '',

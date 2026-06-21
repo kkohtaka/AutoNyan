@@ -18,3 +18,8 @@ variable "function_bucket_name" {
   type        = string
 }
 
+variable "notification_topic_name" {
+  description = "Name of the PubSub topic for notification messages"
+  type        = string
+}
+

@@ -477,6 +477,8 @@ Each environment (`staging`, `production`) should have these secrets with the sa
 - `DRIVE_FOLDER_ID` - Google Drive folder to scan
 - `CATEGORY_ROOT_FOLDER_ID` - Root folder for categorized files
 - `UNCATEGORIZED_FOLDER_ID` - Folder for uncategorized files
+- `BILLING_ACCOUNT_ID` - Cloud Billing account ID (format: XXXXXX-XXXXXX-XXXXXX)
+- `NOTIFICATION_FROM_EMAIL` - Sender email address for processing notifications
 
 **Environment variable in Terraform:**
 ```hcl

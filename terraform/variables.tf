@@ -55,3 +55,8 @@ variable "budget_alert_thresholds" {
   type        = list(number)
   default     = [0.5, 0.9, 1.0]
 }
+
+variable "notification_from_email" {
+  description = "Google Workspace email address to send notifications from (must be authorized for Domain-Wide Delegation)"
+  type        = string
+}

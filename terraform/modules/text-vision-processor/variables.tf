@@ -27,3 +27,8 @@ variable "vision_results_bucket_name" {
   description = "The name of the bucket for Vision API results"
   type        = string
 }
+
+variable "notification_topic_name" {
+  description = "Name of the PubSub topic for notification messages"
+  type        = string
+}

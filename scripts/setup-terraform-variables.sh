@@ -55,6 +55,11 @@ if [ -z "$BILLING_ACCOUNT_ID" ]; then
 	exit 1
 fi
 
+if [ -z "$NOTIFICATION_FROM_EMAIL" ]; then
+	echo "Error: NOTIFICATION_FROM_EMAIL variable is not set"
+	exit 1
+fi
+
 # Optional: default the monthly budget amount when not provided
 BUDGET_AMOUNT=${BUDGET_AMOUNT:-10000}
 
@@ -73,6 +78,7 @@ category_root_folder_id = "$CATEGORY_ROOT_FOLDER_ID"
 uncategorized_folder_id = "$UNCATEGORIZED_FOLDER_ID"
 billing_account_id = "$BILLING_ACCOUNT_ID"
 budget_amount = $BUDGET_AMOUNT
+notification_from_email = "$NOTIFICATION_FROM_EMAIL"
 EOF
 
 echo ""
@@ -88,3 +94,4 @@ echo "  category_root_folder_id = [MASKED]"
 echo "  uncategorized_folder_id = [MASKED]"
 echo "  billing_account_id = [MASKED]"
 echo "  budget_amount = $BUDGET_AMOUNT"
+echo "  notification_from_email = $NOTIFICATION_FROM_EMAIL"

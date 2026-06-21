@@ -19,6 +19,13 @@ resource "google_project_iam_member" "file_classifier_vertex_ai" {
   member  = "serviceAccount:${google_service_account.file_classifier.email}"
 }
 
+# IAM binding for PubSub publisher (to publish notifications)
+resource "google_project_iam_member" "file_classifier_pubsub_publisher" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${google_service_account.file_classifier.email}"
+}
+
 # PubSub topic for file classification trigger
 resource "google_pubsub_topic" "file_classification_trigger" {
   name = "${var.environment}-file-classification-trigger"
@@ -61,6 +68,7 @@ resource "google_cloudfunctions2_function" "file_classifier" {
       ENVIRONMENT             = var.environment
       VERTEX_AI_LOCATION      = var.region
       FIRESTORE_DATABASE_ID   = var.environment
+      NOTIFICATION_TOPIC      = var.notification_topic_name
     }
     service_account_email = google_service_account.file_classifier.email
   }
@@ -75,6 +83,7 @@ resource "google_cloudfunctions2_function" "file_classifier" {
   depends_on = [
     google_project_iam_member.file_classifier_firestore,
     google_project_iam_member.file_classifier_vertex_ai,
+    google_project_iam_member.file_classifier_pubsub_publisher,
     google_pubsub_topic.file_classification_trigger,
   ]
 }

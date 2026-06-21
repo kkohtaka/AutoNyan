@@ -32,3 +32,8 @@ variable "file_classifier_trigger_topic" {
   description = "The name of the PubSub topic to trigger file classification"
   type        = string
 }
+
+variable "notification_topic_name" {
+  description = "Name of the PubSub topic for notification messages"
+  type        = string
+}

@@ -1,5 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import { CloudEvent } from '@google-cloud/functions-framework';
+import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
   createErrorResponse,
@@ -129,7 +130,36 @@ export const fileClassifier = async (
       classificationConfidence: classification.confidence,
       classificationReasoning: classification.reasoning,
       classifiedAt: new Date().toISOString(),
+      summary: classification.summary,
     });
+
+    // Publish success notification (non-fatal)
+    const notificationTopicName = process.env.NOTIFICATION_TOPIC;
+    if (notificationTopicName) {
+      try {
+        const pubsub = new PubSub();
+        const notificationData = {
+          firestoreDocId: eventData.firestoreDocId,
+          fileId: eventData.fileId,
+          fileName: eventData.fileName,
+          category: classification.categoryName,
+          confidence: classification.confidence,
+          reasoning: classification.reasoning,
+          summary: classification.summary,
+          destinationFolderId: targetFolderId,
+        };
+        await pubsub.topic(notificationTopicName).publishMessage({
+          json: notificationData,
+          attributes: {
+            operation: 'success-notification',
+            fileId: eventData.fileId,
+          },
+        });
+      } catch (notifyError) {
+        // eslint-disable-next-line no-console
+        console.warn('Failed to publish success notification:', notifyError);
+      }
+    }
 
     // Move file in Google Drive AFTER Firestore update
     // If move fails, classification is still considered successful (Firestore is already updated)
@@ -179,6 +209,26 @@ export const fileClassifier = async (
       console.warn(
         `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
       );
+
+      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
+      if (notificationTopicName) {
+        try {
+          const pubsub = new PubSub();
+          await pubsub.topic(notificationTopicName).publishMessage({
+            json: {
+              fileId: '',
+              fileName: '',
+              stageName: 'file-classifier',
+              errorMessage: errorResponse.error,
+            },
+            attributes: { operation: 'failure-notification' },
+          });
+        } catch (notifyError) {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to publish failure notification:', notifyError);
+        }
+      }
+
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
         category: null,

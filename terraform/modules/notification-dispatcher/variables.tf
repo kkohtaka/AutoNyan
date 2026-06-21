@@ -18,13 +18,7 @@ variable "function_bucket_name" {
   type        = string
 }
 
-
-variable "doc_process_trigger_topic_name" {
-  description = "Name of the PubSub topic for document processing trigger"
-  type        = string
-}
-
-variable "notification_topic_name" {
-  description = "Name of the PubSub topic for notification messages"
+variable "notification_from_email" {
+  description = "Google Workspace email address to send notifications from (must be authorized for Domain-Wide Delegation)"
   type        = string
 }

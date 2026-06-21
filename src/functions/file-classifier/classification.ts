@@ -6,12 +6,14 @@ export interface ClassificationResult {
   categoryFolderId: string | null;
   confidence: number;
   reasoning: string;
+  summary: string;
 }
 
 interface GeminiResponse {
   category: string;
   confidence: number;
   reasoning: string;
+  summary: string;
 }
 
 const UNCATEGORIZED = 'UNCATEGORIZED';
@@ -64,7 +66,8 @@ ${truncatedText}
 {
   "category": "選択したカテゴリー名",
   "confidence": 0.95,
-  "reasoning": "選択理由の簡潔な説明"
+  "reasoning": "選択理由の簡潔な説明",
+  "summary": "文書内容の簡潔な要約（100文字程度）"
 }
 
 注意: confidence は 0.0 から 1.0 の範囲の数値で、分類の確信度を表してください。
@@ -90,6 +93,7 @@ ${truncatedText}
       categoryFolderId: null,
       confidence: 0,
       reasoning: `Category "${parsed.category}" not found in available folders`,
+      summary: parsed.summary,
     };
   }
 
@@ -98,6 +102,7 @@ ${truncatedText}
     categoryFolderId: categoryFolder?.id || null,
     confidence: parsed.confidence,
     reasoning: parsed.reasoning,
+    summary: parsed.summary,
   };
 }
 
@@ -123,7 +128,8 @@ function parseGeminiResponse(responseText: string): GeminiResponse {
   if (
     typeof parsed.category !== 'string' ||
     typeof parsed.confidence !== 'number' ||
-    typeof parsed.reasoning !== 'string'
+    typeof parsed.reasoning !== 'string' ||
+    typeof parsed.summary !== 'string'
   ) {
     throw new Error('Invalid response structure from Gemini');
   }

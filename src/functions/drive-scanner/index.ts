@@ -57,6 +57,8 @@ interface Result {
 export const driveScanner = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
+  let parsedFolderId = '';
+
   try {
     // Log the incoming CloudEvent for debugging
     // eslint-disable-next-line no-console
@@ -70,6 +72,7 @@ export const driveScanner = async (
     validateRequiredFields(messageData, ['folderId']);
 
     const { folderId } = messageData;
+    parsedFolderId = folderId;
 
     // eslint-disable-next-line no-console
     console.log('Parsed message data:', JSON.stringify(messageData, null, 2));
@@ -221,6 +224,25 @@ export const driveScanner = async (
       console.warn(
         `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
       );
+
+      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
+      if (notificationTopicName) {
+        try {
+          const pubsub = new PubSub();
+          await pubsub.topic(notificationTopicName).publishMessage({
+            json: {
+              folderId: parsedFolderId,
+              stageName: 'drive-scanner',
+              errorMessage: errorResponse.error,
+            },
+            attributes: { operation: 'failure-notification' },
+          });
+        } catch (notifyError) {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to publish failure notification:', notifyError);
+        }
+      }
+
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
         filesFound: 0,
