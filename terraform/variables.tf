@@ -45,15 +45,9 @@ variable "billing_account_id" {
 }
 
 variable "budget_amount" {
-  description = "Monthly budget amount (whole units of budget_currency_code) that triggers cost alerts"
+  description = "Monthly budget amount, in whole units of the billing account's own currency (the budget inherits that currency automatically), that triggers cost alerts"
   type        = number
-  default     = 50
-}
-
-variable "budget_currency_code" {
-  description = "ISO 4217 currency code for the budget amount (e.g., USD, JPY)"
-  type        = string
-  default     = "USD"
+  default     = 10000
 }
 
 variable "budget_alert_thresholds" {

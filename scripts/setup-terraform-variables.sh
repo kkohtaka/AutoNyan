@@ -56,7 +56,7 @@ if [ -z "$BILLING_ACCOUNT_ID" ]; then
 fi
 
 # Optional: default the monthly budget amount when not provided
-BUDGET_AMOUNT=${BUDGET_AMOUNT:-50}
+BUDGET_AMOUNT=${BUDGET_AMOUNT:-10000}
 
 # Generate terraform.tfvars from GitHub Actions variables/secrets
 echo "Generating terraform.tfvars for ${ENVIRONMENT} environment..."
