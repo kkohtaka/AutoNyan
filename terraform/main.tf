@@ -13,6 +13,15 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  # Some APIs (e.g. billingbudgets.googleapis.com) require a quota project via
+  # the X-Goog-User-Project header. Service-account auth (CI) supplies this
+  # automatically, but local user ADC does not, causing a 403 on budget reads.
+  # Routing quota/billing to this project makes both local and CI deploys work
+  # without per-developer GOOGLE_BILLING_PROJECT / GOOGLE_USER_PROJECT_OVERRIDE
+  # environment variables.
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 # Enable required Google Cloud APIs
