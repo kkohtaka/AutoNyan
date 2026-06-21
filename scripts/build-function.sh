@@ -4,7 +4,10 @@
 set -e
 
 # Get list of function directories
-mapfile -t FUNCTIONS < <(find src/functions -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
+FUNCTIONS=()
+while IFS= read -r dir; do
+	FUNCTIONS+=("$(basename "$dir")")
+done < <(find src/functions -maxdepth 1 -mindepth 1 -type d)
 
 # Copy shared utilities to each function directory before building
 echo "Copying shared utilities..."
