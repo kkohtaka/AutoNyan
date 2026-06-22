@@ -8,6 +8,7 @@
     "build": "tsc",
     "clean": "find . -name '*.js' -not -name 'jest.config.js' -delete && rm -f *.js.map *.d.ts && rm -rf dist/",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "lint": "eslint --config=../../eslint.config.js --fix .",
     "format": "prettier --write '**/*.ts'"
   },

@@ -14,7 +14,7 @@
     "terraform:validate": "npm run terraform:init && terraform -chdir=terraform validate",
     "deploy": "timeout 600 npm run terraform:apply",
     "test": "npm run test --workspaces",
-    "test:coverage": "npm run test:coverage --workspaces",
+    "test:coverage": "npm run test:coverage --workspaces --if-present",
     "test:e2e": "tsx tests/e2e/scripts/test-drive-access.ts && NODE_OPTIONS='--experimental-vm-modules' ENVIRONMENT=staging jest --config=tests/e2e/jest.config.e2e.js --runInBand",
     "test:e2e:check-auth": "tsx tests/e2e/scripts/check-auth.ts",
     "test:e2e:check-drive": "tsx tests/e2e/scripts/test-drive-access.ts",

@@ -50,13 +50,13 @@ if ! npm run lint:json; then
     exit 1
 fi
 
-# Run tests
+# Run tests with coverage thresholds (matches CI's test-functions job)
 echo ""
-echo "🧪 Running tests..."
-if ! npm test; then
+echo "🧪 Running tests with coverage..."
+if ! npm run test:coverage; then
     echo ""
-    echo "❌ Tests failed. Please fix the failing tests before pushing."
-    echo "   Run 'npm test' to see details."
+    echo "❌ Tests failed or coverage thresholds not met. Please fix before pushing."
+    echo "   Run 'npm run test:coverage' to see details."
     exit 1
 fi
 
@@ -70,5 +70,5 @@ chmod +x "${HOOKS_DIR}/pre-push"
 
 echo "✅ Git hooks installed successfully!"
 echo ""
-echo "Pre-push hook will now run 'npm run build', 'npm run lint', and 'npm test' before every push."
+echo "Pre-push hook will now run 'npm run build', 'npm run lint', and 'npm run test:coverage' before every push."
 echo "To skip the hook temporarily, use: git push --no-verify"
