@@ -31,6 +31,22 @@ interface ServiceAccountKey {
   private_key: string;
 }
 
+// Roles that receive success notifications. Includes Shared Drive roles
+// (organizer, fileOrganizer) alongside the My Drive roles, since members of a
+// Shared Drive never have the My Drive `owner`/`reader` roles.
+const NOTIFY_VIEWER_ROLES = [
+  'reader',
+  'commenter',
+  'writer',
+  'fileOrganizer',
+  'organizer',
+  'owner',
+];
+
+// Roles treated as the responsible owner of a folder for failure
+// notifications. Shared Drives have no `owner`; `organizer` is the equivalent.
+const FOLDER_OWNER_ROLES = ['owner', 'organizer'];
+
 function buildRfc2822Email(
   from: string,
   to: string,
@@ -109,7 +125,7 @@ async function handleSuccessNotification(
         p.type === 'user' &&
         p.role !== undefined &&
         p.role !== null &&
-        ['reader', 'commenter', 'writer', 'owner'].includes(p.role) &&
+        NOTIFY_VIEWER_ROLES.includes(p.role) &&
         p.emailAddress
     )
     .map((p) => p.emailAddress as string);
@@ -196,12 +212,19 @@ async function handleFailureNotification(
 
   const permissions = permissionsResponse.data.permissions || [];
   const ownerEmails = permissions
-    .filter((p) => p.role === 'owner' && p.type === 'user' && p.emailAddress)
+    .filter(
+      (p) =>
+        p.type === 'user' &&
+        p.role !== undefined &&
+        p.role !== null &&
+        FOLDER_OWNER_ROLES.includes(p.role) &&
+        p.emailAddress
+    )
     .map((p) => p.emailAddress as string);
 
   if (ownerEmails.length === 0) {
     // eslint-disable-next-line no-console
-    console.warn(`No owner found for folder: ${lookupFolderId}`);
+    console.warn(`No owner or organizer found for folder: ${lookupFolderId}`);
     return;
   }
 
