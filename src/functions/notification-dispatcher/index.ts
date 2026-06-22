@@ -233,13 +233,12 @@ export const notificationDispatcher = async (
     const { data: messageData } =
       parsePubSubEvent<NotificationMessage>(cloudEvent);
 
-    const eventData = cloudEvent.data as unknown as {
-      message?: { attributes?: Record<string, string> };
-      attributes?: Record<string, string>;
-    };
-
+    // PubSub message attributes are delivered at the top level of the
+    // CloudEvent (cloudEvent.attributes); cloudEvent.data carries only the
+    // base64-encoded message body.
     const attributes =
-      eventData?.message?.attributes || eventData?.attributes || {};
+      (cloudEvent as unknown as { attributes?: Record<string, string> })
+        .attributes ?? {};
     const operation = attributes['operation'];
 
     // eslint-disable-next-line no-console
