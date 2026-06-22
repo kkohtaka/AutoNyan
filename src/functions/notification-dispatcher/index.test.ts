@@ -37,24 +37,24 @@ function decodeRawEmail(raw: string): string {
   return Buffer.from(raw, 'base64url').toString('utf8');
 }
 
+// Builds an event in the shape the runtime actually delivers: the message body
+// is a base64-encoded string on cloudEvent.data, and the PubSub attributes are
+// at the top level on cloudEvent.attributes.
 const buildEvent = (
   data: Record<string, unknown>,
   attributes: Record<string, string> = {}
-): CloudEvent<MessagePublishedData> => ({
-  specversion: '1.0',
-  id: 'test-event-id',
-  source: 'test-source',
-  type: 'google.cloud.pubsub.topic.v1.messagePublished',
-  time: new Date().toISOString(),
-  data: {
-    message: {
-      data: Buffer.from(JSON.stringify(data)).toString('base64'),
-      attributes,
-      message_id: 'test-message-id',
-      publish_time: new Date().toISOString(),
-    },
-  } as unknown as MessagePublishedData,
-});
+): CloudEvent<MessagePublishedData> =>
+  ({
+    specversion: '1.0',
+    id: 'test-event-id',
+    source: 'test-source',
+    type: 'google.cloud.pubsub.topic.v1.messagePublished',
+    time: new Date().toISOString(),
+    data: Buffer.from(JSON.stringify(data)).toString('base64'),
+    attributes,
+    message_id: 'test-message-id',
+    publish_time: new Date().toISOString(),
+  }) as unknown as CloudEvent<MessagePublishedData>;
 
 describe('notificationDispatcher', () => {
   let mockPermissionsList: jest.Mock;
