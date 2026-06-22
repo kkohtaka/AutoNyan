@@ -160,6 +160,41 @@ describe('notificationDispatcher', () => {
       );
     });
 
+    it('should send emails to Shared Drive organizers and fileOrganizers', async () => {
+      mockParsePubSubEvent.mockReturnValue({ data: successData });
+
+      // Shared Drive members never have the My Drive `owner`/`reader` roles.
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            {
+              emailAddress: 'organizer@example.com',
+              role: 'organizer',
+              type: 'user',
+            },
+            {
+              emailAddress: 'manager@example.com',
+              role: 'fileOrganizer',
+              type: 'user',
+            },
+          ],
+        },
+      });
+
+      const event = buildEvent(successData, {
+        operation: 'success-notification',
+        fileId: 'file-123',
+      });
+      await notificationDispatcher(event);
+
+      expect(mockGmailSend).toHaveBeenCalledTimes(2);
+      const recipients = mockGmailSend.mock.calls.map((c) =>
+        decodeRawEmail(c[0].requestBody.raw as string)
+      );
+      expect(recipients[0]).toContain('To: organizer@example.com');
+      expect(recipients[1]).toContain('To: manager@example.com');
+    });
+
     it('should skip email sending when NOTIFICATION_SA_KEY is not set', async () => {
       delete process.env.NOTIFICATION_SA_KEY;
       mockParsePubSubEvent.mockReturnValue({ data: successData });
@@ -203,6 +238,41 @@ describe('notificationDispatcher', () => {
   });
 
   describe('failure notification', () => {
+    it('should send to Shared Drive organizers when there is no owner', async () => {
+      const failureData = {
+        folderId: 'shared-drive-folder',
+        stageName: 'doc-processor',
+        errorMessage: 'Invalid file data',
+      };
+
+      mockParsePubSubEvent.mockReturnValue({ data: failureData });
+
+      // Shared Drive: humans are `organizer`, never `owner`; writers are SAs.
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            {
+              emailAddress: 'organizer@example.com',
+              role: 'organizer',
+              type: 'user',
+            },
+            { emailAddress: 'sa@example.com', role: 'writer', type: 'user' },
+          ],
+        },
+      });
+
+      const event = buildEvent(failureData, {
+        operation: 'failure-notification',
+      });
+      await notificationDispatcher(event);
+
+      expect(mockGmailSend).toHaveBeenCalledTimes(1);
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      expect(decoded).toContain('To: organizer@example.com');
+    });
+
     it('should look up parents from fileId and send to owner', async () => {
       const failureData = {
         fileId: 'file-456',
@@ -337,7 +407,7 @@ describe('notificationDispatcher', () => {
 
       expect(mockGmailSend).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('No owner found')
+        expect.stringContaining('No owner or organizer found')
       );
 
       consoleSpy.mockRestore();
