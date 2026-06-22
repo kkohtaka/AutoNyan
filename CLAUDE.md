@@ -747,10 +747,12 @@ gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"FOLDER_ID"}'
 
 2. **Verify all checks pass** (no linting errors, no formatting issues)
 
-3. **Run tests:**
+3. **Run tests with coverage** (matches CI and the pre-push hook):
    ```bash
-   npm test
+   npm run test:coverage
    ```
+   This enforces the same coverage thresholds as CI, so a shortfall is caught
+   locally before push. Use `npm test` only for a quick run without thresholds.
 
 4. **Review changed files** before staging
 
