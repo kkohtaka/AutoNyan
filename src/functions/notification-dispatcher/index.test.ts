@@ -387,6 +387,27 @@ describe('notificationDispatcher', () => {
   });
 
   describe('unknown operation', () => {
+    it('should treat an event without attributes as an unknown operation', async () => {
+      const data = { someField: 'value' };
+      mockParsePubSubEvent.mockReturnValue({ data });
+
+      const consoleSpy = jest
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      // Event with no top-level attributes at all (operation cannot be resolved)
+      const event = buildEvent(data);
+      delete (event as unknown as { attributes?: unknown }).attributes;
+      await notificationDispatcher(event);
+
+      expect(mockGmailSend).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Unknown notification operation: undefined')
+      );
+
+      consoleSpy.mockRestore();
+    });
+
     it('should log warning for unknown operation and return', async () => {
       const data = { someField: 'value' };
       mockParsePubSubEvent.mockReturnValue({ data });
