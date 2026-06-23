@@ -89,16 +89,34 @@ Fill the chosen template. Guidelines:
 ### Step 5 — Confirm before filing
 
 Show the user the proposed **title, labels, body, and parent issue (if any)**.
-Wait for explicit approval. Filing an issue is an outward-facing action — do not
-run `gh issue create` until the user confirms.
+Include the Claude Code attribution footer (see Step 6) in the body you show, so
+the user reviews exactly what will be filed. Wait for explicit approval. Filing
+an issue is an outward-facing action — do not run `gh issue create` until the
+user confirms.
 
 ### Step 6 — Create the issue
 
 Title: concise. For a new-skill issue use the `skill(<name>): ...` prefix.
 
+Always append the Claude Code attribution footer as the **last line** of the
+submitted body, separated from the content above by a blank line, so readers can
+tell at a glance the issue was filed by the agent:
+
+```
+🤖 Created by Claude Code via the create-issue skill
+```
+
+This marker is added by the skill at creation time only. Do **not** add it to the
+issue templates (`.github/ISSUE_TEMPLATE/general.md`, `.github/ISSUE_TEMPLATE/skill.md`),
+so manually-filed issues remain unmarked. The marker is **body-only**: no
+attribution label is applied (no suitable `agent`/`claude-code` label exists
+today; adding one is a separate, out-of-scope follow-up).
+
 ```bash
 gh issue create --title "<title>" --label "<label1>" --label "<label2>" --body "$(cat <<'EOF'
 <body>
+
+🤖 Created by Claude Code via the create-issue skill
 EOF
 )"
 ```
