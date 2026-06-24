@@ -47,6 +47,15 @@ const NOTIFY_VIEWER_ROLES = [
 // notifications. Shared Drives have no `owner`; `organizer` is the equivalent.
 const FOLDER_OWNER_ROLES = ['owner', 'organizer'];
 
+// Pipeline service accounts are shared on the Drive folders as `user`-type
+// collaborators (see scripts/share-drive-folders.ts) so the functions can
+// read/write them. Their `*.gserviceaccount.com` addresses are not real
+// mailboxes — the domain has no MX records — so sending notifications to them
+// bounces with NXDOMAIN. They must never be treated as notification recipients.
+function isServiceAccountEmail(email: string): boolean {
+  return email.toLowerCase().endsWith('.gserviceaccount.com');
+}
+
 function buildRfc2822Email(
   from: string,
   to: string,
@@ -126,7 +135,8 @@ async function handleSuccessNotification(
         p.role !== undefined &&
         p.role !== null &&
         NOTIFY_VIEWER_ROLES.includes(p.role) &&
-        p.emailAddress
+        p.emailAddress &&
+        !isServiceAccountEmail(p.emailAddress)
     )
     .map((p) => p.emailAddress as string);
 
@@ -218,7 +228,8 @@ async function handleFailureNotification(
         p.role !== undefined &&
         p.role !== null &&
         FOLDER_OWNER_ROLES.includes(p.role) &&
-        p.emailAddress
+        p.emailAddress &&
+        !isServiceAccountEmail(p.emailAddress)
     )
     .map((p) => p.emailAddress as string);
 

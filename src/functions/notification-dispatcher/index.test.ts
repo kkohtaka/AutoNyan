@@ -195,6 +195,46 @@ describe('notificationDispatcher', () => {
       expect(recipients[1]).toContain('To: manager@example.com');
     });
 
+    it('should not send notifications to service account collaborators', async () => {
+      mockParsePubSubEvent.mockReturnValue({ data: successData });
+
+      // The pipeline service accounts are shared on the destination folder as
+      // `user`/`writer` collaborators. Their gserviceaccount.com addresses are
+      // not real mailboxes and must be excluded from notification recipients.
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            { emailAddress: 'human@example.com', role: 'writer', type: 'user' },
+            {
+              emailAddress:
+                'staging-text-vision-proc@home-hack-388806.iam.gserviceaccount.com',
+              role: 'writer',
+              type: 'user',
+            },
+            {
+              emailAddress:
+                'github-actions-terraform@home-hack-388806.iam.gserviceaccount.com',
+              role: 'writer',
+              type: 'user',
+            },
+          ],
+        },
+      });
+
+      const event = buildEvent(successData, {
+        operation: 'success-notification',
+        fileId: 'file-123',
+      });
+      await notificationDispatcher(event);
+
+      expect(mockGmailSend).toHaveBeenCalledTimes(1);
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      expect(decoded).toContain('To: human@example.com');
+      expect(decoded).not.toContain('gserviceaccount.com');
+    });
+
     it('should skip email sending when NOTIFICATION_SA_KEY is not set', async () => {
       delete process.env.NOTIFICATION_SA_KEY;
       mockParsePubSubEvent.mockReturnValue({ data: successData });
@@ -271,6 +311,46 @@ describe('notificationDispatcher', () => {
         mockGmailSend.mock.calls[0][0].requestBody.raw as string
       );
       expect(decoded).toContain('To: organizer@example.com');
+    });
+
+    it('should exclude service account organizers from failure notifications', async () => {
+      const failureData = {
+        folderId: 'shared-drive-folder',
+        stageName: 'doc-processor',
+        errorMessage: 'Invalid file data',
+      };
+
+      mockParsePubSubEvent.mockReturnValue({ data: failureData });
+
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            {
+              emailAddress: 'organizer@example.com',
+              role: 'organizer',
+              type: 'user',
+            },
+            {
+              emailAddress:
+                'staging-doc-processor@home-hack-388806.iam.gserviceaccount.com',
+              role: 'organizer',
+              type: 'user',
+            },
+          ],
+        },
+      });
+
+      const event = buildEvent(failureData, {
+        operation: 'failure-notification',
+      });
+      await notificationDispatcher(event);
+
+      expect(mockGmailSend).toHaveBeenCalledTimes(1);
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      expect(decoded).toContain('To: organizer@example.com');
+      expect(decoded).not.toContain('gserviceaccount.com');
     });
 
     it('should look up parents from fileId and send to owner', async () => {
