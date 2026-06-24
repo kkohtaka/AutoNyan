@@ -1,0 +1,132 @@
+---
+name: commit
+description: Create one or more incremental conventional commits on a properly named branch, without pushing or opening a PR
+argument-hint: "[commit-scope-hint]"
+disable-model-invocation: true
+allowed-tools: Bash(git *)
+---
+
+# Commit
+
+## Context
+
+Collect the information needed to group and commit the changes.
+
+**Working tree status:**
+```
+!`git status --short`
+```
+
+**Current branch:**
+```
+!`git branch --show-current`
+```
+
+**Staged and unstaged diff:**
+```
+!`git diff HEAD`
+```
+
+**Recent commits (for message style and to detect already-committed work):**
+```
+!`git log --oneline -10`
+```
+
+## Your Task
+
+Follow these steps in order. Stop and ask the user if anything is unclear.
+
+This skill creates local commits only. A local commit is not outward-facing and
+is reversible, so it needs no confirmation gate (CONVENTIONS.md §4.3). Pushing
+the branch and opening a PR are **out of scope** — those are the `create-pr`
+skill's job; do not perform them here.
+
+### Step 1 — Ensure the work is on a properly named branch
+
+First, fetch the latest remote state:
+
+```bash
+git fetch origin
+```
+
+**Case A — current branch is NOT suitable** (it is `master`, or its name does
+not describe the work):
+
+Create a new branch from the remote default branch and move the relevant changes
+there:
+
+```bash
+git checkout -b <branch-name> origin/master
+```
+
+- Derive the branch name from the actual diff/changes — specific enough to
+  convey purpose at a glance.
+- Convention: `feat/`, `fix/`, `refactor/`, `docs/`, `chore/`, `ci/` + lowercase
+  kebab-case description.
+- If the user passed `$ARGUMENTS`, use it as a hint for the branch name and
+  commit scope (adjusted to fit the convention if needed).
+- Uncommitted changes follow `git checkout -b` automatically. If the work was
+  already committed on `master` or a poorly named branch, move those commits to
+  the new branch (e.g. cherry-pick) and reset the old branch.
+
+**Case B — current branch is already a suitable work branch:**
+
+Stay on the current branch — no branch change needed.
+
+### Step 2 — Group related changes
+
+Inspect the diff and split it into focused, logically coherent groups. Each group
+becomes one commit:
+
+- One concern per commit (e.g. keep an unrelated refactor out of a feature commit).
+- Prefer a few meaningful commits over one catch-all commit when the changes
+  address distinct concerns.
+
+### Step 3 — Stage only the relevant files
+
+For the first group, stage just the files that belong to it:
+
+```bash
+git add <file> ...
+```
+
+- Stage only files relevant to the current commit — do not blanket `git add -A`
+  when multiple groups exist.
+- Never stage secrets or credentials (`.env`, key files) or large binaries.
+
+### Step 4 — Write the commit
+
+Commit the staged group with a **conventional commit message**:
+
+- Format: `<type>: <short imperative description>`.
+- Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
+- Keep the subject line under 72 characters.
+- Focus on *why*, not *what*.
+- Append the Co-Authored-By trailer using the model name you are currently
+  running as (e.g. `Claude Sonnet 4.6`, `Claude Opus 4.8`, `Claude Haiku 4.5`):
+
+```bash
+git commit -m "$(cat <<'EOF'
+<type>: <short imperative description>
+
+<optional body explaining why>
+
+Co-Authored-By: Claude <model-name> <noreply@anthropic.com>
+EOF
+)"
+```
+
+### Step 5 — Repeat for remaining groups
+
+If Step 2 produced more than one group, repeat Steps 3–4 for each remaining
+group until all intended changes are committed. Leave out any changes that do
+not belong in this set of commits.
+
+### Step 6 — Report
+
+Report the commits created (subject lines and hashes) and the branch they are
+on. State plainly if any changes were intentionally left uncommitted.
+
+If the user now wants to share this work, point them to the `create-pr` skill,
+which pushes the branch and opens a PR (with the required confirmation gate for
+those outward-facing actions).
