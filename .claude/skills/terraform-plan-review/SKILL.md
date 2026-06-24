@@ -51,6 +51,9 @@ export ENVIRONMENT="${ARGUMENTS:-${ENVIRONMENT:-staging}}"
 echo "Target environment: $ENVIRONMENT"
 ```
 
+Confirm the choice with the user before continuing if `ENVIRONMENT` is
+`production` — a production plan reads real infrastructure state.
+
 ### Step 2 — Ensure the Terraform backend is initialized
 
 Run `terraform:init` with `-reconfigure` so it switches to the correct backend
@@ -110,7 +113,8 @@ For each stateful resource scheduled for destroy or replace:
 1. Report it as a **DATA-LOSS RISK**.
 2. Check whether `force_destroy` is set to `true` in the plan output or the
    Terraform source — if it is, note that the bucket/database contents will be
-   permanently deleted without a separate confirmation step.
+   permanently deleted without a separate confirmation step. Flag this as
+   **HIGH RISK**.
 3. Recommend the user verify a backup or confirm the data is expendable before
    applying.
 
