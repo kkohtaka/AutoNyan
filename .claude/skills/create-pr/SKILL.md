@@ -95,23 +95,7 @@ Co-Authored-By: Claude <model-name> <noreply@anthropic.com>
 git push -u origin <branch-name>
 ```
 
-### Step 4 — Find any related issue
-
-Before writing the PR, check whether an open issue relates to this work. Search by
-keywords drawn from the diff, the branch name, and the commit messages:
-
-```bash
-gh issue list --state open --search "<keywords>"
-```
-
-- If you find a related issue, note its number and URL for the PR body (Step 5).
-- Decide whether this PR **resolves** the issue (fully addresses it) or is merely
-  **related** to it (touches the same area without closing it).
-- If no issue is clearly related, do not invent one — skip the issue reference.
-- If you are unsure whether an issue is related or whether the PR fully resolves it,
-  ask the user.
-
-### Step 5 — Write the PR
+### Step 4 — Write the PR
 
 Analyse all commits in `git log master..HEAD` (not just the latest) and draft:
 
@@ -133,7 +117,13 @@ Guidelines for filling in the template:
 - If the change touches infrastructure (Terraform), mention `terraform plan` in the test plan
 - If the change touches CI workflows, mention checking the Actions run
 
-**Related issue** (only if Step 4 found one):
+**Related issue** — only reference an issue when either:
+- the **conversation context so far** clearly points to a specific issue this work
+  addresses, or
+- the **user explicitly asked** to link a particular issue.
+
+Do not search for or guess at issues otherwise; if none is established, skip this section.
+When you do reference one:
 - Add a `## Related issue` section near the top of the body, just under the title-level content.
 - If this PR **resolves** the issue, link it with a closing keyword so the issue is closed on merge:
   ```
@@ -146,15 +136,16 @@ Guidelines for filling in the template:
 - Never include links to AI sessions or any AI-tooling URLs in the PR body.
 
 **Footer** — always append the following footer at the very end of the body so it is
-clear the PR was authored with AI assistance:
+clear the PR was authored with AI assistance. Substitute the model name you are
+currently running as (e.g. `Claude Opus 4.8`, `Claude Sonnet 4.6`, `Claude Haiku 4.5`):
 
 ```
 ---
 
-🤖 This pull request was created with the assistance of AI.
+🤖 This pull request was created with the assistance of AI (<model-name>).
 ```
 
-### Step 6 — Create the PR as a draft
+### Step 5 — Create the PR as a draft
 
 ```bash
 gh pr create --draft --title "<title>" --body "$(cat <<'EOF'
