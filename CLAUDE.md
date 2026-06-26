@@ -284,6 +284,27 @@ resource "google_cloudfunctions2_function" "my_function" {
 }
 ```
 
+### Comment Policy
+
+Comments (in code, Terraform, and CI workflows) follow these project rules:
+
+- **Explain "why", not "what".** A comment that restates what the next line
+  obviously does is removed. Keep comments that capture rationale a reader
+  cannot recover from the code — a non-obvious decision, constraint, or
+  footgun.
+- **No redundant comments.** Drop any comment that duplicates an adjacent
+  `echo`/log line, a self-documenting variable name, or text already written
+  in this document.
+- **Single source of truth for rationale.** Document a design rationale in
+  exactly one place — usually this `CLAUDE.md` — and have the code carry only
+  a short pointer or a local warning, never a second copy that must be kept in
+  sync.
+- **Keep-or-remove judgment.** When deciding whether a comment earns its place,
+  weigh its maintenance cost (concrete names — file paths, patterns, resource
+  names — drift and go stale) against its benefit (readability and preventing a
+  future maintainer from making a breaking change). Keep it only when the
+  benefit clearly wins.
+
 ## Development Workflows
 
 ### Feature Development Workflow
