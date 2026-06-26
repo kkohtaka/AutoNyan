@@ -581,20 +581,9 @@ git tag v1.0.0 → Deploy to Production
 
 ### Smart Detection Logic
 
-Both the Test workflow and the Terraform Plan workflow skip unnecessary work when a PR only touches code-unrelated files, but they scope "relevant" differently because they validate different things.
+Both the Test workflow (`test.yml`) and the Terraform Plan workflow (`terraform-plan.yml`) skip unnecessary work when a PR only touches code-unrelated files (docs, skills, IDE config), so Renovate dev-dependency bumps and skill/docs edits do not run the full lint/test matrix or Terraform plan.
 
-**Terraform Plan (`terraform-plan.yml`)** uses an allowlist: it runs the plan only when changed files match `terraform/`, `src/`, `package.json`, `package-lock.json`, or `scripts/build-function.sh`. Anything else (docs, workflows, IDE config) skips the plan.
-
-**Test (`test.yml`)** uses an ignore-list instead, because `lint-global` also lints YAML (`.github/`), JSON, shell scripts, and Terraform — so its set of relevant files is broader than Terraform's. A `detect-changes` gate job skips the heavy `lint-functions` / `lint-global` / `test-functions` matrix only when **every** changed file is code-unrelated:
-- Documentation files (`*.md`, anywhere)
-- Claude config (`.claude/`, e.g. skills and agents)
-- IDE configuration files (`.vscode/`, `.devcontainer/`)
-
-Any other change (function/shared code, Terraform, scripts, workflows, JSON config, dependencies) runs the full matrix. Files that Terraform Plan treats as relevant are never in the Test ignore-list, so the two workflows never disagree on code changes.
-
-**Required-check safety:** the `test` job always runs (`if: always()`) and reports success when the matrix is skipped, so a code-unrelated PR stays mergeable instead of leaving the required `test` check perpetually pending — the classic `paths-ignore` pitfall.
-
-This prevents unnecessary Terraform runs and lint/test matrices for Renovate updates to dev dependencies, skill/docs edits, or workflow improvements.
+The exact detection rules live in the workflows' change-detection steps — Test in its `detect-changes` job, Terraform Plan in its detect step — and the comments there explain why each workflow scopes "relevant" differently. Treat those steps as the source of truth rather than restating the patterns here.
 
 ### Debugging CI/CD Workflows
 
