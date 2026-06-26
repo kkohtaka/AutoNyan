@@ -34,16 +34,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Decide whether the heavy lint/test matrix needs to run. Code-unrelated PRs
-  # (skills, docs, IDE config) skip the matrix to avoid wasteful CI, while the
-  # required `test` check still reports success (see the `test` job below).
-  #
-  # Detection uses an ignore-list rather than terraform-plan.yml's allowlist:
-  # lint-global also lints YAML (.github/), JSON, shell and Terraform, so the
-  # set of "code-relevant" files is broader than terraform's. We therefore skip
-  # only when EVERY changed file is code-unrelated; anything else runs the
-  # matrix. Files terraform-plan.yml treats as relevant (src/, terraform/,
-  # package*.json) are never in the ignore set, so the two workflows agree.
+  # Gate job: skip the heavy lint/test matrix when only code-unrelated files
+  # changed. NOTE: this is an ignore-list, deliberately NOT the same shape as
+  # terraform-plan.yml's allowlist — lint-global lints more file types (YAML,
+  # JSON, shell, Terraform), so "code-relevant" is broader here. Do not unify
+  # the two patterns or workflow/script-only changes would be mis-skipped.
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
@@ -71,13 +66,10 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          # Code-unrelated files: documentation, Claude config (skills/agents),
-          # and IDE config. A PR touching only these skips the matrix.
           CODE_UNRELATED='(\.md$|^\.claude/|^\.vscode/|^\.devcontainer/)'
           RELEVANT=$(echo "$CHANGED_FILES" | grep -vE "$CODE_UNRELATED" || true)
 
           if [ -z "$CHANGED_FILES" ]; then
-            # No detectable changes: run the matrix (safe default).
             echo "run_matrix=true" >> $GITHUB_OUTPUT
             echo "ℹ️  No changed files detected - running matrix as a safe default"
           elif [ -z "$RELEVANT" ]; then
