@@ -34,8 +34,64 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decide whether the heavy lint/test matrix needs to run. Code-unrelated PRs
+  # (skills, docs, IDE config) skip the matrix to avoid wasteful CI, while the
+  # required `test` check still reports success (see the `test` job below).
+  #
+  # Detection uses an ignore-list rather than terraform-plan.yml's allowlist:
+  # lint-global also lints YAML (.github/), JSON, shell and Terraform, so the
+  # set of "code-relevant" files is broader than terraform's. We therefore skip
+  # only when EVERY changed file is code-unrelated; anything else runs the
+  # matrix. Files terraform-plan.yml treats as relevant (src/, terraform/,
+  # package*.json) are never in the ignore set, so the two workflows agree.
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_matrix: ${{ steps.detect.outputs.run_matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect if lint/test matrix is needed
+        id: detect
+        run: |
+          # For PRs, compare against master; for master pushes, diff the commit.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin master:master
+            CHANGED_FILES=$(git diff --name-only master...${{ github.event.pull_request.head.sha }})
+          else
+            if git rev-parse HEAD^ >/dev/null 2>&1; then
+              CHANGED_FILES=$(git diff --name-only HEAD^..HEAD)
+            else
+              CHANGED_FILES=$(git diff --name-only $(git hash-object -t tree /dev/null)..HEAD)
+            fi
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Code-unrelated files: documentation, Claude config (skills/agents),
+          # and IDE config. A PR touching only these skips the matrix.
+          CODE_UNRELATED='(\.md$|^\.claude/|^\.vscode/|^\.devcontainer/)'
+          RELEVANT=$(echo "$CHANGED_FILES" | grep -vE "$CODE_UNRELATED" || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            # No detectable changes: run the matrix (safe default).
+            echo "run_matrix=true" >> $GITHUB_OUTPUT
+            echo "ℹ️  No changed files detected - running matrix as a safe default"
+          elif [ -z "$RELEVANT" ]; then
+            echo "run_matrix=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Only code-unrelated files changed - skipping lint/test matrix"
+          else
+            echo "run_matrix=true" >> $GITHUB_OUTPUT
+            echo "✅ Code-relevant files changed - running lint/test matrix"
+          fi
+
   lint-functions:
     runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run_matrix == 'true'
     env:
       # Reduced from 4096MB: type checking disabled for test files + .eslintignore reduces file set
       NODE_OPTIONS: --max-old-space-size=2048
@@ -74,6 +130,8 @@ jobs:
 
   lint-global:
     runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.run_matrix == 'true'
     env:
       # Reduced from 4096MB: still needs more memory for Terraform + multi-tool linting
       NODE_OPTIONS: --max-old-space-size=3072
@@ -136,7 +194,8 @@ jobs:
 
   test-functions:
     runs-on: ubuntu-latest
-    needs: [lint-functions, lint-global]
+    needs: [detect-changes, lint-functions, lint-global]
+    if: needs.detect-changes.outputs.run_matrix == 'true'
     env:
       # Reduced from 4096MB: Jest workerIdleMemoryLimit prevents memory leaks
       NODE_OPTIONS: --max-old-space-size=2048
@@ -186,12 +245,32 @@ jobs:
         if: steps.coverage.outcome == 'failure'
         run: exit 1
 
+  # Required status check. Always runs so it can report success even when the
+  # lint/test matrix is skipped for a code-unrelated PR (a bare `paths-ignore`
+  # would leave this required check perpetually pending and block merges).
   test:
     runs-on: ubuntu-latest
-    needs: [test-functions]
+    needs: [detect-changes, lint-functions, lint-global, test-functions]
+    if: always()
     steps:
-      - name: All tests and coverage checks passed
-        run: echo "✅ All tests and coverage checks completed successfully"
+      - name: Aggregate matrix results
+        run: |
+          if [ "${{ needs.detect-changes.outputs.run_matrix }}" != "true" ]; then
+            echo "⏭️  Code-unrelated PR - lint/test matrix skipped, reporting success"
+            exit 0
+          fi
+
+          if [ "${{ needs.lint-functions.result }}" != "success" ] || \
+             [ "${{ needs.lint-global.result }}" != "success" ] || \
+             [ "${{ needs.test-functions.result }}" != "success" ]; then
+            echo "❌ One or more lint/test jobs did not succeed"
+            echo "  lint-functions: ${{ needs.lint-functions.result }}"
+            echo "  lint-global:    ${{ needs.lint-global.result }}"
+            echo "  test-functions: ${{ needs.test-functions.result }}"
+            exit 1
+          fi
+
+          echo "✅ All tests and coverage checks completed successfully"
 
   trigger-terraform-plan:
     runs-on: ubuntu-latest
