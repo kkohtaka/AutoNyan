@@ -606,6 +606,17 @@ Both the Test workflow (`test.yml`) and the Terraform Plan workflow (`terraform-
 
 The exact detection rules live in the workflows' change-detection steps — Test in its `detect-changes` job, Terraform Plan in its detect step — and the comments there explain why each workflow scopes "relevant" differently. Treat those steps as the source of truth rather than restating the patterns here.
 
+### Required Status Check Invariant
+
+**Every required status check in the `master` ruleset must be reported for all PRs the ruleset applies to — including code-unrelated ones.** A skip path (smart detection, gating, or any conditional that prevents a job from running) must still post a terminal status for each required check; it must never leave a required check perpetually pending, or the PR is stuck `BLOCKED` even when all jobs that ran are green.
+
+The ruleset requires two contexts, each reported by a distinct workflow:
+
+- **`test`** — reported by the aggregation `test` job in `.github/workflows/test.yml`. It runs with `if: always()` and reports success even when the lint/test matrix was skipped for a code-unrelated PR.
+- **`terraform/plan/staging`** — reported by the "Set final status" step in `.github/workflows/terraform-plan.yml`. That workflow self-skips the actual plan for no-infrastructure PRs but still posts `success`. For PRs it is dispatched by the `trigger-terraform-plan` job in `test.yml`, which therefore must still fire when `test` succeeded even if the matrix was skipped.
+
+This was the regression in #344: a skip cascade left `terraform/plan/staging` unreported on code-unrelated PRs. When changing the skip/gating graph, preserve this invariant for both contexts.
+
 ### Debugging CI/CD Workflows
 
 When CI tests fail or you need to investigate GitHub Actions execution, use the WebFetch tool to retrieve CI results and logs directly from Claude Code on the Web.

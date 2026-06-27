@@ -237,9 +237,11 @@ jobs:
         if: steps.coverage.outcome == 'failure'
         run: exit 1
 
-  # Required status check. Always runs so it can report success even when the
-  # lint/test matrix is skipped for a code-unrelated PR (a bare `paths-ignore`
-  # would leave this required check perpetually pending and block merges).
+  # Required status check (`test`). Always runs so it can report success even
+  # when the lint/test matrix is skipped for a code-unrelated PR (a bare
+  # `paths-ignore` would leave this required check perpetually pending and block
+  # merges). See the CI invariant in CLAUDE.md on always reporting required
+  # checks.
   test:
     runs-on: ubuntu-latest
     needs: [detect-changes, lint-functions, lint-global, test-functions]
@@ -264,14 +266,20 @@ jobs:
 
           echo "✅ All tests and coverage checks completed successfully"
 
+  # Dispatches terraform-plan.yml, the only reporter of the required
+  # `terraform/plan/staging` check. The leading `always() && test == 'success'`
+  # is load-bearing: `test` runs with `if: always()`, so on a code-unrelated PR
+  # its skipped matrix needs would otherwise cascade a skip here and the
+  # required check would never be posted. See the CI invariant in CLAUDE.md.
   trigger-terraform-plan:
     runs-on: ubuntu-latest
     needs: [test]
     if: |
-      (github.event_name == 'pull_request' &&
-       (github.event.pull_request.user.login == 'kohtaka-bot[bot]' ||
-        github.event.pull_request.user.login == github.repository_owner)) ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/master')
+      always() && needs.test.result == 'success' &&
+      ((github.event_name == 'pull_request' &&
+        (github.event.pull_request.user.login == 'kohtaka-bot[bot]' ||
+         github.event.pull_request.user.login == github.repository_owner)) ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/master'))
     steps:
       - name: Trigger Terraform Plan workflow
         uses: actions/github-script@v8
