@@ -307,148 +307,47 @@ Comments (in code, Terraform, and CI workflows) follow these project rules:
 
 ## Development Workflows
 
-### Feature Development Workflow
+These workflows are implemented as skills under `.claude/skills/`. Invoke the
+skill rather than following steps by hand — each skill discovers the current
+repo layout and keeps the procedure in one place. The notes below capture only
+the knowledge a skill cannot rediscover.
 
-1. **Create feature branch** (never develop on master)
-   ```bash
-   git checkout -b feature/description
-   ```
+### Feature Development
 
-2. **Make changes** to code or infrastructure
+Work on a `feature/` or `fix/` branch, never on master. The end-to-end loop is a
+chain of skills: make changes → `quality-gate` (lint, format check,
+coverage-gated tests) → `commit` → `create-pr`. The branch, commit, and PR
+conventions those skills enforce are in the Git Workflow Rules below.
 
-3. **Run quality checks** before committing
-   ```bash
-   npm run lint
-   npm run format
-   npm test
-   ```
+### Adding a New Function
 
-4. **Commit changes** with descriptive message
-   ```bash
-   git add .
-   git commit -m "feat: add feature description"
-   ```
+Use the `add-function` skill — it scaffolds the `src/functions/<name>/` npm
+workspace, the `terraform/modules/<name>/` module, the `terraform/main.tf`
+wiring, and **both** CI matrices in `.github/workflows/test.yml`. The pipeline is
+event-driven, so a new stage becomes reachable only once its event trigger is
+wired to the upstream/downstream topic or bucket (see Architecture above).
 
-5. **Push and create PR**
-   ```bash
-   git push -u origin feature/description
-   ```
+### Infrastructure Change
 
-6. **Automated checks run** in GitHub Actions (linting, tests, Terraform plan for owner PRs)
+Edit Terraform under `terraform/`, then review with the `terraform-plan-review`
+skill before applying. The review must catch unexpected resource changes, data
+loss (e.g. a bucket with `force_destroy = false` being replaced), and IAM that
+violates least privilege. Applying to staging is the `deploy-staging` skill;
+production deploys via a version tag (see CI/CD Pipeline below). Never
+`terraform apply` without reviewing the plan first.
 
-7. **Review and merge** after approval
+### Debugging
 
-### Adding a New Function Workflow
+**Local:** `console.log()` is fine (stripped from production builds); run
+functions against test events with all GCP services mocked.
 
-1. **Create function workspace**
-   - Create `src/functions/new-function/` directory
-   - Set up `package.json`, `tsconfig.json`, `jest.config.js` (copy from existing function)
-   - Add workspace to root `package.json` (auto-discovered via `src/functions/*` pattern)
+**Deployed function:** use the `debug-function-logs` skill — it reads logs with
+`gcloud` and maps findings to the common failure modes (timeout → module
+config, permission error → service-account IAM, event not triggering →
+trigger / PubSub-Storage permissions, module not found → workspace build
+output).
 
-2. **Implement CloudEvent handler**
-   - Create `index.ts` with exported function
-   - Use shared utilities for parsing and validation
-   - Follow existing patterns for GCP service integration
-
-3. **Write tests**
-   - Create `index.test.ts` with comprehensive coverage
-   - Mock all external services
-   - Test success paths and error handling
-
-4. **Create Terraform module**
-   - Create `terraform/modules/new-function/` directory
-   - Define service account, IAM roles, Cloud Function resource
-   - Configure event trigger (PubSub or Storage)
-   - Add required infrastructure (topics, buckets, etc.)
-
-5. **Wire up in main configuration**
-   - Add module block to `terraform/main.tf`
-   - Connect to pipeline via event triggers
-   - Add to build script if needed
-
-6. **Update CI workflow**
-   - Add new function to matrix in `.github/workflows/test.yml`
-   - Update both `lint-functions` and `test-functions` job matrices
-   - Example:
-     ```yaml
-     strategy:
-       matrix:
-         function:
-           [
-             doc-processor,
-             drive-scanner,
-             file-classifier,  # Add new function here
-             text-firebase-writer,
-             text-vision-processor,
-           ]
-     ```
-
-7. **Test locally**
-   ```bash
-   npm run build
-   npm test --workspace=src/functions/new-function
-   npm run terraform:plan  # Review infrastructure changes
-   ```
-
-8. **Deploy**
-   ```bash
-   npm run deploy
-   ```
-
-### Infrastructure Change Workflow
-
-1. **Modify Terraform files** in `terraform/` or `terraform/modules/`
-
-2. **Validate configuration**
-   ```bash
-   npm run terraform:validate
-   npm run lint:terraform
-   ```
-
-3. **Preview changes**
-   ```bash
-   npm run terraform:plan
-   ```
-
-4. **Review plan output carefully**
-   - Check for unexpected resource changes
-   - Verify no data loss (e.g., storage buckets with `force_destroy = false`)
-   - Ensure IAM changes follow least privilege
-
-5. **Apply changes**
-   ```bash
-   npm run terraform:apply
-   ```
-
-6. **Verify in Google Cloud Console**
-   - Check deployed resources
-   - View function logs
-   - Test triggers manually
-
-### Debugging Workflow
-
-**Local debugging:**
-- Use `console.log()` for debugging (removed in production via tree shaking)
-- Run functions locally with test events
-- Mock GCP services for isolated testing
-
-**Cloud debugging:**
-```bash
-# View recent logs
-gcloud functions logs read FUNCTION_NAME --region=REGION --limit=50
-
-# Stream logs in real-time
-gcloud functions logs read FUNCTION_NAME --region=REGION --follow
-
-# Filter logs by severity
-gcloud functions logs read FUNCTION_NAME --region=REGION --filter="severity>=ERROR"
-```
-
-**Common debugging scenarios:**
-- **Function timeout**: Check timeout configuration in Terraform module
-- **Permission errors**: Verify service account IAM roles in module
-- **Event not triggering**: Check event trigger configuration and PubSub/Storage permissions
-- **Module not found**: Verify npm workspace configuration and build output
+**CI failures:** use the `debug-ci` skill.
 
 ## Infrastructure Patterns
 
@@ -619,74 +518,12 @@ This was the regression in #344: a skip cascade left `terraform/plan/staging` un
 
 ### Debugging CI/CD Workflows
 
-When CI tests fail or you need to investigate GitHub Actions execution, use the WebFetch tool to retrieve CI results and logs directly from Claude Code on the Web.
-
-**Accessing CI Results:**
-
-Use WebFetch with PR or Actions URLs to view CI status:
-
-```
-WebFetch URL: https://github.com/{owner}/{repo}/pull/{pr_number}
-Prompt: "Extract all CI check results, job names, and their status (success/failure)"
-
-WebFetch URL: https://github.com/{owner}/{repo}/actions/runs/{run_id}
-Prompt: "Extract detailed job results, failure messages, and which steps failed"
-```
-
-**Common CI Debugging Patterns:**
-
-1. **Check PR CI Status**
-   ```
-   URL: https://github.com/{owner}/{repo}/pull/{pr_number}/checks
-   Prompt: "List all checks with their status and identify failed jobs"
-   ```
-
-2. **View Specific Workflow Run**
-   ```
-   URL: https://github.com/{owner}/{repo}/actions/runs/{run_id}
-   Prompt: "Show job statuses, error messages, and which matrix jobs failed"
-   ```
-
-3. **Find Latest Runs for Branch**
-   ```
-   URL: https://github.com/{owner}/{repo}/actions
-   Prompt: "Find the latest Test workflow runs for branch X and their status"
-   ```
-
-**Direct GitHub API Access:**
-
-When WebFetch is not suitable (e.g., downloading binary log archives), use direct GitHub API access with curl:
-
-```bash
-# Download workflow run logs as ZIP archive
-# IMPORTANT: Use "token" prefix, not "Bearer"
-curl -L -H "Authorization: token ${GITHUB_TOKEN}" \
-  "https://api.github.com/repos/{owner}/{repo}/actions/runs/{run_id}/logs" \
-  -o logs.zip
-
-# Extract specific log file from archive
-unzip -p logs.zip "*{job-name}*" | grep -E "(FAIL|Error|heap out of memory)"
-```
-
-**Common authentication mistake:**
-- ❌ `Authorization: Bearer ${GITHUB_TOKEN}` → Results in 401 "Bad credentials"
-- ✅ `Authorization: token ${GITHUB_TOKEN}` → Correct format for GitHub API
-
-**Troubleshooting CI Failures:**
-
-- **Test failures**: Check which specific test jobs (matrix) failed
-- **Coverage failures**: Verify coverage thresholds are met locally first
-- **Codecov issues**: Ensure Codecov repository is activated (not deactivated)
-- **Memory errors**: Check for out-of-memory errors in test jobs
-- **Isolated failures**: If tests pass locally but fail in CI, investigate environment-specific issues
-
-**Best Practices:**
-
-- Always verify tests pass locally before pushing
-- Use WebFetch to retrieve full CI logs when debugging
-- Check both job-level and step-level failures
-- Look for patterns across multiple workflow runs
-- Verify external services (like Codecov) are properly configured
+Use the `debug-ci` skill to investigate a red check. It resolves the target PR
+or run, drills into the failed jobs and matrix entries with `gh`, extracts the
+relevant log excerpt, and reports a diagnosis. When it falls back to the GitHub
+API log archive, the request needs an `Authorization: token …` header —
+`Bearer` returns 401 "Bad credentials". The skill is read-only; fixes are
+delegated to `lint-fix` / `test-fix`.
 
 ## Google Drive Integration
 
@@ -765,24 +602,12 @@ gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"FOLDER_ID"}'
 
 ### Pre-Commit Requirements
 
-**Quality gates before every commit:**
-
-1. **Run linters and formatters:**
-   ```bash
-   npm run lint
-   npm run format
-   ```
-
-2. **Verify all checks pass** (no linting errors, no formatting issues)
-
-3. **Run tests with coverage** (matches CI and the pre-push hook):
-   ```bash
-   npm run test:coverage
-   ```
-   This enforces the same coverage thresholds as CI, so a shortfall is caught
-   locally before push. Use `npm test` only for a quick run without thresholds.
-
-4. **Review changed files** before staging
+Before every commit the working tree must pass the same gates CI enforces:
+lint, a formatting check, and **coverage-gated** tests (`npm run test:coverage`,
+not plain `npm test` — the threshold check is what CI and the pre-push hook
+run). The `quality-gate` skill runs all three read-only and reports a per-check
+verdict; run it (or the equivalent commands) and review the changed files
+before staging.
 
 ### Commit Message Convention
 
@@ -816,28 +641,6 @@ working conversation is in another language. The authoritative procedure (and
 the detailed rationale) lives in the `create-issue` and `create-pr` skills —
 follow those skills rather than running `gh issue create` / `gh pr create`
 directly so the convention is applied consistently.
-
-### Recommended Workflow
-
-```bash
-# 1. Create and switch to new branch
-git checkout -b feature/your-feature-name
-
-# 2. Make your changes
-# ... develop your feature ...
-
-# 3. Run quality checks before committing
-npm run lint
-npm run format
-npm test
-
-# 4. Stage and commit changes
-git add .
-git commit -m "feat: add your feature description"
-
-# 5. Push branch and create PR
-git push -u origin feature/your-feature-name
-```
 
 ## Key Principles for AI Assistance
 
@@ -880,33 +683,13 @@ When working with this codebase:
 
 ### GitHub Actions Service Account Permissions
 
-**Critical:** When adding new Google Cloud services to Terraform configuration, the GitHub Actions service account must be granted appropriate IAM permissions.
-
-**Maintenance checklist for new GCP services:**
-
-1. **Identify required IAM roles** for the new service
-   - Check Google Cloud documentation for minimum required permissions
-   - Example: Firestore requires `roles/datastore.owner` or `roles/datastore.user`
-
-2. **Update `scripts/setup-github-actions.sh`**
-   - Add the role to the `ROLES` array (line ~193-204)
-   - Example:
-     ```bash
-     ROLES=(
-       "roles/cloudfunctions.admin"
-       "roles/pubsub.admin"
-       "roles/datastore.owner"  # Add new role here
-     )
-     ```
-
-3. **Run the setup script** to apply permissions
-   ```bash
-   npm run setup:github-actions
-   ```
-
-4. **Verify CI workflows** can access the new service
-   - Check Terraform plan workflow succeeds
-   - Review GitHub Actions logs for permission errors
+**Critical:** When Terraform starts managing a new Google Cloud service, the
+GitHub Actions service account needs matching IAM. Use the `add-ci-role` skill —
+it determines the minimum required role, adds it to the `ROLES` array in
+`scripts/setup-github-actions.sh`, updates the "Services currently configured"
+list below, and applies the change with `npm run setup:github-actions` only on
+explicit confirmation. Afterwards verify the Terraform plan workflow can reach
+the new service and the Actions logs show no permission errors.
 
 **Services currently configured:**
 - IAM (service accounts)
