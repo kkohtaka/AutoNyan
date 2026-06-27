@@ -295,6 +295,9 @@ jobs:
               body: body
             });
 
+      # Posts the required `terraform/plan/staging` check (success even when the
+      # plan is skipped for a no-infrastructure PR). `if: always()` keeps this
+      # terminal status guaranteed. See the CI invariant in CLAUDE.md.
       - name: Set final status
         if: always()
         uses: actions/github-script@v8
