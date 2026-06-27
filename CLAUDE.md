@@ -809,6 +809,14 @@ Follow conventional commit format:
 - `refactor: extract common validation logic to shared library`
 - `docs: update architecture diagram in README`
 
+### Issue & PR Language
+
+GitHub issue and PR titles and bodies are written in **English**, even when the
+working conversation is in another language. The authoritative procedure (and
+the detailed rationale) lives in the `create-issue` and `create-pr` skills —
+follow those skills rather than running `gh issue create` / `gh pr create`
+directly so the convention is applied consistently.
+
 ### Recommended Workflow
 
 ```bash
