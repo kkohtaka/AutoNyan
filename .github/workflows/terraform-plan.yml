@@ -170,6 +170,11 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
+          # Drop the standalone Docusaurus user-docs site before matching. Its
+          # own docs/package.json would otherwise match the package.json pattern
+          # below and trigger an infrastructure plan for a docs-only change.
+          CHANGED_FILES=$(echo "$CHANGED_FILES" | grep -vE '^docs/' || true)
+
           # Check if any changed files affect Terraform
           # Patterns that require terraform plan:
           # - terraform/** (infrastructure config)

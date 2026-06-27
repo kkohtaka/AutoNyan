@@ -1,0 +1,5 @@
+# The Docusaurus user-docs site is a standalone project with its own toolchain;
+# the root formatter must not reach into it (its generated files, e.g.
+# package-lock.json, would otherwise be reformatted and fail the CI format
+# check).
+docs/
