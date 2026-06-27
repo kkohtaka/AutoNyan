@@ -66,7 +66,10 @@ jobs:
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          CODE_UNRELATED='(\.md$|^\.claude/|^\.vscode/|^\.devcontainer/)'
+          # `^docs/` is the standalone Docusaurus user-docs site: it has its own
+          # toolchain/lockfile and is never built or linted by the function CI,
+          # so a docs-only change must not run the lint/test matrix.
+          CODE_UNRELATED='(\.md$|^\.claude/|^\.vscode/|^\.devcontainer/|^docs/)'
           RELEVANT=$(echo "$CHANGED_FILES" | grep -vE "$CODE_UNRELATED" || true)
 
           if [ -z "$CHANGED_FILES" ]; then

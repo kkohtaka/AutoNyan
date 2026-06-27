@@ -1,0 +1,10 @@
+# Docusaurus
+.docusaurus/
+build/
+
+# Dependencies
+node_modules/
+
+# Misc
+.DS_Store
+*.local

@@ -157,6 +157,9 @@ module.exports = [
       // Ignore compiled JavaScript files (only lint .ts source files)
       'index.js',
       'index.test.js',
+      // The Docusaurus user-docs site is a standalone project with its own
+      // toolchain; the root linters must not reach into it.
+      'docs/',
     ],
   },
 ];
