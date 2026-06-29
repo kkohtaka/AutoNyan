@@ -39,9 +39,9 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          // Serve docs at the site root so there is a working landing page for
-          // the scaffold. Information architecture and a dedicated landing page
-          // are designed in issue #339.
+          // Serve docs at the site root: the landing page is the doc at slug
+          // '/', which keeps the home page bilingual through the same i18n
+          // convention as every other page (no separate React homepage).
           routeBasePath: '/',
           editUrl: 'https://github.com/kkohtaka/AutoNyan/tree/master/docs/',
         },
@@ -72,11 +72,32 @@ const config: Config = {
       style: 'dark',
       links: [
         {
+          title: 'Documentation',
+          items: [
+            {
+              label: 'Getting Started',
+              to: '/getting-started/',
+            },
+            {
+              label: 'Daily Use',
+              to: '/daily-use/',
+            },
+            {
+              label: 'Troubleshooting & FAQ',
+              to: '/troubleshooting/',
+            },
+          ],
+        },
+        {
           title: 'Project',
           items: [
             {
               label: 'GitHub repository',
               href: 'https://github.com/kkohtaka/AutoNyan',
+            },
+            {
+              label: 'Developer documentation',
+              href: 'https://github.com/kkohtaka/AutoNyan#readme',
             },
           ],
         },
