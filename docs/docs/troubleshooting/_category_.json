@@ -1,0 +1,8 @@
+{
+  "label": "Troubleshooting & FAQ",
+  "position": 4,
+  "link": {
+    "type": "doc",
+    "id": "troubleshooting/index"
+  }
+}
