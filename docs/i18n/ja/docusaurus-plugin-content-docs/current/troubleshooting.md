@@ -1,6 +1,6 @@
 ---
 title: トラブルシューティングと FAQ
-sidebar_position: 4
+sidebar_position: 6
 ---
 
 # トラブルシューティングと FAQ
