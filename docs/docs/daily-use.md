@@ -1,6 +1,6 @@
 ---
 title: Daily Use
-sidebar_label: Overview
+sidebar_position: 3
 ---
 
 # Daily Use

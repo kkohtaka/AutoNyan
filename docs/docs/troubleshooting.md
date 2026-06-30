@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting & FAQ
-sidebar_label: Overview
+sidebar_position: 4
 ---
 
 # Troubleshooting & FAQ
