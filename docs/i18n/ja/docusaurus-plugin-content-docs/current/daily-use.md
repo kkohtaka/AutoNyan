@@ -1,6 +1,6 @@
 ---
 title: 日常の使い方
-sidebar_label: 概要
+sidebar_position: 3
 ---
 
 # 日常の使い方

@@ -40,12 +40,12 @@ project repository, not this site.
 
 ## Where to start
 
-- **[Getting Started](getting-started/)** — what you need and how to add your
-  first document.
-- **[Daily Use](daily-use/)** — the everyday flow from dropping a file in Drive
-  to reading the notification email.
-- **[Troubleshooting & FAQ](troubleshooting/)** — answers when something does
-  not look right.
+- **[Getting Started](./getting-started.md)** — what you need and how to add
+  your first document.
+- **[Daily Use](./daily-use.md)** — the everyday flow from dropping a file in
+  Drive to reading the notification email.
+- **[Troubleshooting & FAQ](./troubleshooting.md)** — answers when something
+  does not look right.
 
 Use the language dropdown in the top navigation bar to switch between English
 and 日本語.

@@ -1,6 +1,6 @@
 ---
 title: はじめに
-sidebar_label: 概要
+sidebar_position: 2
 ---
 
 # はじめに
