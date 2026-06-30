@@ -5,6 +5,7 @@ import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePubl
 import {
   createErrorResponse,
   isPermanentError,
+  logger,
   parsePubSubEvent,
   validateRequiredFields,
 } from 'autonyan-shared';
@@ -60,9 +61,7 @@ export const driveScanner = async (
   let parsedFolderId = '';
 
   try {
-    // Log the incoming CloudEvent for debugging
-    // eslint-disable-next-line no-console
-    console.log('Received CloudEvent:', JSON.stringify(cloudEvent, null, 2));
+    logger.info('Received CloudEvent', { cloudEvent });
 
     // Parse PubSub event data using shared utility
     const { data: messageData } =
@@ -74,8 +73,7 @@ export const driveScanner = async (
     const { folderId } = messageData;
     parsedFolderId = folderId;
 
-    // eslint-disable-next-line no-console
-    console.log('Parsed message data:', JSON.stringify(messageData, null, 2));
+    logger.info('Parsed message data', { messageData });
 
     const topicName = process.env.DOC_PROCESS_TRIGGER_TOPIC;
 
@@ -92,10 +90,10 @@ export const driveScanner = async (
       supportsAllDrives: true,
     });
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `Scanning folder: ${folderResponse.data.name} (${folderResponse.data.id})`
-    );
+    logger.info('Scanning folder', {
+      folderName: folderResponse.data.name,
+      folderId: folderResponse.data.id,
+    });
 
     // Search for document files in the specified folder with pagination
     const query = `'${folderId}' in parents and trashed=false and (${DOCUMENT_MIME_TYPES.map(
@@ -146,10 +144,11 @@ export const driveScanner = async (
         const snapshot = await scannedDocRef.get();
         if (snapshot.exists) {
           skippedMessages++;
-          // eslint-disable-next-line no-console
-          console.log(
-            `Skipping already-scanned file ${file.name} (${file.id}) modified at ${modifiedTime}`
-          );
+          logger.info('Skipping already-scanned file', {
+            fileName: file.name,
+            fileId: file.id,
+            modifiedTime,
+          });
           continue;
         }
 
@@ -187,14 +186,14 @@ export const driveScanner = async (
         publishedMessages++;
       }
 
-      // eslint-disable-next-line no-console
-      console.log(
-        `Published ${publishedMessages} messages to topic ${topicName} (skipped ${skippedMessages} already-scanned files)`
-      );
+      logger.info('Published messages to topic', {
+        publishedMessages,
+        topicName,
+        skippedMessages,
+      });
     } else {
-      // eslint-disable-next-line no-console
-      console.log(
-        'DOC_PROCESS_TRIGGER_TOPIC environment variable not set, skipping PubSub publishing'
+      logger.info(
+        'DOC_PROCESS_TRIGGER_TOPIC not set, skipping PubSub publishing'
       );
     }
 
@@ -207,23 +206,19 @@ export const driveScanner = async (
       topicName: topicName || null,
     };
 
-    // Log completion for CloudEvent processing
-    // eslint-disable-next-line no-console
-    console.log(`Drive document scanner completed: ${JSON.stringify(result)}`);
+    logger.info('Drive document scanner completed', { result });
 
     return result;
   } catch (error) {
     const errorResponse = createErrorResponse(error, 'driveScanner');
 
-    // eslint-disable-next-line no-console
-    console.error('Drive document scanner error:', errorResponse);
+    logger.error('Drive document scanner error', { error: errorResponse });
 
     // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
     if (isPermanentError(error)) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
-      );
+      logger.warn('Skipping message (permanent failure, not retrying)', {
+        error: errorResponse.error,
+      });
 
       const notificationTopicName = process.env.NOTIFICATION_TOPIC;
       if (notificationTopicName) {
@@ -238,8 +233,9 @@ export const driveScanner = async (
             attributes: { operation: 'failure-notification' },
           });
         } catch (notifyError) {
-          // eslint-disable-next-line no-console
-          console.warn('Failed to publish failure notification:', notifyError);
+          logger.warn('Failed to publish failure notification', {
+            error: notifyError,
+          });
         }
       }
 

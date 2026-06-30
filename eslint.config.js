@@ -84,7 +84,9 @@ module.exports = [
       '@typescript-eslint/no-unused-vars': 'error',
       '@typescript-eslint/explicit-function-return-type': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn',
-      'no-console': 'warn',
+      // Function source must log via the shared structured logger
+      // (src/shared/logger.ts), not bare console.*.
+      'no-console': 'error',
     },
   },
   {

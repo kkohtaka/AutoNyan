@@ -1,6 +1,6 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { parsePubSubEvent, createErrorResponse } from 'autonyan-shared';
+import { parsePubSubEvent, createErrorResponse, logger } from 'autonyan-shared';
 import { google } from 'googleapis';
 
 interface SuccessNotificationData extends Record<string, unknown> {
@@ -106,8 +106,7 @@ async function handleSuccessNotification(
 ): Promise<void> {
   const saKeyJson = process.env.NOTIFICATION_SA_KEY;
   if (!saKeyJson) {
-    // eslint-disable-next-line no-console
-    console.warn(
+    logger.warn(
       'NOTIFICATION_SA_KEY is not set, skipping success notification email'
     );
     return;
@@ -141,10 +140,9 @@ async function handleSuccessNotification(
     .map((p) => p.emailAddress as string);
 
   if (emailAddresses.length === 0) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `No email addresses found for destination folder: ${data.destinationFolderId}`
-    );
+    logger.warn('No email addresses found for destination folder', {
+      destinationFolderId: data.destinationFolderId,
+    });
     return;
   }
 
@@ -164,10 +162,10 @@ Firestore ドキュメント ID: ${data.firestoreDocId}`;
     await sendEmail(toEmail, subject, body, fromEmail, saKey);
   }
 
-  // eslint-disable-next-line no-console
-  console.log(
-    `Sent success notification to ${emailAddresses.length} recipient(s) for file: ${data.fileName}`
-  );
+  logger.info('Sent success notification', {
+    recipientCount: emailAddresses.length,
+    fileName: data.fileName,
+  });
 }
 
 async function handleFailureNotification(
@@ -175,8 +173,7 @@ async function handleFailureNotification(
 ): Promise<void> {
   const saKeyJson = process.env.NOTIFICATION_SA_KEY;
   if (!saKeyJson) {
-    // eslint-disable-next-line no-console
-    console.warn(
+    logger.warn(
       'NOTIFICATION_SA_KEY is not set, skipping failure notification email'
     );
     return;
@@ -207,8 +204,7 @@ async function handleFailureNotification(
   }
 
   if (!lookupFolderId) {
-    // eslint-disable-next-line no-console
-    console.warn(
+    logger.warn(
       'No fileId or folderId available, cannot determine owner for failure notification'
     );
     return;
@@ -234,8 +230,9 @@ async function handleFailureNotification(
     .map((p) => p.emailAddress as string);
 
   if (ownerEmails.length === 0) {
-    // eslint-disable-next-line no-console
-    console.warn(`No owner or organizer found for folder: ${lookupFolderId}`);
+    logger.warn('No owner or organizer found for folder', {
+      folderId: lookupFolderId,
+    });
     return;
   }
 
@@ -251,18 +248,17 @@ async function handleFailureNotification(
     await sendEmail(toEmail, subject, body, fromEmail, saKey);
   }
 
-  // eslint-disable-next-line no-console
-  console.log(
-    `Sent failure notification to ${ownerEmails.length} owner(s) for stage: ${data.stageName}`
-  );
+  logger.info('Sent failure notification', {
+    ownerCount: ownerEmails.length,
+    stageName: data.stageName,
+  });
 }
 
 export const notificationDispatcher = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<void> => {
   try {
-    // eslint-disable-next-line no-console
-    console.log('Received PubSub event:', JSON.stringify(cloudEvent, null, 2));
+    logger.info('Received PubSub event', { cloudEvent });
 
     const { data: messageData } =
       parsePubSubEvent<NotificationMessage>(cloudEvent);
@@ -275,8 +271,7 @@ export const notificationDispatcher = async (
         .attributes ?? {};
     const operation = attributes['operation'];
 
-    // eslint-disable-next-line no-console
-    console.log(`Processing notification operation: ${operation}`);
+    logger.info('Processing notification operation', { operation });
 
     if (operation === 'success-notification') {
       await handleSuccessNotification(
@@ -287,13 +282,11 @@ export const notificationDispatcher = async (
         messageData as unknown as FailureNotificationData
       );
     } else {
-      // eslint-disable-next-line no-console
-      console.warn(`Unknown notification operation: ${operation}`);
+      logger.warn('Unknown notification operation', { operation });
     }
   } catch (error) {
     const errorResponse = createErrorResponse(error, 'notificationDispatcher');
-    // eslint-disable-next-line no-console
-    console.error('Notification dispatcher error:', errorResponse);
+    logger.error('Notification dispatcher error', { error: errorResponse });
     throw new Error(`Notification dispatcher failed: ${errorResponse.error}`);
   }
 };

@@ -6,6 +6,7 @@ import {
   createErrorResponse,
   getProjectId,
   isPermanentError,
+  logger,
   parseStorageEvent,
   PermanentError,
 } from 'autonyan-shared';
@@ -61,12 +62,7 @@ export const textFirebaseWriter = async (
   let originalFileName = '';
 
   try {
-    // Log the incoming Storage object data for debugging
-    // eslint-disable-next-line no-console
-    console.log(
-      'Received Storage object data:',
-      JSON.stringify(storageObjectData, null, 2)
-    );
+    logger.info('Received Storage object data', { storageObjectData });
 
     // Parse storage event data using shared utility
     const {
@@ -80,8 +76,7 @@ export const textFirebaseWriter = async (
       contentType !== 'application/octet-stream' &&
       contentType !== 'application/json'
     ) {
-      // eslint-disable-next-line no-console
-      console.log(`Skipping non-JSON file: ${objectName}`);
+      logger.info('Skipping non-JSON file', { objectName });
       throw new PermanentError(`Unsupported file type: ${contentType}`);
     }
 
@@ -109,10 +104,10 @@ export const textFirebaseWriter = async (
       );
     }
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `Processing Vision API results for ${originalFileName} (${objectName})`
-    );
+    logger.info('Processing Vision API results', {
+      originalFileName,
+      objectName,
+    });
 
     // Download and parse the Vision API result JSON
     const [fileContent] = await file.download();
@@ -176,8 +171,7 @@ export const textFirebaseWriter = async (
       const [originalMetadata] = await originalFile.getMetadata();
       fileSize = parseInt(String(originalMetadata.size || '0'), 10);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn(`Could not get original file size: ${error}`);
+      logger.warn('Could not get original file size', { error });
     }
 
     // Prepare data for Firestore
@@ -227,22 +221,19 @@ export const textFirebaseWriter = async (
 
         classificationTriggered = true;
 
-        // eslint-disable-next-line no-console
-        console.log(
-          `Published classification trigger for ${originalFileName} to topic ${classifierTopicName}`
-        );
+        logger.info('Published classification trigger', {
+          originalFileName,
+          topicName: classifierTopicName,
+        });
       } catch (pubsubError) {
-        // Log PubSub error but don't fail the function
-        // eslint-disable-next-line no-console
-        console.warn(
-          `Failed to publish classification trigger: ${pubsubError}`,
-          pubsubError
-        );
+        // PubSub failure here is non-fatal: the text is already in Firestore.
+        logger.warn('Failed to publish classification trigger', {
+          error: pubsubError,
+        });
       }
     } else {
-      // eslint-disable-next-line no-console
-      console.log(
-        'FILE_CLASSIFIER_TOPIC environment variable not set, skipping classification trigger'
+      logger.info(
+        'FILE_CLASSIFIER_TOPIC not set, skipping classification trigger'
       );
     }
 
@@ -256,22 +247,19 @@ export const textFirebaseWriter = async (
       classificationTriggered: classificationTriggered,
     };
 
-    // eslint-disable-next-line no-console
-    console.log(`Firebase storage completed: ${JSON.stringify(result)}`);
+    logger.info('Firebase storage completed', { result });
 
     return result;
   } catch (error) {
     const errorResponse = createErrorResponse(error, 'textFirebaseWriter');
 
-    // eslint-disable-next-line no-console
-    console.error('Firebase storage error:', errorResponse);
+    logger.error('Firebase storage error', { error: errorResponse });
 
     // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
     if (isPermanentError(error)) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
-      );
+      logger.warn('Skipping message (permanent failure, not retrying)', {
+        error: errorResponse.error,
+      });
 
       const notificationTopicName = process.env.NOTIFICATION_TOPIC;
       if (notificationTopicName) {
@@ -290,8 +278,9 @@ export const textFirebaseWriter = async (
             },
           });
         } catch (notifyError) {
-          // eslint-disable-next-line no-console
-          console.warn('Failed to publish failure notification:', notifyError);
+          logger.warn('Failed to publish failure notification', {
+            error: notifyError,
+          });
         }
       }
 

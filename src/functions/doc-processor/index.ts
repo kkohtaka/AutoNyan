@@ -6,6 +6,7 @@ import {
   createErrorResponse,
   getProjectId,
   isPermanentError,
+  logger,
   parsePubSubEvent,
   PermanentError,
   validateRequiredFields,
@@ -35,9 +36,7 @@ export const docProcessor = async (
   let parsedFileId = '';
 
   try {
-    // Log the incoming CloudEvent for debugging
-    // eslint-disable-next-line no-console
-    console.log('Received CloudEvent:', JSON.stringify(cloudEvent, null, 2));
+    logger.info('Received CloudEvent', { cloudEvent });
 
     // Parse PubSub event data using shared utility
     const { data: messageData } =
@@ -49,8 +48,7 @@ export const docProcessor = async (
     const { fileId } = messageData;
     parsedFileId = fileId;
 
-    // eslint-disable-next-line no-console
-    console.log('Parsed message data:', JSON.stringify(messageData, null, 2));
+    logger.info('Parsed message data', { messageData });
 
     // Initialize Google Drive API with default credentials
     const auth = new google.auth.GoogleAuth({
@@ -124,10 +122,9 @@ export const docProcessor = async (
     if (exists) {
       // Object already exists, get its metadata
       [metadata] = await storageFile.getMetadata();
-      // eslint-disable-next-line no-console
-      console.log(
-        `Object ${objectName} already exists in bucket, skipping upload`
-      );
+      logger.info('Object already exists in bucket, skipping upload', {
+        objectName,
+      });
     } else {
       // Create a writable stream to Cloud Storage
       const stream = storageFile.createWriteStream({
@@ -159,8 +156,7 @@ export const docProcessor = async (
 
       // Get the uploaded file metadata
       [metadata] = await storageFile.getMetadata();
-      // eslint-disable-next-line no-console
-      console.log(`Successfully uploaded new object ${objectName} to bucket`);
+      logger.info('Successfully uploaded new object to bucket', { objectName });
     }
 
     const result = {
@@ -175,24 +171,19 @@ export const docProcessor = async (
       size: parseInt(String(metadata.size || '0'), 10),
     };
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `Document scan preparation completed: ${JSON.stringify(result)}`
-    );
+    logger.info('Document scan preparation completed', { result });
 
     return result;
   } catch (error) {
     const errorResponse = createErrorResponse(error, 'docProcessor');
 
-    // eslint-disable-next-line no-console
-    console.error('Document scan preparation error:', errorResponse);
+    logger.error('Document scan preparation error', { error: errorResponse });
 
     // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
     if (isPermanentError(error)) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
-      );
+      logger.warn('Skipping message (permanent failure, not retrying)', {
+        error: errorResponse.error,
+      });
 
       const notificationTopicName = process.env.NOTIFICATION_TOPIC;
       if (notificationTopicName) {
@@ -211,8 +202,9 @@ export const docProcessor = async (
             },
           });
         } catch (notifyError) {
-          // eslint-disable-next-line no-console
-          console.warn('Failed to publish failure notification:', notifyError);
+          logger.warn('Failed to publish failure notification', {
+            error: notifyError,
+          });
         }
       }
 

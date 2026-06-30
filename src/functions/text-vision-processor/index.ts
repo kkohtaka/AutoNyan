@@ -6,6 +6,7 @@ import {
   createErrorResponse,
   getProjectId,
   isPermanentError,
+  logger,
   parseStorageEvent,
   PermanentError,
 } from 'autonyan-shared';
@@ -38,12 +39,7 @@ export const textVisionProcessor = async (
   let originalFileName = '';
 
   try {
-    // Log the incoming Storage object data for debugging
-    // eslint-disable-next-line no-console
-    console.log(
-      'Received Storage object data:',
-      JSON.stringify(storageObjectData, null, 2)
-    );
+    logger.info('Received Storage object data', { storageObjectData });
 
     // Parse storage event data using shared utility
     const {
@@ -54,10 +50,9 @@ export const textVisionProcessor = async (
 
     // Check if file type is supported for text extraction
     if (!contentType || !SUPPORTED_MIME_TYPES.includes(contentType)) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `Skipping text extraction for unsupported file type: ${contentType}`
-      );
+      logger.info('Skipping text extraction for unsupported file type', {
+        contentType,
+      });
       throw new PermanentError(
         `Unsupported file type for text extraction: ${contentType}`
       );
@@ -79,10 +74,10 @@ export const textVisionProcessor = async (
       throw new PermanentError('Missing required metadata from uploaded file');
     }
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `Starting Vision API processing for ${originalFileName} (${objectName})`
-    );
+    logger.info('Starting Vision API processing', {
+      originalFileName,
+      objectName,
+    });
 
     // Setup output bucket and path
     const projectId = getProjectId();
@@ -167,8 +162,9 @@ export const textVisionProcessor = async (
     // Call Vision API async batch processing
     const [operation] = await vision.asyncBatchAnnotateFiles(request);
 
-    // eslint-disable-next-line no-console
-    console.log(`Vision API operation started: ${operation.name}`);
+    logger.info('Vision API operation started', {
+      operationName: operation.name,
+    });
 
     // Wait for the operation to complete
     const [result] = await operation.promise();
@@ -185,24 +181,19 @@ export const textVisionProcessor = async (
       operationId: operation.name || 'unknown',
     };
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `Vision API processing completed: ${JSON.stringify(result_obj)}`
-    );
+    logger.info('Vision API processing completed', { result: result_obj });
 
     return result_obj;
   } catch (error) {
     const errorResponse = createErrorResponse(error, 'textVisionProcessor');
 
-    // eslint-disable-next-line no-console
-    console.error('Vision API processing error:', errorResponse);
+    logger.error('Vision API processing error', { error: errorResponse });
 
     // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
     if (isPermanentError(error)) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
-      );
+      logger.warn('Skipping message (permanent failure, not retrying)', {
+        error: errorResponse.error,
+      });
 
       const notificationTopicName = process.env.NOTIFICATION_TOPIC;
       if (notificationTopicName) {
@@ -221,8 +212,9 @@ export const textVisionProcessor = async (
             },
           });
         } catch (notifyError) {
-          // eslint-disable-next-line no-console
-          console.warn('Failed to publish failure notification:', notifyError);
+          logger.warn('Failed to publish failure notification', {
+            error: notifyError,
+          });
         }
       }
 
