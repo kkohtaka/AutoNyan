@@ -6,6 +6,7 @@ import {
   createErrorResponse,
   getProjectId,
   isPermanentError,
+  logger,
   parsePubSubEvent,
   validateRequiredFields,
 } from 'autonyan-shared';
@@ -39,8 +40,7 @@ export const fileClassifier = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   try {
-    // eslint-disable-next-line no-console
-    console.log('Received PubSub event:', JSON.stringify(cloudEvent, null, 2));
+    logger.info('Received PubSub event', { cloudEvent });
 
     // Parse PubSub event data
     const { data: eventData } =
@@ -65,10 +65,10 @@ export const fileClassifier = async (
       );
     }
 
-    // eslint-disable-next-line no-console
-    console.log(
-      `Processing classification for file: ${eventData.fileName} (${eventData.fileId})`
-    );
+    logger.info('Processing classification for file', {
+      fileName: eventData.fileName,
+      fileId: eventData.fileId,
+    });
 
     // Initialize Google Auth for Drive API
     const auth = new google.auth.GoogleAuth({
@@ -76,37 +76,31 @@ export const fileClassifier = async (
     });
 
     // Get category folders from Google Drive
-    // eslint-disable-next-line no-console
-    console.log(`Fetching category folders from: ${categoryRootFolderId}`);
+    logger.info('Fetching category folders', { categoryRootFolderId });
     const categoryFolders = await listCategoryFolders(
       auth,
       categoryRootFolderId
     );
 
     if (categoryFolders.length === 0) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `No category folders found in root folder: ${categoryRootFolderId}`
-      );
+      logger.warn('No category folders found in root folder', {
+        categoryRootFolderId,
+      });
     } else {
-      // eslint-disable-next-line no-console
-      console.log(
-        `Found ${categoryFolders.length} category folders:`,
-        categoryFolders.map((f) => f.name).join(', ')
-      );
+      logger.info('Found category folders', {
+        count: categoryFolders.length,
+        folderNames: categoryFolders.map((f) => f.name),
+      });
     }
 
-    // Classify document using Gemini AI
-    // eslint-disable-next-line no-console
-    console.log('Classifying document with Gemini AI...');
+    logger.info('Classifying document with Gemini AI');
     const classification = await classifyWithGemini(
       projectId,
       eventData.extractedText,
       categoryFolders
     );
 
-    // eslint-disable-next-line no-console
-    console.log('Classification result:', classification);
+    logger.info('Classification result', { classification });
 
     // Determine target folder (category folder or uncategorized)
     const targetFolderId =
@@ -121,8 +115,7 @@ export const fileClassifier = async (
     });
     const documentPath = `extracted_texts/${eventData.firestoreDocId}`;
 
-    // eslint-disable-next-line no-console
-    console.log(`Updating Firestore document: ${documentPath}`);
+    logger.info('Updating Firestore document', { documentPath });
 
     await updateDocumentWithClassification(firestore, documentPath, {
       category: classification.categoryName,
@@ -156,8 +149,9 @@ export const fileClassifier = async (
           },
         });
       } catch (notifyError) {
-        // eslint-disable-next-line no-console
-        console.warn('Failed to publish success notification:', notifyError);
+        logger.warn('Failed to publish success notification', {
+          error: notifyError,
+        });
       }
     }
 
@@ -165,21 +159,18 @@ export const fileClassifier = async (
     // If move fails, classification is still considered successful (Firestore is already updated)
     let fileMoved = false;
     try {
-      // eslint-disable-next-line no-console
-      console.log(
-        `Moving file to folder: ${targetFolderName} (${targetFolderId})`
-      );
+      logger.info('Moving file to folder', {
+        targetFolderName,
+        targetFolderId,
+      });
       await moveFileInDrive(auth, eventData.fileId, targetFolderId);
       fileMoved = true;
-      // eslint-disable-next-line no-console
-      console.log('File moved successfully');
+      logger.info('File moved successfully');
     } catch (moveError) {
-      // Log the error but don't fail the function - classification is already saved
-      // eslint-disable-next-line no-console
-      console.warn(
-        'Failed to move file in Drive (classification still saved):',
-        moveError
-      );
+      // Non-fatal: classification is already saved to Firestore.
+      logger.warn('Failed to move file in Drive (classification still saved)', {
+        error: moveError,
+      });
     }
 
     const result = {
@@ -193,22 +184,19 @@ export const fileClassifier = async (
       fileMoved,
     };
 
-    // eslint-disable-next-line no-console
-    console.log(`Classification completed:`, result);
+    logger.info('Classification completed', { result });
 
     return result;
   } catch (error) {
     const errorResponse = createErrorResponse(error, 'fileClassifier');
 
-    // eslint-disable-next-line no-console
-    console.error('File classification error:', errorResponse);
+    logger.error('File classification error', { error: errorResponse });
 
     // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
     if (isPermanentError(error)) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `Skipping message (permanent failure, not retrying): ${errorResponse.error}`
-      );
+      logger.warn('Skipping message (permanent failure, not retrying)', {
+        error: errorResponse.error,
+      });
 
       const notificationTopicName = process.env.NOTIFICATION_TOPIC;
       if (notificationTopicName) {
@@ -224,8 +212,9 @@ export const fileClassifier = async (
             attributes: { operation: 'failure-notification' },
           });
         } catch (notifyError) {
-          // eslint-disable-next-line no-console
-          console.warn('Failed to publish failure notification:', notifyError);
+          logger.warn('Failed to publish failure notification', {
+            error: notifyError,
+          });
         }
       }
 

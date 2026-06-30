@@ -14,6 +14,8 @@ jest.mock('googleapis', () => ({
 }));
 
 jest.mock('autonyan-shared', () => ({
+  // Keep the real structured logger so stdout/stderr assertions exercise it.
+  ...jest.requireActual('autonyan-shared'),
   parsePubSubEvent: jest.fn(),
   createErrorResponse: jest.fn((error: unknown, context: string) => ({
     error: error instanceof Error ? error.message : String(error),
@@ -259,8 +261,8 @@ describe('notificationDispatcher', () => {
       });
 
       const consoleSpy = jest
-        .spyOn(console, 'warn')
-        .mockImplementation(() => {});
+        .spyOn(process.stdout, 'write')
+        .mockImplementation(() => true);
 
       const event = buildEvent(successData, {
         operation: 'success-notification',
@@ -476,8 +478,8 @@ describe('notificationDispatcher', () => {
       });
 
       const consoleSpy = jest
-        .spyOn(console, 'warn')
-        .mockImplementation(() => {});
+        .spyOn(process.stdout, 'write')
+        .mockImplementation(() => true);
 
       const event = buildEvent(failureData, {
         operation: 'failure-notification',
@@ -519,8 +521,8 @@ describe('notificationDispatcher', () => {
       mockParsePubSubEvent.mockReturnValue({ data: failureData });
 
       const consoleSpy = jest
-        .spyOn(console, 'warn')
-        .mockImplementation(() => {});
+        .spyOn(process.stdout, 'write')
+        .mockImplementation(() => true);
 
       const event = buildEvent(failureData, {
         operation: 'failure-notification',
@@ -542,8 +544,8 @@ describe('notificationDispatcher', () => {
       mockParsePubSubEvent.mockReturnValue({ data });
 
       const consoleSpy = jest
-        .spyOn(console, 'warn')
-        .mockImplementation(() => {});
+        .spyOn(process.stdout, 'write')
+        .mockImplementation(() => true);
 
       // Event with no top-level attributes at all (operation cannot be resolved)
       const event = buildEvent(data);
@@ -552,7 +554,7 @@ describe('notificationDispatcher', () => {
 
       expect(mockGmailSend).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Unknown notification operation: undefined')
+        expect.stringContaining('Unknown notification operation')
       );
 
       consoleSpy.mockRestore();
@@ -563,17 +565,15 @@ describe('notificationDispatcher', () => {
       mockParsePubSubEvent.mockReturnValue({ data });
 
       const consoleSpy = jest
-        .spyOn(console, 'warn')
-        .mockImplementation(() => {});
+        .spyOn(process.stdout, 'write')
+        .mockImplementation(() => true);
 
       const event = buildEvent(data, { operation: 'unknown-operation' });
       await notificationDispatcher(event);
 
       expect(mockGmailSend).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Unknown notification operation: unknown-operation'
-        )
+        expect.stringContaining('"operation":"unknown-operation"')
       );
 
       consoleSpy.mockRestore();

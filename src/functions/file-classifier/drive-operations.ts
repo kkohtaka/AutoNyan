@@ -1,3 +1,4 @@
+import { logger } from 'autonyan-shared';
 import { google, drive_v3 } from 'googleapis';
 
 export interface CategoryFolder {
@@ -100,10 +101,11 @@ export async function moveFileInDrive(
       // Delay increases linearly: 5s, 10s, 15s, 20s, 25s
       const delay = baseDelay * (attempt + 1);
 
-      // eslint-disable-next-line no-console
-      console.log(
-        `File move attempt ${attempt + 1} failed (${errorCode}), retrying in ${delay}ms...`
-      );
+      logger.info('File move attempt failed, retrying', {
+        attempt: attempt + 1,
+        errorCode,
+        retryDelayMs: delay,
+      });
 
       await sleep(delay);
     }

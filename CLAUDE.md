@@ -338,8 +338,12 @@ production deploys via a version tag (see CI/CD Pipeline below). Never
 
 ### Debugging
 
-**Local:** `console.log()` is fine (stripped from production builds); run
-functions against test events with all GCP services mocked.
+**Local:** function source logs via the shared structured logger
+(`src/shared/logger.ts`), not bare `console.*` (enforced by `no-console:
+error`). The logger writes one JSON line per entry to stdout/stderr, which the
+Cloud Functions runtime forwards to Cloud Logging; nothing is stripped at build
+time (the build is plain `tsc`). Run functions against test events with all GCP
+services mocked.
 
 **Deployed function:** use the `debug-function-logs` skill — it reads logs with
 `gcloud` and maps findings to the common failure modes (timeout → module
