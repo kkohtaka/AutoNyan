@@ -17,7 +17,7 @@ background.
 ## What it does for you
 
 - **Reads your documents** — text is extracted automatically from the files you
-  drop in, including scans and photos of paper documents.
+  drop in, including scanned or photographed pages saved as a PDF.
 - **Sorts them into categories** — each document is classified and moved into
   the matching folder, so related papers end up together without manual filing.
 - **Tells you what happened** — you receive a notification email summarizing
@@ -40,8 +40,12 @@ project repository, not this site.
 
 ## Where to start
 
+- **[How AutoNyan Works](./overview.md)** — the concepts behind the flow, in
+  plain terms.
 - **[Getting Started](./getting-started.md)** — what you need and how to add
   your first document.
+- **[Supported File Types](./supported-files.md)** — which kinds of documents
+  AutoNyan can read.
 - **[Daily Use](./daily-use.md)** — the everyday flow from dropping a file in
   Drive to reading the notification email.
 - **[Troubleshooting & FAQ](./troubleshooting.md)** — answers when something
