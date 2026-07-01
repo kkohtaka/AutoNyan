@@ -229,6 +229,8 @@ export const fileClassifier = async (
     }
 
     // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
-    throw new Error(`File classification failed: ${errorResponse.error}`);
+    throw new Error(`File classification failed: ${errorResponse.error}`, {
+      cause: error,
+    });
   }
 };

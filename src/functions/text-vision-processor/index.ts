@@ -229,6 +229,8 @@ export const textVisionProcessor = async (
     }
 
     // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
-    throw new Error(`Vision API processing failed: ${errorResponse.error}`);
+    throw new Error(`Vision API processing failed: ${errorResponse.error}`, {
+      cause: error,
+    });
   }
 };

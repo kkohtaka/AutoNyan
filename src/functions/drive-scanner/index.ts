@@ -251,6 +251,8 @@ export const driveScanner = async (
     }
 
     // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
-    throw new Error(`Drive document scanner failed: ${errorResponse.error}`);
+    throw new Error(`Drive document scanner failed: ${errorResponse.error}`, {
+      cause: error,
+    });
   }
 };

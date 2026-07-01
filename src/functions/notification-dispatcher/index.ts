@@ -287,6 +287,8 @@ export const notificationDispatcher = async (
   } catch (error) {
     const errorResponse = createErrorResponse(error, 'notificationDispatcher');
     logger.error('Notification dispatcher error', { error: errorResponse });
-    throw new Error(`Notification dispatcher failed: ${errorResponse.error}`);
+    throw new Error(`Notification dispatcher failed: ${errorResponse.error}`, {
+      cause: error,
+    });
   }
 };
