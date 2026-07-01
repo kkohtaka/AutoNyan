@@ -88,7 +88,7 @@ jobs:
     needs: [detect-changes]
     if: needs.detect-changes.outputs.run_matrix == 'true'
     env:
-      # Reduced from 4096MB: type checking disabled for test files + .eslintignore reduces file set
+      # Reduced from 4096MB: type checking disabled for test files + eslint.config.js ignores reduce file set
       NODE_OPTIONS: --max-old-space-size=2048
     strategy:
       matrix:

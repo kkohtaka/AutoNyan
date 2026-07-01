@@ -297,6 +297,8 @@ export const textFirebaseWriter = async (
     }
 
     // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
-    throw new Error(`Firebase storage failed: ${errorResponse.error}`);
+    throw new Error(`Firebase storage failed: ${errorResponse.error}`, {
+      cause: error,
+    });
   }
 };

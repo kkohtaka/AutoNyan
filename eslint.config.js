@@ -153,10 +153,27 @@ module.exports = [
   },
   prettierConfig,
   {
+    // ESLint 10 dropped .eslintignore; these patterns live here instead.
     ignores: [
-      'dist/',
       'node_modules/',
-      // Ignore compiled JavaScript files (only lint .ts source files)
+      'dist/',
+      'build/',
+      'coverage/',
+      'terraform/',
+      '.terraform/',
+      '.tmp/',
+      'tmp/',
+      '.vscode/',
+      '.idea/',
+      '*.js.map',
+      '*.d.ts',
+      '*.tfstate',
+      '*.tfstate.backup',
+      '*.swp',
+      '*.swo',
+      '*.log',
+      'npm-debug.log*',
+      // Compiled JavaScript output — only the .ts source is linted.
       'index.js',
       'index.test.js',
       // The Docusaurus user-docs site is a standalone project with its own

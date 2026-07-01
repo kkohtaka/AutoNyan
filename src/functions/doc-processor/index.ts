@@ -221,6 +221,11 @@ export const docProcessor = async (
     }
 
     // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
-    throw new Error(`Document scan preparation failed: ${errorResponse.error}`);
+    throw new Error(
+      `Document scan preparation failed: ${errorResponse.error}`,
+      {
+        cause: error,
+      }
+    );
   }
 };
