@@ -2,6 +2,8 @@
 
 A Google Cloud Functions project demonstrating serverless document processing with TypeScript and Terraform. AutoNyan implements an event-driven pipeline for automated Google Drive document scanning, text extraction using Vision API, and data persistence to Firestore.
 
+> **Using a deployed AutoNyan instance?** See the **[user documentation site](https://kkohtaka.github.io/AutoNyan/)** (available in English and 日本語) for how to drop documents into Drive, read the classified results, and interpret notification emails. This README targets contributors and operators building and deploying the pipeline.
+
 ## Architecture Overview
 
 AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 5-stage pipeline:
