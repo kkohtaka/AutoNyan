@@ -11,6 +11,7 @@ export interface TerraformOutputs {
   category_root_folder_id: string;
   uncategorized_folder_id: string;
   project_id: string;
+  region: string;
   file_classifier_service_account_email: string;
 }
 
@@ -23,6 +24,7 @@ interface TerraformVariables {
   drive_folder_id?: string;
   category_root_folder_id?: string;
   uncategorized_folder_id?: string;
+  region?: string;
 }
 
 let cachedOutputs: Record<string, TerraformOutputs> = {};
@@ -65,7 +67,8 @@ function parseTerraformVariables(): TerraformVariables {
           key === 'project_id' ||
           key === 'drive_folder_id' ||
           key === 'category_root_folder_id' ||
-          key === 'uncategorized_folder_id'
+          key === 'uncategorized_folder_id' ||
+          key === 'region'
         ) {
           variables[key] = value;
         }
@@ -130,6 +133,7 @@ export async function getTerraformOutputs(
         process.env.UNCATEGORIZED_FOLDER_ID ||
         tfVars.uncategorized_folder_id ||
         '',
+      region: process.env.GCP_REGION || tfVars.region || 'us-central1',
       file_classifier_service_account_email:
         outputs.file_classifier_service_account_email?.value || '',
     };

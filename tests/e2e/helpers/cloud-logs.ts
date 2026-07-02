@@ -35,24 +35,30 @@ export async function getCloudFunctionLogs(
 }
 
 /**
- * Poll a Cloud Function's logs until a single log entry contains all the
- * given substrings
+ * Poll a Cloud Function's logs until an entry matches all the given
+ * jsonPayload fields
  *
- * @param functionName - Function name
+ * Queries the Cloud Logging API via `gcloud logging read` rather than
+ * `gcloud functions logs read`: the latter neither supports timestamp
+ * filters (its resource keys are `time_utc`/`log`/...) nor exposes the
+ * structured-logger context fields (e.g. `fileName`), both of which this
+ * assertion needs.
+ *
+ * @param functionName - Function name (Gen2 Cloud Run service name)
  * @param region - GCP region
  * @param since - Only consider logs since this date
- * @param substrings - Strings that must all appear in one log entry
+ * @param payloadMatch - jsonPayload fields the entry must match exactly
  * @param options - Polling options
- * @returns The matching log entry text, or null on timeout when
+ * @returns The matching entry's jsonPayload, or null on timeout when
  *          errorOnTimeout is false
  */
 export async function pollForFunctionLogEntry(
   functionName: string,
   region: string,
   since: Date,
-  substrings: string[],
+  payloadMatch: Record<string, string>,
   options: Partial<PollOptions> = {}
-): Promise<string | null> {
+): Promise<Record<string, unknown> | null> {
   const opts: PollOptions = {
     timeout: 60000,
     interval: 10000,
@@ -61,25 +67,27 @@ export async function pollForFunctionLogEntry(
   };
   const startTime = Date.now();
 
+  const filter = [
+    'resource.type="cloud_run_revision"',
+    `resource.labels.service_name="${functionName}"`,
+    `resource.labels.location="${region}"`,
+    `timestamp>="${since.toISOString()}"`,
+    ...Object.entries(payloadMatch).map(
+      ([key, value]) => `jsonPayload.${key}="${value}"`
+    ),
+  ].join(' AND ');
+
   while (Date.now() - startTime < opts.timeout) {
-    const logsJson = await getCloudFunctionLogs(functionName, region, since);
+    const entriesJson = execSync(
+      `gcloud logging read '${filter}' --limit=1 --format=json`,
+      { encoding: 'utf-8' }
+    );
+    const entries = JSON.parse(entriesJson) as {
+      jsonPayload?: Record<string, unknown>;
+    }[];
 
-    if (logsJson) {
-      let entries: { log?: string }[] = [];
-      try {
-        entries = JSON.parse(logsJson) as { log?: string }[];
-      } catch {
-        // Transient gcloud output issue; keep polling
-      }
-
-      const match = entries.find(
-        (entry) =>
-          typeof entry.log === 'string' &&
-          substrings.every((s) => entry.log!.includes(s))
-      );
-      if (match) {
-        return match.log!;
-      }
+    if (entries.length > 0) {
+      return entries[0].jsonPayload ?? {};
     }
 
     await new Promise((resolve) => setTimeout(resolve, opts.interval));
@@ -87,7 +95,7 @@ export async function pollForFunctionLogEntry(
 
   if (opts.errorOnTimeout) {
     throw new Error(
-      `Timeout waiting for log entry containing [${substrings.join(', ')}] ` +
+      `Timeout waiting for log entry matching ${JSON.stringify(payloadMatch)} ` +
         `from ${functionName} after ${opts.timeout}ms`
     );
   }

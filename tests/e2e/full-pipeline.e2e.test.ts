@@ -346,9 +346,9 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         // fails if it exits via the 'Unknown notification operation' branch.
         const notificationLog = await pollForFunctionLogEntry(
           `${process.env.ENVIRONMENT}-notification-dispatcher`,
-          process.env.GCP_REGION || 'us-central1',
+          outputs.region,
           testStartTime,
-          ['Sent success notification', testFileName],
+          { message: 'Sent success notification', fileName: testFileName },
           { timeout: 180000, interval: 15000 }
         );
 
