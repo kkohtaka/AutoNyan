@@ -702,6 +702,7 @@ the new service and the Actions logs show no permission errors.
 - Pub/Sub
 - Cloud Scheduler
 - Firestore/Datastore
+- Cloud Logging (read-only, for E2E log assertions)
 
 **Least privilege:** Only grant roles for services the Terraform configuration
 actually manages. Compute Engine roles are intentionally NOT granted — there are
