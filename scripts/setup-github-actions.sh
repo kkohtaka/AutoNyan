@@ -193,8 +193,10 @@ log "Granting IAM permissions for Terraform operations..."
 # resources: Cloud Functions, Pub/Sub, Cloud Scheduler, Cloud Storage,
 # Firestore/Datastore, project services, and the IAM bindings between them.
 # Least privilege: a role belongs here only when a managed
-# `resource "google_..."` requires it. Compute Engine roles are excluded because
-# the configuration manages no compute resources.
+# `resource "google_..."` requires it, or when a CI workflow performs a
+# read-only check that needs it (e.g. the E2E test reads Cloud Function logs).
+# Compute Engine roles are excluded because the configuration manages no
+# compute resources.
 ROLES=(
 	"roles/iam.serviceAccountUser"
 	"roles/iam.serviceAccountKeyAdmin"
@@ -206,6 +208,7 @@ ROLES=(
 	"roles/serviceusage.serviceUsageAdmin"
 	"roles/datastore.owner"
 	"roles/secretmanager.admin"
+	"roles/logging.viewer"
 )
 SERVICE_ACCOUNT_MEMBER="serviceAccount:$SERVICE_ACCOUNT_EMAIL"
 for ROLE in "${ROLES[@]}"; do
