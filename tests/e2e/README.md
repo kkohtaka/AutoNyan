@@ -1,15 +1,17 @@
 # E2E Tests - AutoNyan Pipeline
 
-End-to-end tests for the complete AutoNyan document processing pipeline, covering all 5 stages from Drive scanning to AI classification.
+End-to-end tests for the complete AutoNyan document processing pipeline, covering all 6 stages from Drive scanning to notification dispatch.
 
 ## Overview
 
 The E2E test suite validates the entire pipeline flow:
+
 1. **Drive Scanner** - Discovers documents in Google Drive
 2. **Doc Processor** - Downloads and uploads to Cloud Storage
 3. **Vision Processor** - Extracts text using Vision API OCR
 4. **Firebase Writer** - Stores extracted text in Firestore
 5. **File Classifier** - Categorizes documents and moves them in Drive
+6. **Notification Dispatcher** - Sends a success notification email for the processed document
 
 ## Prerequisites
 
@@ -28,6 +30,7 @@ gcloud config set project YOUR_PROJECT_ID
 ```
 
 **Test your authentication:**
+
 ```bash
 npm run test:e2e:check-auth      # Verify ADC is configured
 npm run test:e2e:check-drive     # Verify Drive API access
@@ -39,12 +42,14 @@ Workload Identity Federation is configured automatically in GitHub Actions with 
 ### 2. Infrastructure Deployed
 
 Ensure the staging environment is deployed:
+
 ```bash
 export ENVIRONMENT=staging
 npm run deploy
 ```
 
 Verify deployment:
+
 ```bash
 terraform -chdir=terraform output
 ```
@@ -56,12 +61,14 @@ terraform -chdir=terraform output
 No manual environment variable setup is required if your `terraform.tfvars` is configured correctly (which it should be if `npm run terraform:apply` succeeds).
 
 The tests will automatically use values from `terraform.tfvars` for:
+
 - `project_id`
 - `drive_folder_id`
 - `category_root_folder_id`
 - `uncategorized_folder_id`
 
 **Optional:** You can override these values with environment variables if needed:
+
 ```bash
 export ENVIRONMENT=staging  # defaults to staging
 export PROJECT_ID=override-project-id
@@ -86,6 +93,7 @@ npm run setup:share-drive-folders
 ```
 
 This script:
+
 - Reads service account emails from Terraform outputs
 - Shares the main Drive folder with all service accounts
 - Shares category root folder and uncategorized folder (if configured)
@@ -93,6 +101,7 @@ This script:
 - Works for both staging and production environments
 
 **Note**: Once folders are shared, you don't need to run this again unless you:
+
 - Create new service accounts in Terraform
 - Need to share additional folders
 - Accidentally revoked permissions
@@ -109,6 +118,7 @@ Alternatively, share folders manually:
    - Click "Send"
 
 **Verify access:**
+
 ```bash
 npm run test:e2e:check-drive
 ```
@@ -121,11 +131,12 @@ npm run test:e2e:check-drive
 npm run test:e2e
 ```
 
-This runs the complete 5-stage pipeline test with a 10-minute timeout.
+This runs the complete 6-stage pipeline test with a 25-minute timeout.
 
 ### Cleanup Orphaned Resources
 
 If tests fail and leave resources behind:
+
 ```bash
 npm run test:e2e:cleanup
 ```
@@ -156,7 +167,8 @@ tests/e2e/
 - **Vision Processor**: 300 seconds (5 minutes) - OCR processing
 - **Firebase Writer**: 60 seconds
 - **File Classifier**: 120 seconds (2 minutes) - AI classification
-- **Full Pipeline**: 600 seconds (10 minutes)
+- **Notification Dispatcher**: 180 seconds (3 minutes) - log-based verification
+- **Full Pipeline**: 1500 seconds (25 minutes)
 
 ## What the Test Does
 
@@ -167,13 +179,15 @@ tests/e2e/
 5. **Waits** for Firebase Writer to create Firestore document in `extracted_texts` collection
 6. **Waits** for File Classifier to add category and move file in Drive
 7. **Verifies** the file was moved to the correct category folder
-8. **Cleans up** all created resources (Drive files, Storage objects, Firestore docs)
+8. **Verifies** the Notification Dispatcher logged `Sent success notification` for the test file
+9. **Cleans up** all created resources (Drive files, Storage objects, Firestore docs)
 
 ## Debugging Failures
 
 ### Check Test Logs
 
 Logs are saved to `tests/e2e/logs/`:
+
 ```bash
 ls -lt tests/e2e/logs/
 cat tests/e2e/logs/full-pipeline-*.log
@@ -195,21 +209,25 @@ gcloud functions logs read staging-text-vision-processor --region=us-central1 --
 ### Common Issues
 
 **Authentication Errors:**
+
 - Run `gcloud auth application-default login`
 - Verify `PROJECT_ID` environment variable is set
 - Check Workload Identity Federation configuration (CI/CD)
 
 **Drive Access Errors:**
+
 - Verify service account has "Editor" access to test folder
 - Wait a few minutes after sharing for permissions to propagate
 - Check folder ID is correct
 
 **Timeout Errors:**
+
 - Vision API can take 3-5 minutes for OCR processing
 - Increase timeout if needed in `jest.config.e2e.js`
 - Check Cloud Function logs for actual errors
 
 **Resource Not Found:**
+
 - Verify staging infrastructure is deployed: `terraform output`
 - Check bucket names and topic names match Terraform outputs
 - Ensure all functions are deployed successfully
@@ -223,14 +241,17 @@ Set `verbose: true` in `jest.config.e2e.js` for detailed test output.
 E2E tests run automatically in GitHub Actions:
 
 ### Manual Trigger
+
 ```bash
 gh workflow run e2e-test.yml
 ```
 
 ### Scheduled Runs
+
 Tests run daily at 2 AM UTC via cron schedule.
 
 ### After Deployment
+
 Optionally triggered after successful staging deployment.
 
 ## Cost Considerations
@@ -240,6 +261,7 @@ Optionally triggered after successful staging deployment.
 - **Firestore**: Minimal reads/writes for single document
 
 To minimize costs:
+
 - Use small test files (< 100KB)
 - Run tests manually instead of on every commit
 - Scheduled runs: once per day maximum
@@ -248,6 +270,7 @@ To minimize costs:
 ## Test Fixtures
 
 Sample documents are in `fixtures/sample-documents/`:
+
 - `test-document.txt` - Plain text with invoice data
 - `test-invoice.pdf` - PDF version (to be created)
 - `test-receipt.png` - Image with text (to be created)
@@ -277,6 +300,7 @@ See `fixtures/README.md` for instructions on creating PDF and image fixtures.
 ## Support
 
 For issues or questions:
+
 1. Check this README and `plans/END_TO_END_TEST.md`
 2. Review Cloud Function logs
 3. Check test logs in `tests/e2e/logs/`

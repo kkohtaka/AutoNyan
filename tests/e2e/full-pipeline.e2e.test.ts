@@ -18,6 +18,7 @@ import {
   pollForDriveFileLocation,
 } from './helpers/polling';
 import { cleanupTestResources } from './helpers/cleanup';
+import { pollForFunctionLogEntry } from './helpers/cloud-logs';
 import { getTerraformOutputs } from './helpers/terraform-outputs';
 import { E2ELogger } from './helpers/logger';
 
@@ -36,7 +37,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
   let categoryFolderId: string; // Test category folder (e.g., "請求書")
 
   const logger = new E2ELogger('full-pipeline');
-  const TEST_TIMEOUT = 1500000; // 25 minutes: stage2(5m) + stage3(9m) + stage4(1m) + stage5(5m) + buffer
+  const TEST_TIMEOUT = 1500000; // 25 minutes: stage2(5m) + stage3(9m) + stage4(1m) + stage5(5m) + stage6(3m) + buffer
   const testStartTime = new Date();
 
   beforeAll(async () => {
@@ -156,7 +157,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
   }, TEST_TIMEOUT);
 
   it(
-    'should process a document through all 5 pipeline stages',
+    'should process a document through all 6 pipeline stages',
     async () => {
       try {
         // ========================================
@@ -333,11 +334,36 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         expect(classifiedDoc!.category).toBeDefined(); // This is the critical check
 
         // ========================================
+        // Stage 6: Wait for notification dispatch
+        // ========================================
+        logger.log(
+          'stage-6',
+          'Waiting for Notification Dispatcher to send success notification'
+        );
+
+        // The dispatcher only logs 'Sent success notification' after correctly
+        // parsing the `operation` attribute and reaching the send path, so this
+        // fails if it exits via the 'Unknown notification operation' branch.
+        const notificationLog = await pollForFunctionLogEntry(
+          `${process.env.ENVIRONMENT}-notification-dispatcher`,
+          process.env.GCP_REGION || 'us-central1',
+          testStartTime,
+          ['Sent success notification', testFileName],
+          { timeout: 180000, interval: 15000 }
+        );
+
+        expect(notificationLog).toBeTruthy();
+
+        logger.log('stage-6', 'Notification Dispatcher completed', {
+          logEntry: notificationLog,
+        });
+
+        // ========================================
         // Test Completion
         // ========================================
         logger.log('success', 'Full pipeline E2E test completed successfully', {
           duration: `${Date.now() - testStartTime.getTime()}ms`,
-          stages: 5,
+          stages: 6,
         });
       } catch (error) {
         logger.error('failure', error as Error, {
