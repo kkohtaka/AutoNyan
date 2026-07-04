@@ -96,22 +96,25 @@ export async function uploadTestFile(
 }
 
 /**
- * Clean up Google Drive files
+ * Move a Drive item to the trash
+ *
+ * E2E cleanup must trash instead of permanently deleting: in a shared drive,
+ * files.delete requires the Manager role, while the CI service account holds
+ * only fileOrganizer (Content Manager), which can trash. Trashed items are
+ * purged automatically after 30 days.
  *
  * @param drive - Drive API client
- * @param fileIds - Array of file IDs to delete
+ * @param fileId - Item ID to trash
  */
-export async function cleanupDriveFiles(
+export async function trashDriveItem(
   drive: drive_v3.Drive,
-  fileIds: string[]
+  fileId: string
 ): Promise<void> {
-  for (const fileId of fileIds) {
-    try {
-      await drive.files.delete({ fileId, supportsAllDrives: true });
-    } catch (error) {
-      console.warn(`Failed to delete Drive file ${fileId}:`, error);
-    }
-  }
+  await drive.files.update({
+    fileId,
+    requestBody: { trashed: true },
+    supportsAllDrives: true,
+  });
 }
 
 /**
@@ -133,6 +136,10 @@ export async function createTestFolder(
       name: folderName,
       mimeType: 'application/vnd.google-apps.folder',
       parents: [parentFolderId],
+      // Public custom property so cleanup sweeps can identify e2e artifacts
+      // regardless of identity or folder name (test category folders share
+      // their display name with real category folders)
+      properties: { e2eTest: 'true' },
     },
     fields: 'id',
     supportsAllDrives: true,

@@ -1,6 +1,7 @@
 import { Storage } from '@google-cloud/storage';
 import { Firestore } from '@google-cloud/firestore';
 import { drive_v3 } from 'googleapis';
+import { trashDriveItem } from './drive-setup';
 
 export interface CleanupContext {
   drive: drive_v3.Drive;
@@ -26,12 +27,9 @@ export async function cleanupTestResources(
   // Cleanup Drive files
   if (testFileId) {
     cleanupTasks.push(
-      drive.files
-        .delete({ fileId: testFileId, supportsAllDrives: true })
-        .then(() => undefined)
-        .catch((err) =>
-          console.warn(`Failed to cleanup Drive file ${testFileId}:`, err)
-        )
+      trashDriveItem(drive, testFileId).catch((err) =>
+        console.warn(`Failed to cleanup Drive file ${testFileId}:`, err)
+      )
     );
   }
 

@@ -390,9 +390,10 @@ gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"root"}'
 - Read file metadata and content
 - Create new folders
 - Copy files
-- Move files — requires the Content Manager (`fileOrganizer`) role on the
-  shared drive folders; the sharing script grants it only to the classifier
-  service account (plain Editor/`writer` cannot re-parent items)
+- Move or trash files — requires the Content Manager (`fileOrganizer`) role
+  on the shared drive folders; the sharing script grants it only to the
+  classifier and GitHub Actions service accounts (plain Editor/`writer` can
+  neither re-parent nor trash items)
 - Download documents for processing
 
 **What the service account CANNOT do:**
