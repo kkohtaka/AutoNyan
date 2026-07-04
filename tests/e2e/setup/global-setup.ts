@@ -1,6 +1,7 @@
 import { Storage } from '@google-cloud/storage';
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
+import { trashDriveItem } from '../helpers/drive-setup';
 import { getTerraformOutputs } from '../helpers/terraform-outputs';
 
 export default async function globalSetup(): Promise<void> {
@@ -15,9 +16,11 @@ export default async function globalSetup(): Promise<void> {
     // Get configuration from Terraform outputs and tfvars
     const config = await getTerraformOutputs(process.env.ENVIRONMENT);
 
-    // Clean up old Drive test artifacts before running tests
-    // This covers both legacy e2e-test-* files (direct children) and
-    // isolated e2e-run-* subfolders from the current approach
+    // Trash old Drive test artifacts left behind by earlier runs (e.g. when
+    // a run is killed before teardown). Scan-folder artifacts are matched by
+    // the e2e-* name convention; test category folders share their display
+    // name with real category folders, so they are matched by the e2eTest
+    // property set at creation instead.
     console.log('Cleaning up old Drive test artifacts...');
     try {
       const auth = new GoogleAuth({
@@ -25,30 +28,37 @@ export default async function globalSetup(): Promise<void> {
       });
       const drive = google.drive({ version: 'v3', auth });
 
-      const response = await drive.files.list({
-        q: `'${config.drive_folder_id}' in parents and (name contains 'e2e-test' or name contains 'e2e-run') and trashed=false`,
-        fields: 'files(id,name)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      });
+      const queries = [
+        `'${config.drive_folder_id}' in parents and (name contains 'e2e-test' or name contains 'e2e-run') and trashed=false`,
+      ];
+      if (config.category_root_folder_id) {
+        queries.push(
+          `'${config.category_root_folder_id}' in parents and properties has { key='e2eTest' and value='true' } and trashed=false`
+        );
+      }
 
-      const files = response.data.files || [];
-      for (const file of files) {
-        try {
-          await drive.files.delete({
-            fileId: file.id!,
-            supportsAllDrives: true,
-          });
-        } catch (err) {
-          console.warn(
-            `  ⚠️  Failed to delete ${file.name} (${file.id}):`,
-            err
-          );
+      let trashedCount = 0;
+      for (const query of queries) {
+        const response = await drive.files.list({
+          q: query,
+          fields: 'files(id,name)',
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        });
+
+        for (const file of response.data.files || []) {
+          try {
+            await trashDriveItem(drive, file.id!);
+            trashedCount++;
+          } catch (err) {
+            console.warn(
+              `  ⚠️  Failed to trash ${file.name} (${file.id}):`,
+              err
+            );
+          }
         }
       }
-      console.log(
-        `  ✅ Deleted ${files.length} old test artifact(s) from Drive`
-      );
+      console.log(`  ✅ Trashed ${trashedCount} old test artifact(s) in Drive`);
     } catch (error) {
       console.warn(`  ⚠️  Failed to clean Drive artifacts:`, error);
     }
