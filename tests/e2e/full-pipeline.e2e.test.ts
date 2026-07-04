@@ -9,8 +9,8 @@ import * as fs from 'fs';
 import { authenticateE2E } from './helpers/auth';
 import {
   uploadTestFile,
-  cleanupDriveFiles,
   createTestFolder,
+  trashDriveItem,
 } from './helpers/drive-setup';
 import {
   pollForStorageObject,
@@ -115,20 +115,17 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       contentHash,
     });
 
-    // Cleanup isolated test subfolder (deleting the folder removes the test file inside it too)
+    // Cleanup isolated test subfolder (trashing the folder removes the test file inside it too)
     if (testSubFolderId) {
       try {
-        await drive.files.delete({
-          fileId: testSubFolderId,
-          supportsAllDrives: true,
-        });
-        logger.log('teardown', 'Isolated test subfolder deleted', {
+        await trashDriveItem(drive, testSubFolderId);
+        logger.log('teardown', 'Isolated test subfolder trashed', {
           testSubFolderId,
         });
       } catch (error) {
         logger.log(
           'teardown',
-          'Failed to delete isolated test subfolder (may not exist)',
+          'Failed to trash isolated test subfolder (may not exist)',
           { error }
         );
       }
@@ -137,17 +134,14 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     // Cleanup test category folder
     if (categoryFolderId) {
       try {
-        await drive.files.delete({
-          fileId: categoryFolderId,
-          supportsAllDrives: true,
-        });
-        logger.log('teardown', 'Test category folder deleted', {
+        await trashDriveItem(drive, categoryFolderId);
+        logger.log('teardown', 'Test category folder trashed', {
           categoryFolderId,
         });
       } catch (error) {
         logger.log(
           'teardown',
-          'Failed to delete test category folder (may not exist)',
+          'Failed to trash test category folder (may not exist)',
           { error }
         );
       }

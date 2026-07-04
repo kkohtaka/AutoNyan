@@ -42,13 +42,18 @@ interface ShareResult {
 type DriveRole = 'writer' | 'fileOrganizer';
 
 /**
- * Folders live on a shared drive, where moving items requires the
- * fileOrganizer (Content Manager) role — writer/Contributor can edit files
- * but not re-parent them. Only the classifier moves files, so it alone gets
- * fileOrganizer; every other account keeps least-privilege writer.
+ * Folders live on a shared drive, where writer/Contributor can edit files
+ * but can neither re-parent nor trash them; those need the fileOrganizer
+ * (Content Manager) role. Only two accounts organize content — the classifier
+ * moves files into category folders, and the GitHub Actions account trashes
+ * E2E test artifacts — so they alone get fileOrganizer; every other account
+ * keeps least-privilege writer.
  */
 function roleForServiceAccount(email: string): DriveRole {
-  return email.includes('file-classifier') ? 'fileOrganizer' : 'writer';
+  return email.includes('file-classifier') ||
+    email.startsWith('github-actions-terraform@')
+    ? 'fileOrganizer'
+    : 'writer';
 }
 
 /**
@@ -154,9 +159,7 @@ async function shareFolderWithServiceAccount(
         supportsAllDrives: true,
       });
 
-      console.log(
-        `  ✅ Updated role for ${email}: ${existing.role} → ${role}`
-      );
+      console.log(`  ✅ Updated role for ${email}: ${existing.role} → ${role}`);
       return { status: 'role_updated', email };
     }
 

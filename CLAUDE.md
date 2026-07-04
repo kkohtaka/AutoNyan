@@ -564,13 +564,16 @@ delegated to `lint-fix` / `test-fix`.
   script grants each service account a per-folder role
 - ✅ Can access: Explicitly shared folders and files
 - ✅ Can perform (role `writer`): List, read, create folders, copy files
-- ⚠️ Moving (re-parenting) items requires the `fileOrganizer` (Content
-  Manager) role — `writer` can edit files but not move them, and the attempt
-  fails with a **non-transient 403** ("insufficient permissions for this
-  file"). The sharing script grants `fileOrganizer` only to the account that
-  files documents into category folders, `writer` to all others.
+- ⚠️ Moving (re-parenting) and trashing items requires the `fileOrganizer`
+  (Content Manager) role — `writer` can edit files but not move or trash
+  them, and the attempt fails with a **non-transient 403** ("insufficient
+  permissions for this file"; `files.delete` surfaces it as a misleading
+  404 "File not found"). The sharing script grants `fileOrganizer` only to
+  the accounts that organize content (the classifier moves files, the CI
+  account trashes E2E artifacts), `writer` to all others.
 - ❌ Cannot access: Unshared folders, other users' private content
-- ❌ Cannot perform: Delete files, modify permissions
+- ❌ Cannot perform: Permanently delete files (`fileOrganizer` can only
+  trash; `files.delete` needs the Manager role), modify permissions
 
 ### Supported Operations
 

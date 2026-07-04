@@ -77,7 +77,7 @@ export DRIVE_FOLDER_ID=override-folder-id
 
 ### 4. Google Drive Access
 
-Service accounts must have "Editor" access to the Drive folders (the file-classifier service account needs "Content Manager" so it can move files on the shared drive — the sharing script grants the right role per account). **This is a one-time setup** - once folders are shared, permissions persist across deployments.
+Service accounts must have "Editor" access to the Drive folders. Two accounts need "Content Manager" instead: the file-classifier account (moves files on the shared drive) and the GitHub Actions account (trashes E2E test artifacts during cleanup) — the sharing script grants the right role per account. **This is a one-time setup** - once folders are shared, permissions persist across deployments.
 
 **Automatic Sharing (Recommended)**
 
