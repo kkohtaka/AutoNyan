@@ -550,18 +550,25 @@ delegated to `lint-fix` / `test-fix`.
    # staging uses values from terraform/environments/staging.tfvars
    npm run setup:share-drive-folders
 
-   # production requires explicit folder IDs (not in local tfvars)
-   ENVIRONMENT=production \
-     DRIVE_FOLDER_ID=xxx CATEGORY_ROOT_FOLDER_ID=xxx UNCATEGORIZED_FOLDER_ID=xxx \
-     npm run setup:share-drive-folders
+   # production reads terraform/environments/production.tfvars; pass
+   # DRIVE_FOLDER_ID / CATEGORY_ROOT_FOLDER_ID / UNCATEGORIZED_FOLDER_ID
+   # env vars only if the folder IDs are not in that file
+   ENVIRONMENT=production npm run setup:share-drive-folders
    ```
    - **Note**: This is a one-time setup. Once shared, permissions persist across deployments
    - Not required in CI/CD (manual setup only)
 4. Test access via Drive check: `npm run test:e2e:check-drive`
 
 **Permission model:**
+- The scanned and category folders live on a **shared drive**; the sharing
+  script grants each service account a per-folder role
 - ✅ Can access: Explicitly shared folders and files
-- ✅ Can perform: List, read, create folders, move/copy files
+- ✅ Can perform (role `writer`): List, read, create folders, copy files
+- ⚠️ Moving (re-parenting) items requires the `fileOrganizer` (Content
+  Manager) role — `writer` can edit files but not move them, and the attempt
+  fails with a **non-transient 403** ("insufficient permissions for this
+  file"). The sharing script grants `fileOrganizer` only to the account that
+  files documents into category folders, `writer` to all others.
 - ❌ Cannot access: Unshared folders, other users' private content
 - ❌ Cannot perform: Delete files, modify permissions
 
@@ -573,7 +580,8 @@ Functions using Drive API can perform:
 - Read file metadata (name, size, modified time, MIME type)
 - Download file content
 - Create folders in shared areas
-- Move files between shared folders
+- Move files between shared folders (requires the `fileOrganizer` role — see
+  the permission model above)
 - Copy files within shared areas
 
 ### Manual Trigger Pattern

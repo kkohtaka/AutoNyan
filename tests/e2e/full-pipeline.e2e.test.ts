@@ -307,7 +307,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           'Polling for file to be moved to target folder...',
           {
             expectedFolderId,
-            timeout: '150 seconds',
+            timeout: '60 seconds',
           }
         );
 
@@ -315,7 +315,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           drive,
           testFileId,
           expectedFolderId,
-          { timeout: 150000, interval: 5000, errorOnTimeout: false } // 150s to cover 5-retry linear backoff in file-classifier
+          { timeout: 60000, interval: 5000, errorOnTimeout: false }
         );
 
         if (fileMoved) {
@@ -325,7 +325,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         } else {
           logger.log('stage-5', 'File was not moved within timeout', {
             expectedFolderId,
-            note: 'Classification succeeded but file move may have failed due to permission propagation delays',
+            note: 'Classification succeeded but the file move failed - check the classifier service account has fileOrganizer on the shared drive folders',
           });
         }
 
