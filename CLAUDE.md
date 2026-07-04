@@ -601,6 +601,7 @@ gcloud pubsub topics publish <TOPIC_NAME> --message='{"folderId":"FOLDER_ID"}'
 **Branch rules:**
 - ⛔ Never develop directly on master branch
 - ✅ Always create feature/fix branches
+- ✅ Base every new branch on the latest `origin/master` (`git fetch origin` first) — a local `master` ref can silently lag behind the remote and produce conflicting PRs
 - ✅ Delete branches after merging
 - ✅ Keep branches short-lived and focused
 

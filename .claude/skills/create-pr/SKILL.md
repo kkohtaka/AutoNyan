@@ -27,15 +27,19 @@ Collect the information needed to create the PR.
 !`git diff HEAD`
 ```
 
-**Commits ahead of master:**
+**Commits ahead of the remote default branch:**
 ```
-!`git log master..HEAD --oneline`
+!`git log origin/master..HEAD --oneline`
 ```
 
-**Full diff from master:**
+**Full diff from the remote default branch:**
 ```
-!`git diff master...HEAD`
+!`git diff origin/master...HEAD`
 ```
+
+> These comparisons use `origin/master`, never the local `master` ref — a local
+> `master` can silently lag behind the remote, which would make both the commit
+> list and the diff misleading.
 
 ## Your Task
 
@@ -97,7 +101,7 @@ git push -u origin <branch-name>
 
 ### Step 4 — Write the PR
 
-Analyse all commits in `git log master..HEAD` (not just the latest) and draft:
+Analyse all commits in `git log origin/master..HEAD` (not just the latest) and draft:
 
 **Title** (under 70 characters):
 - Conventional format: `<type>(<optional scope>): <description>`

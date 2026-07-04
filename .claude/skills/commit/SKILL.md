@@ -71,7 +71,17 @@ git checkout -b <branch-name> origin/master
 
 **Case B — current branch is already a suitable work branch:**
 
-Stay on the current branch — no branch change needed.
+Stay on the current branch, but verify its base is not stale:
+
+```bash
+git merge-base --is-ancestor origin/master HEAD && echo "base OK" || echo "STALE BASE"
+```
+
+If the check reports a stale base, the branch was cut from an outdated
+`master` (a local `master` ref can silently lag behind `origin/master`), and a
+PR from it will conflict or carry an outdated view of the code. Rebase the
+branch onto `origin/master` — after committing the working tree (Steps 2–5)
+if it is dirty, since a dirty tree cannot rebase — and resolve any conflicts.
 
 ### Step 2 — Group related changes
 
