@@ -69,18 +69,19 @@ describe('textFirebaseWriter', () => {
     } as StorageObjectData,
   });
 
+  // Metadata of the original document object in document storage; Vision API
+  // result objects themselves carry no custom metadata.
+  const originalDocMetadata = {
+    metadata: {
+      originalFileId: 'file123',
+      originalFileName: 'test.pdf',
+      originalMimeType: 'application/pdf',
+    },
+    size: '1024',
+  };
+
   it('should process Vision API results and store to Firestore', async () => {
     const cloudEvent = createCloudEvent({});
-
-    const mockMetadata = {
-      metadata: {
-        originalFileId: 'file123',
-        originalFileName: 'test.pdf',
-        originalMimeType: 'application/pdf',
-        contentHash: 'abc123',
-        processedAt: '2023-01-01T00:00:00Z',
-      },
-    };
 
     const visionResult = {
       responses: [
@@ -99,15 +100,10 @@ describe('textFirebaseWriter', () => {
       ],
     };
 
-    const originalFileMetadata = {
-      size: '1024',
-    };
-
     mockStorage
       .bucket()
       .file()
-      .getMetadata.mockResolvedValueOnce([mockMetadata]) // Vision results metadata
-      .mockResolvedValueOnce([originalFileMetadata]); // Original file metadata
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
 
     mockStorage
       .bucket()
@@ -125,6 +121,9 @@ describe('textFirebaseWriter', () => {
     expect(result.pages).toBe(2);
     expect(result.classificationTriggered).toBe(true);
 
+    expect(mockStorage.bucket).toHaveBeenCalledWith(
+      'test-project-staging-document-storage'
+    );
     expect(mockFirestore.collection).toHaveBeenCalledWith('extracted_texts');
     expect(mockFirestore.collection().add).toHaveBeenCalledWith({
       fileId: 'file123',
@@ -135,7 +134,7 @@ describe('textFirebaseWriter', () => {
         { pageNumber: 1, text: 'Page 1 text', confidence: 0.95 },
         { pageNumber: 2, text: 'Page 2 text', confidence: 0.9 },
       ],
-      extractedAt: '2023-01-01T00:00:00Z',
+      extractedAt: expect.any(String),
       mimeType: 'application/pdf',
       fileName: 'test.pdf',
       fileSize: 1024,
@@ -151,16 +150,6 @@ describe('textFirebaseWriter', () => {
 
   it('should handle empty text pages gracefully', async () => {
     const cloudEvent = createCloudEvent({});
-
-    const mockMetadata = {
-      metadata: {
-        originalFileId: 'file123',
-        originalFileName: 'test.pdf',
-        originalMimeType: 'application/pdf',
-        contentHash: 'abc123',
-        processedAt: '2023-01-01T00:00:00Z',
-      },
-    };
 
     const visionResult = {
       responses: [
@@ -188,8 +177,7 @@ describe('textFirebaseWriter', () => {
     mockStorage
       .bucket()
       .file()
-      .getMetadata.mockResolvedValueOnce([mockMetadata])
-      .mockResolvedValueOnce([{ size: '1024' }]);
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
 
     mockStorage
       .bucket()
@@ -220,32 +208,6 @@ describe('textFirebaseWriter', () => {
 
     const cloudEvent = createCloudEvent({});
 
-    const mockMetadata = {
-      metadata: {
-        originalFileId: 'file123',
-        originalFileName: 'test.pdf',
-        originalMimeType: 'application/pdf',
-        contentHash: 'abc123',
-      },
-    };
-
-    const visionResult = {
-      responses: [
-        {
-          fullTextAnnotation: {
-            text: 'Test text',
-            pages: [{ confidence: 0.95 }],
-          },
-        },
-      ],
-    };
-
-    mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
-    mockStorage
-      .bucket()
-      .file()
-      .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
-
     const result = await textFirebaseWriter(cloudEvent.data!);
 
     expect(result.skipped).toBe(true);
@@ -254,33 +216,34 @@ describe('textFirebaseWriter', () => {
     );
   });
 
+  it('should ACK (skip) when the result object path is unexpected', async () => {
+    const cloudEvent = createCloudEvent({
+      name: 'unexpected/output.json',
+    });
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
+      'Unexpected Vision API result object path'
+    );
+    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
+  });
+
   it('should publish a failure notification on permanent failure when NOTIFICATION_TOPIC is set', async () => {
     process.env.NOTIFICATION_TOPIC = 'notification-trigger';
-    delete process.env.PROJECT_ID; // triggers a permanent failure
 
     const cloudEvent = createCloudEvent({});
     mockStorage
       .bucket()
       .file()
-      .getMetadata.mockResolvedValue([
-        {
-          metadata: {
-            originalFileId: 'file123',
-            originalFileName: 'test.pdf',
-            originalMimeType: 'application/pdf',
-            contentHash: 'abc123',
-          },
-        },
-      ]);
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    // Empty responses trigger a permanent failure after metadata is resolved
     mockStorage
       .bucket()
       .file()
       .download.mockResolvedValue([
-        Buffer.from(
-          JSON.stringify({
-            responses: [{ fullTextAnnotation: { text: 'x', pages: [] } }],
-          })
-        ),
+        Buffer.from(JSON.stringify({ responses: [] })),
       ]);
 
     await textFirebaseWriter(cloudEvent.data!);
@@ -295,44 +258,35 @@ describe('textFirebaseWriter', () => {
     );
   });
 
-  it('should ACK (skip) when original file metadata is missing', async () => {
+  it('should ACK (skip) when original document metadata is missing', async () => {
     const cloudEvent = createCloudEvent({});
 
-    const mockMetadata = {
-      metadata: {},
-    };
-
-    mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([{ metadata: {} }]);
 
     const result = await textFirebaseWriter(cloudEvent.data!);
 
     expect(result.skipped).toBe(true);
     expect(result.message).toContain(
-      'Missing required metadata from Vision API result file'
+      'Missing required metadata on original document object'
     );
   });
 
   it('should ACK (skip) when Vision API responses are missing', async () => {
     const cloudEvent = createCloudEvent({});
 
-    const mockMetadata = {
-      metadata: {
-        originalFileId: 'file123',
-        originalFileName: 'test.pdf',
-        originalMimeType: 'application/pdf',
-        contentHash: 'abc123',
-      },
-    };
-
-    const visionResult = {
-      responses: [],
-    };
-
-    mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
     mockStorage
       .bucket()
       .file()
-      .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([
+        Buffer.from(JSON.stringify({ responses: [] })),
+      ]);
 
     const result = await textFirebaseWriter(cloudEvent.data!);
 
@@ -361,16 +315,6 @@ describe('textFirebaseWriter', () => {
 
     const cloudEvent = createCloudEvent({});
 
-    const mockMetadata = {
-      metadata: {
-        originalFileId: 'file123',
-        originalFileName: 'test.pdf',
-        originalMimeType: 'application/pdf',
-        contentHash: 'abc123',
-        processedAt: '2023-01-01T00:00:00Z',
-      },
-    };
-
     const visionResult = {
       responses: [
         {
@@ -382,15 +326,10 @@ describe('textFirebaseWriter', () => {
       ],
     };
 
-    const originalFileMetadata = {
-      size: '1024',
-    };
-
     mockStorage
       .bucket()
       .file()
-      .getMetadata.mockResolvedValueOnce([mockMetadata])
-      .mockResolvedValueOnce([originalFileMetadata]);
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
 
     mockStorage
       .bucket()

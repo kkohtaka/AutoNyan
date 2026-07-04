@@ -160,16 +160,36 @@ export const textVisionProcessor = async (
     };
 
     // Call Vision API async batch processing
-    const [operation] = await vision.asyncBatchAnnotateFiles(request);
+    let operationId: string;
+    let responseCount: number;
+    try {
+      const [operation] = await vision.asyncBatchAnnotateFiles(request);
 
-    logger.info('Vision API operation started', {
-      operationName: operation.name,
-    });
+      logger.info('Vision API operation started', {
+        operationName: operation.name,
+      });
 
-    // Wait for the operation to complete
-    const [result] = await operation.promise();
+      // Wait for the operation to complete
+      const [result] = await operation.promise();
 
-    if (!result.responses || result.responses.length === 0) {
+      operationId = operation.name || 'unknown';
+      responseCount = result.responses?.length ?? 0;
+    } catch (error) {
+      // gRPC INVALID_ARGUMENT (3) means Vision rejected the input itself
+      // (e.g. a non-PDF file uploaded under a .pdf name); retrying can never
+      // succeed and every retry is a billable Vision call.
+      if ((error as { code?: number }).code === 3) {
+        throw new PermanentError(
+          `Vision API rejected input: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          error
+        );
+      }
+      throw error;
+    }
+
+    if (responseCount === 0) {
       throw new Error('No responses received from Vision API');
     }
 
@@ -178,7 +198,7 @@ export const textVisionProcessor = async (
       objectName: objectName,
       outputBucket: outputBucket,
       outputPath: outputPath,
-      operationId: operation.name || 'unknown',
+      operationId: operationId,
     };
 
     logger.info('Vision API processing completed', { result: result_obj });
