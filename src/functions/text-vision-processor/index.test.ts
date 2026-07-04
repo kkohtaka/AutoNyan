@@ -263,6 +263,51 @@ describe('textVisionProcessor', () => {
     expect(result.skipped).toBe(true);
   });
 
+  it('should ACK (skip) when Vision API rejects the input format', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const cloudEvent = createCloudEvent({
+      contentType: 'application/pdf',
+    });
+
+    const mockMetadata = {
+      metadata: {
+        originalFileId: 'file123',
+        originalFileName: 'test.pdf',
+        contentHash: 'abc123',
+      },
+    };
+
+    // gRPC INVALID_ARGUMENT, as returned for e.g. an HTML file named .pdf
+    const invalidArgumentError = Object.assign(
+      new Error('Unsupported input file format.'),
+      { code: 3 }
+    );
+
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([
+      {
+        name: 'operation123',
+        promise: jest.fn().mockRejectedValue(invalidArgumentError),
+      },
+    ]);
+
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
+      'Vision API rejected input: Unsupported input file format.'
+    );
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+          fileId: 'file123',
+        }),
+      })
+    );
+  });
+
   it('should throw (retry) on transient Vision API failures', async () => {
     const cloudEvent = createCloudEvent({
       contentType: 'application/pdf',

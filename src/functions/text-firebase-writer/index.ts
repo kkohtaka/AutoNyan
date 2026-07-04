@@ -87,22 +87,48 @@ export const textFirebaseWriter = async (
       databaseId,
     });
 
-    // Get the Vision API result file
-    const file = storage.bucket(bucket).file(objectName);
-    const [metadata] = await file.getMetadata();
-
-    // Extract metadata
-    originalFileId = String(metadata.metadata?.originalFileId || '');
-    originalFileName = String(metadata.metadata?.originalFileName || '');
-    const originalMimeType = String(metadata.metadata?.originalMimeType || '');
-    const contentHash = String(metadata.metadata?.contentHash || '');
-    const processedAt = String(metadata.metadata?.processedAt || '');
-
-    if (!originalFileId || !originalFileName || !contentHash) {
+    // Vision API writes result objects without custom metadata, so the
+    // original document object (keyed by the contentHash in the result path)
+    // is the only reliable metadata source.
+    const hashMatch = objectName.match(/^results\/([^/]+)\//);
+    if (!hashMatch) {
       throw new PermanentError(
-        'Missing required metadata from Vision API result file'
+        `Unexpected Vision API result object path: ${objectName}`
       );
     }
+    const contentHash = hashMatch[1];
+
+    const projectId = getProjectId();
+    const environment = process.env.ENVIRONMENT;
+    if (!environment) {
+      throw new Error(
+        'ENVIRONMENT environment variable is required but not set'
+      );
+    }
+
+    const documentBucket = `${projectId}-${environment}-document-storage`;
+    const originalObjectName = `documents/${contentHash}`;
+
+    const [originalMetadata] = await storage
+      .bucket(documentBucket)
+      .file(originalObjectName)
+      .getMetadata();
+
+    originalFileId = String(originalMetadata.metadata?.originalFileId || '');
+    originalFileName = String(
+      originalMetadata.metadata?.originalFileName || ''
+    );
+    const originalMimeType = String(
+      originalMetadata.metadata?.originalMimeType || ''
+    );
+
+    if (!originalFileId || !originalFileName) {
+      throw new PermanentError(
+        'Missing required metadata on original document object'
+      );
+    }
+
+    const fileSize = parseInt(String(originalMetadata.size || '0'), 10);
 
     logger.info('Processing Vision API results', {
       originalFileName,
@@ -110,6 +136,7 @@ export const textFirebaseWriter = async (
     });
 
     // Download and parse the Vision API result JSON
+    const file = storage.bucket(bucket).file(objectName);
     const [fileContent] = await file.download();
     const visionResult: VisionApiResult = JSON.parse(
       fileContent.toString('utf-8')
@@ -151,29 +178,6 @@ export const textFirebaseWriter = async (
 
     const overallConfidence = pageCount > 0 ? totalConfidence / pageCount : 0;
 
-    // Get file size from the original document storage
-    const projectId = getProjectId();
-    const environment = process.env.ENVIRONMENT;
-    if (!environment) {
-      throw new Error(
-        'ENVIRONMENT environment variable is required but not set'
-      );
-    }
-
-    const documentBucket = `${projectId}-${environment}-document-storage`;
-    const originalObjectName = `documents/${contentHash}`;
-
-    let fileSize = 0;
-    try {
-      const originalFile = storage
-        .bucket(documentBucket)
-        .file(originalObjectName);
-      const [originalMetadata] = await originalFile.getMetadata();
-      fileSize = parseInt(String(originalMetadata.size || '0'), 10);
-    } catch (error) {
-      logger.warn('Could not get original file size', { error });
-    }
-
     // Prepare data for Firestore
     const extractedTextDoc: ExtractedText = {
       fileId: originalFileId,
@@ -181,7 +185,7 @@ export const textFirebaseWriter = async (
       extractedText: extractedText,
       confidence: overallConfidence,
       pages: pages,
-      extractedAt: processedAt || new Date().toISOString(),
+      extractedAt: new Date().toISOString(),
       mimeType: originalMimeType || 'unknown',
       fileName: originalFileName,
       fileSize: fileSize,
