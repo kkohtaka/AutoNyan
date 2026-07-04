@@ -7,7 +7,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HOOKS_DIR="${PROJECT_ROOT}/.git/hooks"
+# Resolve via git so this works in worktrees, where .git is a file
+HOOKS_DIR="$(git -C "${PROJECT_ROOT}" rev-parse --path-format=absolute --git-path hooks)"
 
 echo "Setting up Git hooks for AutoNyan..."
 
