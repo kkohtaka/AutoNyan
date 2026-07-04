@@ -34,9 +34,21 @@ interface TerraformOutputs {
 }
 
 interface ShareResult {
-  status: 'shared' | 'already_shared' | 'failed';
+  status: 'shared' | 'already_shared' | 'role_updated' | 'failed';
   email: string;
   error?: string;
+}
+
+type DriveRole = 'writer' | 'fileOrganizer';
+
+/**
+ * Folders live on a shared drive, where moving items requires the
+ * fileOrganizer (Content Manager) role — writer/Contributor can edit files
+ * but not re-parent them. Only the classifier moves files, so it alone gets
+ * fileOrganizer; every other account keeps least-privilege writer.
+ */
+function roleForServiceAccount(email: string): DriveRole {
+  return email.includes('file-classifier') ? 'fileOrganizer' : 'writer';
 }
 
 /**
@@ -115,6 +127,8 @@ async function shareFolderWithServiceAccount(
   folderId: string,
   email: string
 ): Promise<ShareResult> {
+  const role = roleForServiceAccount(email);
+
   try {
     // Check if permission already exists
     const existingPermissions = await drive.permissions.list({
@@ -123,13 +137,27 @@ async function shareFolderWithServiceAccount(
       supportsAllDrives: true,
     });
 
-    const alreadyShared = existingPermissions.data.permissions?.some(
+    const existing = existingPermissions.data.permissions?.find(
       (p) => p.emailAddress === email
     );
 
-    if (alreadyShared) {
-      console.log(`  ✓ Already shared with ${email}`);
-      return { status: 'already_shared', email };
+    if (existing) {
+      if (existing.role === role) {
+        console.log(`  ✓ Already shared with ${email} (${role})`);
+        return { status: 'already_shared', email };
+      }
+
+      await drive.permissions.update({
+        fileId: folderId,
+        permissionId: existing.id!,
+        requestBody: { role },
+        supportsAllDrives: true,
+      });
+
+      console.log(
+        `  ✅ Updated role for ${email}: ${existing.role} → ${role}`
+      );
+      return { status: 'role_updated', email };
     }
 
     // Create new permission
@@ -137,14 +165,14 @@ async function shareFolderWithServiceAccount(
       fileId: folderId,
       requestBody: {
         type: 'user',
-        role: 'writer', // Editor access
+        role,
         emailAddress: email,
       },
       sendNotificationEmail: false,
       supportsAllDrives: true,
     });
 
-    console.log(`  ✅ Shared with ${email}`);
+    console.log(`  ✅ Shared with ${email} (${role})`);
     return { status: 'shared', email };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -268,12 +296,16 @@ async function shareDriveFolder(): Promise<void> {
     console.log('\n=== Summary ===\n');
 
     const shared = mainFolderResults.filter((r) => r.status === 'shared');
+    const roleUpdated = mainFolderResults.filter(
+      (r) => r.status === 'role_updated'
+    );
     const alreadyShared = mainFolderResults.filter(
       (r) => r.status === 'already_shared'
     );
     const failed = mainFolderResults.filter((r) => r.status === 'failed');
 
     console.log(`✅ Newly shared: ${shared.length}`);
+    console.log(`✅ Role updated: ${roleUpdated.length}`);
     console.log(`✓  Already shared: ${alreadyShared.length}`);
     if (failed.length > 0) {
       console.log(`❌ Failed: ${failed.length}`);
