@@ -312,6 +312,14 @@ skill rather than following steps by hand — each skill discovers the current
 repo layout and keeps the procedure in one place. The notes below capture only
 the knowledge a skill cannot rediscover.
 
+**APM-managed skills:** the `commit`, `create-pr`, `create-issue`, and
+`debug-ci` skills are installed from the shared
+[kkohtaka/agent-skills](https://github.com/kkohtaka/agent-skills) package via
+APM (`apm.yml` + `apm.lock.yaml`; run `apm install --target claude` after a
+version bump). Never hand-edit those four skill directories — the next
+`apm install` overwrites them. Change them in the package repo, tag a release,
+and bump the pin in `apm.yml`. All other skills are owned by this repository.
+
 ### Feature Development
 
 Work on a `feature/` or `fix/` branch, never on master. The end-to-end loop is a

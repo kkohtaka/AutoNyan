@@ -3,7 +3,7 @@ name: commit
 description: Create one or more incremental conventional commits on a properly named branch, without pushing or opening a PR
 argument-hint: "[commit-scope-hint]"
 disable-model-invocation: true
-allowed-tools: Bash(git *)
+allowed-tools: Bash(git *) Bash(gh *)
 ---
 
 # Commit
@@ -11,6 +11,11 @@ allowed-tools: Bash(git *)
 ## Context
 
 Collect the information needed to group and commit the changes.
+
+**Remote default branch (strip the `origin/` prefix when using it):**
+```
+!`git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || gh repo view --json defaultBranchRef -q '"origin/" + .defaultBranchRef.name' 2>/dev/null || echo "(unresolved — run: git remote set-head origin --auto)"`
+```
 
 **Working tree status:**
 ```
@@ -37,9 +42,13 @@ Collect the information needed to group and commit the changes.
 Follow these steps in order. Stop and ask the user if anything is unclear.
 
 This skill creates local commits only. A local commit is not outward-facing and
-is reversible, so it needs no confirmation gate (CONVENTIONS.md §4.3). Pushing
-the branch and opening a PR are **out of scope** — those are the `create-pr`
-skill's job; do not perform them here.
+is reversible, so it needs no confirmation gate. Pushing the branch and opening
+a PR are **out of scope** — those are the `create-pr` skill's job (if it is
+available); do not perform them here.
+
+Throughout these steps, `<default>` means the remote default branch resolved in
+Context (e.g. `main` or `master`) — never assume a specific name, and never use
+the local ref of that branch (it can silently lag behind the remote).
 
 ### Step 1 — Ensure the work is on a properly named branch
 
@@ -49,14 +58,22 @@ First, fetch the latest remote state:
 git fetch origin
 ```
 
-**Case A — current branch is NOT suitable** (it is `master`, or its name does
-not describe the work):
+If the default branch could not be resolved in Context, fix the local
+`origin/HEAD` ref and re-resolve before continuing:
+
+```bash
+git remote set-head origin --auto
+git symbolic-ref --short refs/remotes/origin/HEAD
+```
+
+**Case A — current branch is NOT suitable** (it is the default branch, or its
+name does not describe the work):
 
 Create a new branch from the remote default branch and move the relevant changes
 there:
 
 ```bash
-git checkout -b <branch-name> origin/master
+git checkout -b <branch-name> origin/<default>
 ```
 
 - Derive the branch name from the actual diff/changes — specific enough to
@@ -66,22 +83,22 @@ git checkout -b <branch-name> origin/master
 - If the user passed `$ARGUMENTS`, use it as a hint for the branch name and
   commit scope (adjusted to fit the convention if needed).
 - Uncommitted changes follow `git checkout -b` automatically. If the work was
-  already committed on `master` or a poorly named branch, move those commits to
-  the new branch (e.g. cherry-pick) and reset the old branch.
+  already committed on the default branch or a poorly named branch, move those
+  commits to the new branch (e.g. cherry-pick) and reset the old branch.
 
 **Case B — current branch is already a suitable work branch:**
 
 Stay on the current branch, but verify its base is not stale:
 
 ```bash
-git merge-base --is-ancestor origin/master HEAD && echo "base OK" || echo "STALE BASE"
+git merge-base --is-ancestor origin/<default> HEAD && echo "base OK" || echo "STALE BASE"
 ```
 
-If the check reports a stale base, the branch was cut from an outdated
-`master` (a local `master` ref can silently lag behind `origin/master`), and a
-PR from it will conflict or carry an outdated view of the code. Rebase the
-branch onto `origin/master` — after committing the working tree (Steps 2–5)
-if it is dirty, since a dirty tree cannot rebase — and resolve any conflicts.
+If the check reports a stale base, the branch was cut from an outdated view of
+the default branch, and a PR from it will conflict or carry an outdated view of
+the code. Rebase the branch onto `origin/<default>` — after committing the
+working tree (Steps 2–5) if it is dirty, since a dirty tree cannot rebase — and
+resolve any conflicts.
 
 ### Step 2 — Group related changes
 
@@ -137,6 +154,6 @@ not belong in this set of commits.
 Report the commits created (subject lines and hashes) and the branch they are
 on. State plainly if any changes were intentionally left uncommitted.
 
-If the user now wants to share this work, point them to the `create-pr` skill,
-which pushes the branch and opens a PR (with the required confirmation gate for
-those outward-facing actions).
+If the user now wants to share this work, point them to the `create-pr` skill
+(if available), which pushes the branch and opens a PR (with the required
+confirmation gate for those outward-facing actions).

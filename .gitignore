@@ -64,3 +64,6 @@ src/functions/*/shared/
 
 # Serena AI assistant
 .serena/
+
+# APM dependencies
+apm_modules/

@@ -1,0 +1,12 @@
+name: autonyan
+version: 0.1.0
+description: APM consumer manifest — shared agent skills for this repository
+author: kkohtaka
+targets:
+- claude
+dependencies:
+  apm:
+  - kkohtaka/agent-skills#v0.1.0
+  mcp: []
+includes: auto
+scripts: {}
