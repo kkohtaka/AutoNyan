@@ -22,19 +22,9 @@ Collect the information needed to write a good issue.
 !`gh label list --limit 100`
 ```
 
-**Available issue templates:**
+**Available issue templates (empty if the repo has none):**
 ```
-!`ls .github/ISSUE_TEMPLATE/ 2>/dev/null`
-```
-
-**General issue template:**
-```
-!`cat .github/ISSUE_TEMPLATE/general.md 2>/dev/null`
-```
-
-**New-skill issue template:**
-```
-!`cat .github/ISSUE_TEMPLATE/skill.md 2>/dev/null`
+!`ls .github/ISSUE_TEMPLATE/ 2>/dev/null || echo "(no issue templates)"`
 ```
 
 **Current branch and recent commits (context, if the issue relates to current work):**
@@ -55,36 +45,44 @@ tracking issue, note the parent issue number.
 
 ### Step 2 — Choose the template
 
-Pick the template from `.github/ISSUE_TEMPLATE/` that best fits:
+If the repository has issue templates (listed in Context), read the candidates
+with `cat .github/ISSUE_TEMPLATE/<file>` and pick the one that best fits the
+issue's subject. Use the template's section structure as-is so manually-filed
+and skill-filed issues stay consistent. Strip the YAML frontmatter and all
+`<!-- ... -->` comments from the body you submit. Honor any labels the
+template's frontmatter presets.
 
-- `skill.md` — developing or tracking a Claude Code agent skill.
-- `general.md` — everything else (bug, feature, docs, refactor, infra).
+If the repository has no templates, use this structure:
 
-Use the template's section structure as-is so manually-filed and skill-filed
-issues stay consistent. Strip the YAML frontmatter and all `<!-- ... -->`
-comments from the body you submit.
+```markdown
+## Summary
+
+## Background / Motivation
+
+## Proposal / Tasks
+
+## Acceptance criteria
+
+- [ ] <a verifiable condition>
+```
 
 ### Step 3 — Choose labels
 
-Pick labels **only from the existing label list** in Context. Match on intent:
+Pick labels **only from the existing label list** in Context. Match on intent —
+e.g. an `enhancement`-like label for new capabilities, a `bug`-like label for
+defects, a `documentation`-like label for docs-only changes, and any area tags
+the repository maintains.
 
-- `enhancement` — new feature/skill/capability
-- `bug` — something is broken
-- `documentation` — docs-only change
-- `terraform` / `github-actions` / `npm` / `dependencies` — area tags
-- `question` — needs discussion before work
-
-Do not create new labels. The `skill.md` template already presets
-`enhancement`. If nothing fits, propose the closest match and confirm.
+Do not create new labels. If nothing fits, propose the closest match and
+confirm; filing with no labels is acceptable when the repo has none that apply.
 
 ### Step 4 — Draft the body
 
-Fill the chosen template. Guidelines:
+Fill the chosen structure. Guidelines:
 
-- Reference files and code precisely (`src/functions/...`, `terraform/...`).
+- Reference files and code precisely (paths, function names).
 - Acceptance criteria must be concrete and checkable.
-- For skill issues, keep the acceptance criteria aligned with
-  `.claude/skills/CONVENTIONS.md` (the template already mirrors it).
+- Link related issues/PRs/commits where they exist.
 
 ### Step 5 — Confirm before filing
 
@@ -96,7 +94,7 @@ user confirms.
 
 ### Step 6 — Create the issue
 
-Title: concise. For a new-skill issue use the `skill(<name>): ...` prefix.
+Title: concise, matching any title convention the chosen template prescribes.
 
 Always append the Claude Code attribution footer as the **last line** of the
 submitted body, separated from the content above by a blank line, so readers can
@@ -106,11 +104,9 @@ tell at a glance the issue was filed by the agent:
 🤖 Created by Claude Code via the create-issue skill
 ```
 
-This marker is added by the skill at creation time only. Do **not** add it to the
-issue templates (`.github/ISSUE_TEMPLATE/general.md`, `.github/ISSUE_TEMPLATE/skill.md`),
-so manually-filed issues remain unmarked. The marker is **body-only**: no
-attribution label is applied (no suitable `agent`/`claude-code` label exists
-today; adding one is a separate, out-of-scope follow-up).
+This marker is added by the skill at creation time only — do **not** add it to
+the repository's issue templates, so manually-filed issues remain unmarked. The
+marker is **body-only**: do not apply an attribution label.
 
 ```bash
 gh issue create --title "<title>" --label "<label1>" --label "<label2>" --body "$(cat <<'EOF'

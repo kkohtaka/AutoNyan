@@ -5,6 +5,13 @@ repository are written. Every skill under `.claude/skills/<name>/SKILL.md` MUST
 follow it. When an existing skill and this document disagree, this document
 wins and the skill should be updated.
 
+**Exception — APM-managed skills.** The `commit`, `create-pr`, `create-issue`,
+and `debug-ci` directories are deployed from the
+[kkohtaka/agent-skills](https://github.com/kkohtaka/agent-skills) package and
+follow that package's own conventions. Do not edit them here (see the
+"APM-managed skills" note in `CLAUDE.md`); this document governs only the
+repository-owned skills.
+
 ## 1. File layout
 
 - One skill per directory: `.claude/skills/<name>/SKILL.md`.

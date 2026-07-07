@@ -3,14 +3,13 @@ name: debug-ci
 description: Fetch CI results for a PR or workflow run, identify failed jobs and steps, and surface relevant log excerpts so a failure can be diagnosed. Use when a CI check is red and you need to know why.
 argument-hint: "[pr-number | run-id]"
 disable-model-invocation: false
-allowed-tools: Bash(gh *) WebFetch
+allowed-tools: Bash(gh *) Bash(git *) WebFetch
 ---
 
 # Debug CI
 
-Codifies the "Debugging CI/CD Workflows" guidance in `CLAUDE.md`. Read-only
-investigation only — this skill fetches and reports; it does not fix, re-run,
-or push anything.
+Read-only investigation only — this skill fetches and reports; it does not fix,
+re-run, or push anything.
 
 ## Context
 
@@ -80,7 +79,7 @@ Prompt: "List all checks with their status and identify the failed jobs and matr
 
 Identify:
 - Which jobs failed (mark them clearly).
-- Which matrix entries failed (e.g. `test-functions (drive-scanner)`).
+- Which matrix entries failed (e.g. `test (unit, macos-latest)`).
 - Which jobs are still in progress vs. completed.
 
 ### Step 3 — Drill into each failed job
@@ -142,7 +141,8 @@ Prompt: "Show job statuses, error messages, and which steps failed with relevant
 
 ### Step 5 — Report the diagnosis
 
-Summarise the findings concisely (CONVENTIONS.md §4.6):
+Summarise the findings concisely and honestly — report failures, partial
+results, and anything you could not retrieve:
 
 1. **Target**: PR `#<n>` / run `<id>`, workflow name, branch.
 2. **Failed jobs**: list each failed job and which matrix entry (if applicable).
@@ -150,9 +150,8 @@ Summarise the findings concisely (CONVENTIONS.md §4.6):
 4. **Key error lines**: the 5–10 most informative log lines per job.
 5. **Likely cause**: your interpretation of what went wrong (e.g. type error,
    test assertion failure, coverage threshold miss, memory exhaustion).
-6. **Suggested next step**: point to `lint-fix` for lint/format failures,
-   `test-fix` for test failures, or describe a code change needed. Do not
-   attempt to make the fix yourself — this skill is read-only.
+6. **Suggested next step**: point to the repository's own lint/test remediation
+   workflow or skills if it has them, or describe the code change needed. Do
+   not attempt to make the fix yourself — this skill is read-only.
 
-This skill does not fix, re-run, or push anything. To fix failures, delegate to
-`/lint-fix`, `/test-fix`, or a targeted code change.
+This skill does not fix, re-run, or push anything.
