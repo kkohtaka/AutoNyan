@@ -104,6 +104,43 @@ export async function pollForFunctionLogEntry(
 }
 
 /**
+ * Count a Cloud Function's log entries matching the given jsonPayload fields
+ *
+ * Used to assert a permanently failed message was ACKed exactly once: an
+ * Eventarc redelivery would re-run the function and produce a second
+ * matching entry.
+ *
+ * @param functionName - Function name (Gen2 Cloud Run service name)
+ * @param region - GCP region
+ * @param since - Only consider logs since this date
+ * @param payloadMatch - jsonPayload fields the entries must match exactly
+ * @returns Number of matching entries (capped at 50)
+ */
+export async function countFunctionLogEntries(
+  functionName: string,
+  region: string,
+  since: Date,
+  payloadMatch: Record<string, string>
+): Promise<number> {
+  const filter = [
+    'resource.type="cloud_run_revision"',
+    `resource.labels.service_name="${functionName}"`,
+    `resource.labels.location="${region}"`,
+    `timestamp>="${since.toISOString()}"`,
+    ...Object.entries(payloadMatch).map(
+      ([key, value]) => `jsonPayload.${key}="${value}"`
+    ),
+  ].join(' AND ');
+
+  const entriesJson = execSync(
+    `gcloud logging read '${filter}' --limit=50 --format=json`,
+    { encoding: 'utf-8' }
+  );
+
+  return (JSON.parse(entriesJson) as unknown[]).length;
+}
+
+/**
  * Debug pipeline failure by retrieving logs from all functions
  *
  * @param stage - Failed stage

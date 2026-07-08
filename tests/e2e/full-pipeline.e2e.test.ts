@@ -3,8 +3,6 @@ import { Storage } from '@google-cloud/storage';
 import { Firestore } from '@google-cloud/firestore';
 import { google } from 'googleapis';
 import { drive_v3 } from 'googleapis';
-import { createHash } from 'crypto';
-import * as fs from 'fs';
 
 import { authenticateE2E } from './helpers/auth';
 import {
@@ -18,27 +16,89 @@ import {
   pollForDriveFileLocation,
 } from './helpers/polling';
 import { cleanupTestResources } from './helpers/cleanup';
-import { pollForFunctionLogEntry } from './helpers/cloud-logs';
-import { getTerraformOutputs } from './helpers/terraform-outputs';
+import {
+  pollForFunctionLogEntry,
+  countFunctionLogEntries,
+} from './helpers/cloud-logs';
+import { getTerraformOutputs, TerraformOutputs } from './helpers/terraform-outputs';
 import { E2ELogger } from './helpers/logger';
+
+interface FormatFixture {
+  label: string;
+  fixturePath: string;
+  mimeType: string;
+  // Core-matrix cases run on every trigger (including post-deploy); the rest
+  // run only when E2E_FORMAT_MATRIX=full (nightly/manual) to keep the
+  // post-deploy job inside its 45-minute timeout.
+  coreMatrix: boolean;
+}
+
+// PDF is the core case: it exercises the Vision async-batch path where both
+// #364 production bugs lived, which the text/plain path skips entirely.
+// The image case uses TIFF because asyncBatchAnnotateFiles accepts only
+// PDF/TIFF/GIF inputs.
+const HAPPY_PATH_FIXTURES: FormatFixture[] = [
+  {
+    label: 'PDF document',
+    fixturePath: './tests/e2e/fixtures/sample-documents/test-invoice.pdf',
+    mimeType: 'application/pdf',
+    coreMatrix: true,
+  },
+  {
+    label: 'plain text document',
+    fixturePath: './tests/e2e/fixtures/sample-documents/test-document.txt',
+    mimeType: 'text/plain',
+    coreMatrix: false,
+  },
+  {
+    label: 'TIFF image',
+    fixturePath: './tests/e2e/fixtures/sample-documents/test-receipt.tiff',
+    mimeType: 'image/tiff',
+    coreMatrix: false,
+  },
+];
+
+// HTML bytes stored under application/pdf: Vision rejects the input with
+// INVALID_ARGUMENT, which must be treated as a permanent failure (single ACK,
+// failure notification, no Firestore document) — the other #364 regression.
+const PERMANENT_FAILURE_FIXTURES: FormatFixture[] = [
+  {
+    label: 'HTML content disguised as PDF',
+    fixturePath: './tests/e2e/fixtures/sample-documents/test-invalid.pdf',
+    mimeType: 'application/pdf',
+    coreMatrix: false,
+  },
+];
+
+const isFullMatrix = process.env.E2E_FORMAT_MATRIX === 'full';
+const activeHappyPathFixtures = HAPPY_PATH_FIXTURES.filter(
+  (fixture) => isFullMatrix || fixture.coreMatrix
+);
+const activePermanentFailureFixtures = PERMANENT_FAILURE_FIXTURES.filter(
+  (fixture) => isFullMatrix || fixture.coreMatrix
+);
 
 describe('AutoNyan E2E - Full Pipeline', () => {
   let pubsub: PubSub;
   let storage: Storage;
   let firestore: Firestore;
   let drive: drive_v3.Drive;
+  let outputs: TerraformOutputs;
 
   let testFolderId: string;
-  let testSubFolderId: string; // Isolated subfolder per test run to avoid Drive scan picking up accumulated files
-  let testFileId: string;
-  let testFileName: string;
-  let contentHash: string;
+  let testRunFolderId: string; // Isolated folder per test run to avoid Drive scan picking up accumulated files
   let categoryRootFolderId: string;
   let categoryFolderId: string; // Test category folder (e.g., "請求書")
 
+  // Every uploaded file is registered here so afterAll can clean up even
+  // when a case fails mid-pipeline.
+  const uploadedFiles: {
+    fileId: string;
+    contentHash?: string;
+  }[] = [];
+
   const logger = new E2ELogger('full-pipeline');
   const TEST_TIMEOUT = 1500000; // 25 minutes: stage2(5m) + stage3(9m) + stage4(1m) + stage5(5m) + stage6(3m) + buffer
-  const testStartTime = new Date();
 
   beforeAll(async () => {
     logger.log('setup', 'Starting E2E test setup');
@@ -65,20 +125,22 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     drive = google.drive({ version: 'v3', auth });
 
     // Get Terraform outputs for staging environment
-    const outputs = await getTerraformOutputs('staging');
+    outputs = await getTerraformOutputs('staging');
     testFolderId = outputs.drive_folder_id;
     categoryRootFolderId = outputs.category_root_folder_id;
 
-    // Create isolated subfolder for this test run to avoid Drive Scanner picking up
+    // Create isolated folder for this test run to avoid Drive Scanner picking up
     // accumulated files from previous runs (which would create a large PubSub backlog)
-    logger.log('setup', 'Creating isolated test subfolder');
-    testSubFolderId = await createTestFolder(
+    logger.log('setup', 'Creating isolated test run folder');
+    testRunFolderId = await createTestFolder(
       drive,
       testFolderId,
       `e2e-run-${Date.now()}`,
       [outputs.file_classifier_service_account_email]
     );
-    logger.log('setup', 'Isolated test subfolder created', { testSubFolderId });
+    logger.log('setup', 'Isolated test run folder created', {
+      testRunFolderId,
+    });
 
     // Create test category folder for classification
     logger.log('setup', 'Creating test category folder');
@@ -99,33 +161,36 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       folderId: testFolderId,
       categoryRootFolderId,
       categoryFolderId,
+      formatMatrix: isFullMatrix ? 'full' : 'core',
     });
   }, TEST_TIMEOUT);
 
   afterAll(async () => {
     logger.log('teardown', 'Cleaning up test resources');
 
-    // Cleanup test resources
-    await cleanupTestResources({
-      drive,
-      storage,
-      firestore,
-      testFolderId,
-      testFileId,
-      contentHash,
-    });
+    for (const uploadedFile of uploadedFiles) {
+      await cleanupTestResources({
+        drive,
+        storage,
+        firestore,
+        testFolderId,
+        testFileId: uploadedFile.fileId,
+        contentHash: uploadedFile.contentHash,
+      });
+    }
 
-    // Cleanup isolated test subfolder (trashing the folder removes the test file inside it too)
-    if (testSubFolderId) {
+    // Cleanup isolated test run folder (trashing the folder removes the
+    // per-case subfolders and any files still inside them)
+    if (testRunFolderId) {
       try {
-        await trashDriveItem(drive, testSubFolderId);
-        logger.log('teardown', 'Isolated test subfolder trashed', {
-          testSubFolderId,
+        await trashDriveItem(drive, testRunFolderId);
+        logger.log('teardown', 'Isolated test run folder trashed', {
+          testRunFolderId,
         });
       } catch (error) {
         logger.log(
           'teardown',
-          'Failed to trash isolated test subfolder (may not exist)',
+          'Failed to trash isolated test run folder (may not exist)',
           { error }
         );
       }
@@ -150,77 +215,113 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     logger.log('teardown', 'Cleanup complete');
   }, TEST_TIMEOUT);
 
-  it(
-    'should process a document through all 6 pipeline stages',
-    async () => {
+  /**
+   * Stage 1 (shared by every case): upload the fixture into a fresh per-case
+   * subfolder and trigger the Drive Scanner on it. The per-case subfolder
+   * keeps a case's scan from republishing files left behind by earlier cases
+   * (a failed best-effort move in stage 5 leaves the file in place).
+   */
+  async function uploadFixtureAndTriggerScan(fixture: FormatFixture): Promise<{
+    fileId: string;
+    fileName: string;
+  }> {
+    logger.log('stage-1', 'Creating per-case subfolder', {
+      fixture: fixture.label,
+    });
+
+    const caseFolderId = await createTestFolder(drive, testRunFolderId, 'case', [
+      outputs.file_classifier_service_account_email,
+    ]);
+
+    logger.log('stage-1', 'Uploading test file to Google Drive', {
+      fixturePath: fixture.fixturePath,
+      mimeType: fixture.mimeType,
+    });
+
+    const testFile = await uploadTestFile(
+      drive,
+      caseFolderId,
+      fixture.fixturePath,
+      [outputs.file_classifier_service_account_email],
+      fixture.mimeType
+    );
+    const fileId = testFile.id!;
+    const fileName = testFile.name!;
+
+    uploadedFiles.push({ fileId });
+
+    logger.log('stage-1', 'Test file uploaded', { fileId, fileName });
+
+    // Wait for Drive permissions to propagate
+    // Google Drive can take time to propagate file sharing permissions
+    logger.log(
+      'stage-1',
+      'Waiting 10 seconds for Drive permissions to propagate...'
+    );
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+
+    const topic = pubsub.topic(outputs.drive_scan_trigger_topic);
+
+    logger.log('stage-1', 'Publishing PubSub message to trigger scanner', {
+      topic: outputs.drive_scan_trigger_topic,
+      folderId: caseFolderId,
+    });
+
+    await topic.publishMessage({
+      data: Buffer.from(JSON.stringify({ folderId: caseFolderId })),
+    });
+
+    logger.log('stage-1', 'Drive Scanner triggered successfully');
+
+    return { fileId, fileName };
+  }
+
+  /**
+   * Stage 2 (shared by every case): wait for the Doc Processor to copy the
+   * file into the document-storage bucket and return its contentHash.
+   */
+  async function waitForDocProcessor(fileId: string): Promise<string> {
+    logger.log('stage-2', 'Waiting for Doc Processor to process file');
+
+    const documentBucket = outputs.document_storage_bucket;
+    const docObject = await pollForStorageObject(
+      storage,
+      documentBucket,
+      (fileName, metadata) =>
+        fileName.startsWith('documents/') &&
+        metadata?.originalFileId === fileId,
+      { timeout: 300000, interval: 5000 } // 5 minutes to account for cold starts
+    );
+
+    expect(docObject).toBeDefined();
+    const contentHash = String(docObject!.metadata?.contentHash || '');
+    const uploadedFile = uploadedFiles.find((file) => file.fileId === fileId);
+    if (uploadedFile) {
+      uploadedFile.contentHash = contentHash;
+    }
+
+    logger.log('stage-2', 'Doc Processor completed', {
+      objectName: docObject!.name,
+      contentHash,
+      size: docObject!.size,
+    });
+
+    return contentHash;
+  }
+
+  it.each(activeHappyPathFixtures)(
+    'should process a $label through all 6 pipeline stages',
+    async (fixture) => {
+      const caseStartTime = new Date();
+      let testFileId = '';
+      let contentHash = '';
+
       try {
-        // ========================================
-        // Stage 1: Upload test file to Drive and trigger scanner
-        // ========================================
-        logger.log('stage-1', 'Uploading test file to Google Drive');
+        const uploaded = await uploadFixtureAndTriggerScan(fixture);
+        testFileId = uploaded.fileId;
+        const testFileName = uploaded.fileName;
 
-        const outputs = await getTerraformOutputs('staging');
-        // Upload to isolated subfolder so Drive Scanner only finds this one file
-        const testFile = await uploadTestFile(
-          drive,
-          testSubFolderId,
-          './tests/e2e/fixtures/sample-documents/test-document.txt',
-          [outputs.file_classifier_service_account_email]
-        );
-        testFileId = testFile.id!;
-        testFileName = testFile.name!;
-
-        logger.log('stage-1', 'Test file uploaded', {
-          fileId: testFileId,
-          fileName: testFileName,
-        });
-
-        // Wait for Drive permissions to propagate
-        // Google Drive can take time to propagate file sharing permissions
-        logger.log(
-          'stage-1',
-          'Waiting 10 seconds for Drive permissions to propagate...'
-        );
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-
-        // Trigger Drive Scanner via PubSub
-        const topic = pubsub.topic(outputs.drive_scan_trigger_topic);
-
-        logger.log('stage-1', 'Publishing PubSub message to trigger scanner', {
-          topic: outputs.drive_scan_trigger_topic,
-          folderId: testSubFolderId,
-        });
-
-        // Scan the isolated subfolder so Drive Scanner only finds this test's file
-        await topic.publishMessage({
-          data: Buffer.from(JSON.stringify({ folderId: testSubFolderId })),
-        });
-
-        logger.log('stage-1', 'Drive Scanner triggered successfully');
-
-        // ========================================
-        // Stage 2: Wait for Doc Processor to upload to Storage
-        // ========================================
-        logger.log('stage-2', 'Waiting for Doc Processor to process file');
-
-        const documentBucket = outputs.document_storage_bucket;
-        const docObject = await pollForStorageObject(
-          storage,
-          documentBucket,
-          (fileName, metadata) =>
-            fileName.startsWith('documents/') &&
-            metadata?.originalFileId === testFileId,
-          { timeout: 300000, interval: 5000 } // 5 minutes to account for cold starts
-        );
-
-        expect(docObject).toBeDefined();
-        contentHash = String(docObject!.metadata?.contentHash || '');
-
-        logger.log('stage-2', 'Doc Processor completed', {
-          objectName: docObject!.name,
-          contentHash,
-          size: docObject!.size,
-        });
+        contentHash = await waitForDocProcessor(testFileId);
 
         // ========================================
         // Stage 3: Wait for Vision API processing
@@ -341,7 +442,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         const notificationLog = await pollForFunctionLogEntry(
           `${process.env.ENVIRONMENT}-notification-dispatcher`,
           outputs.region,
-          testStartTime,
+          caseStartTime,
           { message: 'Sent success notification', fileName: testFileName },
           { timeout: 180000, interval: 15000 }
         );
@@ -356,14 +457,16 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         // Test Completion
         // ========================================
         logger.log('success', 'Full pipeline E2E test completed successfully', {
-          duration: `${Date.now() - testStartTime.getTime()}ms`,
+          fixture: fixture.label,
+          duration: `${Date.now() - caseStartTime.getTime()}ms`,
           stages: 6,
         });
       } catch (error) {
         logger.error('failure', error as Error, {
+          fixture: fixture.label,
           testFileId,
           contentHash,
-          testStartTime,
+          caseStartTime,
         });
 
         // Re-throw to fail the test
@@ -372,4 +475,128 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     },
     TEST_TIMEOUT
   );
+
+  // it.each throws on an empty array, and the core matrix has no
+  // permanent-failure cases.
+  if (activePermanentFailureFixtures.length > 0) {
+    it.each(activePermanentFailureFixtures)(
+      'should permanently reject a $label without retries or a Firestore document',
+      async (fixture) => {
+        const caseStartTime = new Date();
+        const visionProcessorService = `${process.env.ENVIRONMENT}-text-vision-processor`;
+        const permanentFailureMatch = {
+          message: 'Skipping message (permanent failure, not retrying)',
+        };
+        let testFileId = '';
+        let contentHash = '';
+
+        try {
+          const uploaded = await uploadFixtureAndTriggerScan(fixture);
+          testFileId = uploaded.fileId;
+
+          contentHash = await waitForDocProcessor(testFileId);
+
+          // ========================================
+          // Stage 3 (negative): Vision rejects the input permanently
+          // ========================================
+          logger.log(
+            'stage-3-negative',
+            'Waiting for text-vision-processor to ACK the permanent failure'
+          );
+
+          // The permanent-failure log carries no file identifier, so the
+          // match is scoped by service and case start time instead; the suite
+          // runs sequentially and no other case produces this entry.
+          const permanentFailureLog = await pollForFunctionLogEntry(
+            visionProcessorService,
+            outputs.region,
+            caseStartTime,
+            permanentFailureMatch,
+            { timeout: 300000, interval: 10000 }
+          );
+
+          expect(permanentFailureLog).toBeTruthy();
+
+          logger.log('stage-3-negative', 'Permanent failure ACKed', {
+            logEntry: permanentFailureLog,
+          });
+
+          // ========================================
+          // Failure notification is dispatched
+          // ========================================
+          logger.log(
+            'stage-3-negative',
+            'Waiting for Notification Dispatcher to send failure notification'
+          );
+
+          const failureNotificationLog = await pollForFunctionLogEntry(
+            `${process.env.ENVIRONMENT}-notification-dispatcher`,
+            outputs.region,
+            caseStartTime,
+            {
+              message: 'Sent failure notification',
+              stageName: 'text-vision-processor',
+            },
+            { timeout: 180000, interval: 15000 }
+          );
+
+          expect(failureNotificationLog).toBeTruthy();
+
+          logger.log('stage-3-negative', 'Failure notification dispatched', {
+            logEntry: failureNotificationLog,
+          });
+
+          // ========================================
+          // Message was ACKed once: no Eventarc redelivery
+          // ========================================
+          // A nacked message is redelivered within seconds, so a second
+          // permanent-failure entry would appear well inside this window.
+          logger.log(
+            'stage-3-negative',
+            'Waiting 2 minutes to confirm the message is not redelivered'
+          );
+          await new Promise((resolve) => setTimeout(resolve, 120000));
+
+          const permanentFailureCount = await countFunctionLogEntries(
+            visionProcessorService,
+            outputs.region,
+            caseStartTime,
+            permanentFailureMatch
+          );
+
+          expect(permanentFailureCount).toBe(1);
+
+          // ========================================
+          // No Firestore document was created
+          // ========================================
+          const snapshot = await firestore
+            .collection('extracted_texts')
+            .where('fileId', '==', testFileId)
+            .get();
+
+          expect(snapshot.empty).toBe(true);
+
+          logger.log(
+            'success',
+            'Permanent-failure E2E test completed successfully',
+            {
+              fixture: fixture.label,
+              duration: `${Date.now() - caseStartTime.getTime()}ms`,
+            }
+          );
+        } catch (error) {
+          logger.error('failure', error as Error, {
+            fixture: fixture.label,
+            testFileId,
+            contentHash,
+            caseStartTime,
+          });
+
+          // Re-throw to fail the test
+          throw error;
+        }
+      },
+      TEST_TIMEOUT
+    );
+  }
 });

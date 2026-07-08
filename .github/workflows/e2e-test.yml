@@ -27,12 +27,17 @@ permissions:
 jobs:
   e2e-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Post-deploy verification (workflow_run) runs only the core fixture
+    # matrix so it stays within 45 minutes; nightly/manual runs the full
+    # format matrix (all happy paths + the permanent-failure case) and needs
+    # the extra headroom.
+    timeout-minutes: ${{ github.event_name == 'workflow_run' && 45 || 90 }}
     environment:
       name: staging
     env:
       NODE_OPTIONS: --max-old-space-size=4096
       ENVIRONMENT: staging
+      E2E_FORMAT_MATRIX: ${{ github.event_name == 'workflow_run' && 'core' || 'full' }}
 
     steps:
       - name: Checkout code

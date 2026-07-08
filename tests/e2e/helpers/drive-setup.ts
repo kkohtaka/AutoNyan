@@ -9,13 +9,17 @@ import * as path from 'path';
  * @param folderId - Parent folder ID
  * @param filePath - Local file path
  * @param serviceAccountEmails - Optional service account emails to share file with
+ * @param mimeType - Optional explicit MIME type; without it Drive sniffs the
+ *                   content, which the negative E2E case must prevent (HTML
+ *                   bytes must be stored as application/pdf)
  * @returns Uploaded file metadata
  */
 export async function uploadTestFile(
   drive: drive_v3.Drive,
   folderId: string,
   filePath: string,
-  serviceAccountEmails?: string[]
+  serviceAccountEmails?: string[],
+  mimeType?: string
 ): Promise<drive_v3.Schema$File> {
   const fileName = path.basename(filePath);
 
@@ -32,6 +36,7 @@ export async function uploadTestFile(
         parents: [folderId],
       },
       media: {
+        ...(mimeType ? { mimeType } : {}),
         body: fileStream,
       },
       fields: 'id,name,mimeType',

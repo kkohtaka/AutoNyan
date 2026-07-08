@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Not a PDF</title>
+  </head>
+  <body>
+    <h1>This file is HTML content saved under a .pdf name.</h1>
+    <p>
+      The E2E suite uploads it to Drive with the application/pdf MIME type so
+      that Vision asyncBatchAnnotateFiles rejects it with INVALID_ARGUMENT,
+      exercising the permanent-failure (single ACK, no retry) path of
+      text-vision-processor.
+    </p>
+  </body>
+</html>

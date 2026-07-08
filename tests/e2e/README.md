@@ -131,7 +131,27 @@ npm run test:e2e:check-drive
 npm run test:e2e
 ```
 
-This runs the complete 6-stage pipeline test with a 25-minute timeout.
+This runs the complete 6-stage pipeline test with a 25-minute timeout per case.
+
+### Format Matrix
+
+The pipeline test is parametrized over a fixture table covering the input
+formats the pipeline supports. `E2E_FORMAT_MATRIX` selects which cases run:
+
+- **`core`** (default): PDF happy path only. This is the case that exercises
+  the Vision async-batch code path (where the #364 production bugs lived) at
+  the lowest wall-clock cost, and is what the post-deploy CI trigger runs.
+- **`full`**: all happy paths (PDF, plain text, TIFF image) plus the
+  permanent-failure case (HTML content stored as `application/pdf`, which
+  Vision rejects with `INVALID_ARGUMENT`). Nightly and manually triggered CI
+  runs use this.
+
+```bash
+E2E_FORMAT_MATRIX=full npm run test:e2e
+```
+
+The image case uses TIFF because Vision `asyncBatchAnnotateFiles` accepts only
+PDF, TIFF, and GIF inputs.
 
 ### Cleanup Orphaned Resources
 
@@ -271,11 +291,15 @@ To minimize costs:
 
 Sample documents are in `fixtures/sample-documents/`:
 
-- `test-document.txt` - Plain text with invoice data
-- `test-invoice.pdf` - PDF version (to be created)
-- `test-receipt.png` - Image with text (to be created)
+- `test-document.txt` - Plain text with invoice data (direct-read path, no Vision call)
+- `test-invoice.pdf` - Invoice PDF with extractable text (Vision async-batch path)
+- `test-receipt.tiff` - Invoice image (Vision async-batch path, image MIME family)
+- `test-invalid.pdf` - HTML content; uploaded as `application/pdf` so Vision rejects it (permanent-failure case)
 
-See `fixtures/README.md` for instructions on creating PDF and image fixtures.
+The PDF was generated with `pdf-lib` (standard Helvetica, plain drawn text) and
+the TIFF rasterized from an equivalent page with `sips -s format tiff
+-s formatOptions lzw --resampleWidth 1240`. Happy-path fixture content must
+remain invoice-like so the classifier files it into the E2E test category.
 
 ## Troubleshooting
 
