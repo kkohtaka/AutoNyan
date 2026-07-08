@@ -39,6 +39,18 @@ function decodeRawEmail(raw: string): string {
   return Buffer.from(raw, 'base64url').toString('utf8');
 }
 
+// Extracts and decodes the base64 body of the multipart/alternative part with
+// the given Content-Type.
+function extractMimePart(decodedEmail: string, contentType: string): string {
+  const boundary = decodedEmail.match(/boundary="([^"]+)"/)?.[1] ?? '';
+  const part =
+    decodedEmail
+      .split(`--${boundary}`)
+      .find((p) => p.includes(`Content-Type: ${contentType}`)) ?? '';
+  const bodyB64 = part.split('\r\n\r\n')[1]?.trim() ?? '';
+  return Buffer.from(bodyB64, 'base64').toString('utf8');
+}
+
 // Builds an event in the shape the runtime actually delivers: the message body
 // is a base64-encoded string on cloudEvent.data, and the PubSub attributes are
 // at the top level on cloudEvent.attributes.
@@ -146,12 +158,28 @@ describe('notificationDispatcher', () => {
       const subjectB64 =
         subjectLine.match(/=\?UTF-8\?B\?([^?]+)\?=/)?.[1] || '';
       const subject = Buffer.from(subjectB64, 'base64').toString('utf8');
-      expect(subject).toContain('[AutoNyan]');
+      expect(subject).toContain('[AutoNyan][請求書]');
 
-      // Body is base64 encoded; decode it
-      const bodyB64 = firstEmailDecoded.split('\r\n\r\n')[1];
-      const bodyDecoded = Buffer.from(bodyB64, 'base64').toString('utf8');
-      expect(bodyDecoded).toContain('請求書');
+      expect(firstEmailDecoded).toContain(
+        'Content-Type: multipart/alternative'
+      );
+
+      const textPart = extractMimePart(firstEmailDecoded, 'text/plain');
+      expect(textPart).toContain('請求書');
+      expect(textPart).toContain(
+        'https://drive.google.com/file/d/file-123/view'
+      );
+      expect(textPart).toContain(
+        'https://drive.google.com/drive/folders/dest-folder-id'
+      );
+
+      const htmlPart = extractMimePart(firstEmailDecoded, 'text/html');
+      expect(htmlPart).toContain(
+        'href="https://drive.google.com/file/d/file-123/view"'
+      );
+      expect(htmlPart).toContain(
+        'href="https://drive.google.com/drive/folders/dest-folder-id"'
+      );
 
       expect(google.auth.JWT).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -414,9 +442,16 @@ describe('notificationDispatcher', () => {
       const subject = Buffer.from(subjectB64, 'base64').toString('utf8');
       expect(subject).toContain('ドキュメント処理失敗');
 
-      const bodyB64 = decoded.split('\r\n\r\n')[1];
-      const body = Buffer.from(bodyB64, 'base64').toString('utf8');
-      expect(body).toContain('doc-processor');
+      const textPart = extractMimePart(decoded, 'text/plain');
+      expect(textPart).toContain('doc-processor');
+      expect(textPart).toContain(
+        'https://drive.google.com/file/d/file-456/view'
+      );
+
+      const htmlPart = extractMimePart(decoded, 'text/html');
+      expect(htmlPart).toContain(
+        'href="https://drive.google.com/file/d/file-456/view"'
+      );
     });
 
     it('should use folderId directly when no fileId is provided', async () => {
