@@ -1,6 +1,13 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
-import { parsePubSubEvent, createErrorResponse, logger } from 'autonyan-shared';
+import {
+  parsePubSubEvent,
+  createErrorResponse,
+  logger,
+  renderSuccessEmail,
+  renderFailureEmail,
+  RenderedEmail,
+} from 'autonyan-shared';
 import { google } from 'googleapis';
 
 interface SuccessNotificationData extends Record<string, unknown> {
@@ -56,30 +63,41 @@ function isServiceAccountEmail(email: string): boolean {
   return email.toLowerCase().endsWith('.gserviceaccount.com');
 }
 
+// A static boundary is safe here: both parts are single-line base64 bodies,
+// and the base64 alphabet contains no '-', so a body line can never match a
+// '--boundary' delimiter.
+const MULTIPART_BOUNDARY = 'autonyan-multipart-boundary';
+
 function buildRfc2822Email(
   from: string,
   to: string,
-  subject: string,
-  body: string
+  email: RenderedEmail
 ): string {
-  const encodedSubject = `=?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`;
-  const encodedBody = Buffer.from(body).toString('base64');
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(email.subject).toString('base64')}?=`;
   return [
     `From: ${from}`,
     `To: ${to}`,
     `Subject: ${encodedSubject}`,
     'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${MULTIPART_BOUNDARY}"`,
+    '',
+    `--${MULTIPART_BOUNDARY}`,
     'Content-Type: text/plain; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
-    encodedBody,
+    Buffer.from(email.text).toString('base64'),
+    `--${MULTIPART_BOUNDARY}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(email.html).toString('base64'),
+    `--${MULTIPART_BOUNDARY}--`,
   ].join('\r\n');
 }
 
 async function sendEmail(
   to: string,
-  subject: string,
-  body: string,
+  email: RenderedEmail,
   fromEmail: string,
   saKey: ServiceAccountKey
 ): Promise<void> {
@@ -92,7 +110,7 @@ async function sendEmail(
   });
 
   const gmail = google.gmail({ version: 'v1', auth });
-  const rawEmail = buildRfc2822Email(fromEmail, to, subject, body);
+  const rawEmail = buildRfc2822Email(fromEmail, to, email);
   const encodedEmail = Buffer.from(rawEmail).toString('base64url');
 
   await gmail.users.messages.send({
@@ -146,20 +164,10 @@ async function handleSuccessNotification(
     return;
   }
 
-  const subject = `[AutoNyan] ドキュメント処理完了: ${data.fileName}`;
-  const body = `ファイル「${data.fileName}」の処理が完了しました。
-
-カテゴリ: ${data.category || '未分類'}
-分類信頼度: ${Math.round(data.confidence * 100)}%
-分類理由: ${data.reasoning}
-
-要約:
-${data.summary}
-
-Firestore ドキュメント ID: ${data.firestoreDocId}`;
+  const email = renderSuccessEmail(data);
 
   for (const toEmail of emailAddresses) {
-    await sendEmail(toEmail, subject, body, fromEmail, saKey);
+    await sendEmail(toEmail, email, fromEmail, saKey);
   }
 
   logger.info('Sent success notification', {
@@ -236,16 +244,10 @@ async function handleFailureNotification(
     return;
   }
 
-  const subject = `[AutoNyan] ドキュメント処理失敗: ${data.fileName || data.fileId || data.folderId || ''}`;
-  const body = `ドキュメント処理中にエラーが発生しました。
-
-処理ステージ: ${data.stageName}
-エラー内容: ${data.errorMessage}
-ファイル ID: ${data.fileId || ''}
-フォルダ ID: ${data.folderId || ''}`;
+  const email = renderFailureEmail(data);
 
   for (const toEmail of ownerEmails) {
-    await sendEmail(toEmail, subject, body, fromEmail, saKey);
+    await sendEmail(toEmail, email, fromEmail, saKey);
   }
 
   logger.info('Sent failure notification', {
