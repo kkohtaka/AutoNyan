@@ -20,16 +20,21 @@ interface Result {
   skipped?: boolean;
 }
 
-// Supported file types for text extraction (texts, PDFs, and images)
-const SUPPORTED_MIME_TYPES = [
-  'application/pdf',
-  'text/plain',
+// Vision asyncBatchAnnotateFiles only accepts these input types; every other
+// image format must go through the synchronous batchAnnotateImages API.
+const VISION_FILE_MIME_TYPES = ['application/pdf', 'image/tiff', 'image/gif'];
+
+const VISION_IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/png',
-  'image/gif',
   'image/bmp',
   'image/webp',
-  'image/tiff',
+];
+
+const SUPPORTED_MIME_TYPES = [
+  'text/plain',
+  ...VISION_FILE_MIME_TYPES,
+  ...VISION_IMAGE_MIME_TYPES,
 ];
 
 export const textVisionProcessor = async (
@@ -138,7 +143,75 @@ export const textVisionProcessor = async (
       };
     }
 
-    // For PDFs and images, use Vision API async batch processing
+    // Single-image formats: annotate synchronously and write the result JSON
+    // ourselves, mirroring the text/plain branch, because the async files API
+    // rejects them (see VISION_FILE_MIME_TYPES).
+    if (VISION_IMAGE_MIME_TYPES.includes(contentType)) {
+      const [batchResult] = await vision.batchAnnotateImages({
+        requests: [
+          {
+            image: {
+              source: { imageUri: `gs://${bucket}/${objectName}` },
+            },
+            features: [{ type: 'DOCUMENT_TEXT_DETECTION' as const }],
+          },
+        ],
+      });
+
+      const response = batchResult.responses?.[0];
+      if (!response) {
+        throw new Error('No responses received from Vision API');
+      }
+
+      // batchAnnotateImages embeds per-image errors in the response instead
+      // of throwing; INVALID_ARGUMENT (3) means the image itself is
+      // unreadable, so retrying can never succeed.
+      if (response.error) {
+        const errorMessage = response.error.message || 'Unknown error';
+        if (response.error.code === 3) {
+          throw new PermanentError(
+            `Vision API rejected input: ${errorMessage}`
+          );
+        }
+        throw new Error(`Vision API image annotation failed: ${errorMessage}`);
+      }
+
+      const imageResult = {
+        responses: [{ fullTextAnnotation: response.fullTextAnnotation }],
+      };
+
+      const outputFile = storage
+        .bucket(outputBucket)
+        .file(`${outputPath}output-1-to-1.json`);
+      await outputFile.save(JSON.stringify(imageResult, null, 2), {
+        metadata: {
+          contentType: 'application/json',
+          metadata: {
+            originalFileId: originalFileId,
+            originalFileName: originalFileName,
+            originalMimeType: contentType,
+            contentHash: contentHash,
+            processedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+      const imageResultObj = {
+        message: `Successfully processed image ${originalFileName} with Vision API`,
+        objectName: objectName,
+        outputBucket: outputBucket,
+        outputPath: outputPath,
+        operationId: 'image-sync-annotation',
+      };
+
+      logger.info('Vision API image annotation completed', {
+        result: imageResultObj,
+      });
+
+      return imageResultObj;
+    }
+
+    // For PDFs, TIFFs, and GIFs, use Vision API async batch processing
     const request = {
       requests: [
         {
