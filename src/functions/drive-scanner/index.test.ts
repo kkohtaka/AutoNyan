@@ -443,6 +443,8 @@ describe('driveScanner', () => {
       expect(query).toContain(
         "mimeType='application/vnd.google-apps.presentation'"
       );
+      expect(query).toContain("mimeType='image/tiff'");
+      expect(query).toContain("mimeType='image/gif'");
     });
 
     it('should handle pagination when folder has more than 100 files', async () => {
