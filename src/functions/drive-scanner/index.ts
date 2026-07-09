@@ -38,6 +38,12 @@ const DOCUMENT_MIME_TYPES = [
   'application/vnd.google-apps.document',
   'application/vnd.google-apps.spreadsheet',
   'application/vnd.google-apps.presentation',
+  // Only the image formats Vision asyncBatchAnnotateFiles accepts; other
+  // image formats (PNG/JPEG/...) stay excluded until the pipeline can
+  // annotate single images, otherwise every discovery would fail permanently
+  // downstream.
+  'image/tiff',
+  'image/gif',
 ];
 
 interface DriveScanMessage extends Record<string, unknown> {
