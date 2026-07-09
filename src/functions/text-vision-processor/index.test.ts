@@ -10,6 +10,7 @@ jest.mock('@google-cloud/pubsub');
 const mockPublishMessage = jest.fn();
 const mockVision = {
   asyncBatchAnnotateFiles: jest.fn(),
+  batchAnnotateImages: jest.fn(),
 };
 
 const mockStorage = {
@@ -113,6 +114,138 @@ describe('textVisionProcessor', () => {
         },
       ],
     });
+  });
+
+  it('should process image files with synchronous Vision annotation', async () => {
+    const cloudEvent = createCloudEvent({
+      name: 'documents/test-image.png',
+      contentType: 'image/png',
+    });
+
+    const mockMetadata = {
+      metadata: {
+        originalFileId: 'file123',
+        originalFileName: 'test.png',
+        contentHash: 'abc123',
+      },
+    };
+
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
+    mockVision.batchAnnotateImages.mockResolvedValue([
+      {
+        responses: [
+          {
+            fullTextAnnotation: {
+              text: 'image text',
+              pages: [{ confidence: 0.9 }],
+            },
+          },
+        ],
+      },
+    ]);
+
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.message).toContain(
+      'Successfully processed image test.png with Vision API'
+    );
+    expect(result.operationId).toBe('image-sync-annotation');
+    expect(result.outputBucket).toBe('test-project-staging-vision-results');
+    expect(result.outputPath).toBe('results/abc123/');
+    expect(mockVision.batchAnnotateImages).toHaveBeenCalledWith({
+      requests: [
+        {
+          image: {
+            source: { imageUri: 'gs://test-bucket/documents/test-image.png' },
+          },
+          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+        },
+      ],
+    });
+    expect(mockVision.asyncBatchAnnotateFiles).not.toHaveBeenCalled();
+    expect(mockStorage.bucket().file().save).toHaveBeenCalledWith(
+      expect.stringContaining('"text": "image text"'),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          contentType: 'application/json',
+        }),
+      })
+    );
+  });
+
+  it('should ACK (skip) when Vision API rejects an image input', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const cloudEvent = createCloudEvent({
+      name: 'documents/test-image.png',
+      contentType: 'image/png',
+    });
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([
+        {
+          metadata: {
+            originalFileId: 'file123',
+            originalFileName: 'test.png',
+            contentHash: 'abc123',
+          },
+        },
+      ]);
+    // batchAnnotateImages embeds per-image errors instead of throwing
+    mockVision.batchAnnotateImages.mockResolvedValue([
+      {
+        responses: [{ error: { code: 3, message: 'Bad image data.' } }],
+      },
+    ]);
+
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
+      'Vision API rejected input: Bad image data.'
+    );
+    expect(mockStorage.bucket().file().save).not.toHaveBeenCalled();
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+          fileId: 'file123',
+        }),
+      })
+    );
+  });
+
+  it('should throw (retry) on transient image annotation errors', async () => {
+    const cloudEvent = createCloudEvent({
+      name: 'documents/test-image.png',
+      contentType: 'image/png',
+    });
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([
+        {
+          metadata: {
+            originalFileId: 'file123',
+            originalFileName: 'test.png',
+            contentHash: 'abc123',
+          },
+        },
+      ]);
+    // UNAVAILABLE (14) embedded in the response is retryable
+    mockVision.batchAnnotateImages.mockResolvedValue([
+      {
+        responses: [{ error: { code: 14, message: 'Service unavailable.' } }],
+      },
+    ]);
+
+    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
+      'Vision API image annotation failed: Service unavailable.'
+    );
+    expect(mockStorage.bucket().file().save).not.toHaveBeenCalled();
   });
 
   it('should process text files directly without Vision API', async () => {
