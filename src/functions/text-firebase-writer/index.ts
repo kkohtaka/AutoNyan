@@ -49,6 +49,10 @@ interface VisionApiResponse {
       confidence?: number;
     }>;
   };
+  error?: {
+    code?: number;
+    message?: string;
+  };
 }
 
 interface VisionApiResult {
@@ -176,7 +180,29 @@ export const textFirebaseWriter = async (
       }
     }
 
-    const overallConfidence = pageCount > 0 ? totalConfidence / pageCount : 0;
+    // Vision embeds per-file extraction failures in the result JSON instead
+    // of failing the operation, so a result with no usable text is an
+    // extraction failure to surface, not a blank document to store.
+    const embeddedErrors = visionResult.responses
+      .filter((response) => response.error)
+      .map((response) => response.error?.message || 'unknown error');
+
+    if (pageCount === 0) {
+      throw new PermanentError(
+        embeddedErrors.length > 0
+          ? `Vision API result contains only errors: ${embeddedErrors.join('; ')}`
+          : 'Vision API result contains no extracted text'
+      );
+    }
+
+    if (embeddedErrors.length > 0) {
+      logger.warn('Vision API result contains page-level errors', {
+        originalFileName,
+        errors: embeddedErrors,
+      });
+    }
+
+    const overallConfidence = totalConfidence / pageCount;
 
     // Prepare data for Firestore
     const extractedTextDoc: ExtractedText = {
