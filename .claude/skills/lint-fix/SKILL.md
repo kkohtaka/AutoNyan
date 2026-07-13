@@ -2,7 +2,7 @@
 name: lint-fix
 description: Run the project's linters (npm run lint covering TypeScript, YAML, JSON, Terraform, and shell), interpret the failures, fix them, and re-run until clean
 argument-hint: "[optional: ts|terraform to scope the run]"
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Read Edit Bash(npm *) Bash(terraform *)
 ---
 

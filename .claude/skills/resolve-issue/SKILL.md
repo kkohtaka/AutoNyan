@@ -2,7 +2,7 @@
 name: resolve-issue
 description: Turn a GitHub issue into a ready-to-merge change by reading the issue, confirming the approach, creating a correctly named branch, and delegating implementation, quality checks, commits, and PR creation to sibling skills
 argument-hint: "<issue-number>"
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Bash(git *) Bash(gh *)
 ---
 

@@ -2,7 +2,7 @@
 name: add-function
 description: Scaffold and wire a new Cloud Function end to end — its npm workspace, Terraform module, main.tf wiring, and CI matrix entries — following the project's Adding a New Function Workflow
 argument-hint: "<function-name> [pubsub|storage]"
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Read Write Edit Bash(npm *)
 ---
 

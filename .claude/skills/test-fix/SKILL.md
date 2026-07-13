@@ -2,7 +2,7 @@
 name: test-fix
 description: Run the project's tests with coverage, interpret failures, and fix code or add tests until tests pass and Jest coverage thresholds are satisfied
 argument-hint: "[workspace-name]"
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Read Edit Bash(npm *)
 ---
 

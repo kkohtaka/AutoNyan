@@ -1,7 +1,7 @@
 ---
 name: renovate-triage
 description: Triage open Renovate dependency PRs and the Dependency Dashboard — summarize each update, assess risk (dev vs runtime, major vs minor, CI status), recommend an action, and merge only approved PRs after explicit confirmation
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Bash(gh *)
 ---
 
