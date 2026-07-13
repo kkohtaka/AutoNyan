@@ -294,6 +294,118 @@ describe('textFirebaseWriter', () => {
     expect(result.message).toContain('No responses found in Vision API result');
   });
 
+  it('should ACK (skip) and notify when the result contains only embedded errors', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const cloudEvent = createCloudEvent({});
+
+    const visionResult = {
+      responses: [
+        {
+          error: {
+            code: 3,
+            message: 'Unsupported input file format.',
+          },
+        },
+      ],
+    };
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
+      'Vision API result contains only errors: Unsupported input file format.'
+    );
+    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+          fileId: 'file123',
+        }),
+      })
+    );
+  });
+
+  it('should ACK (skip) when no page yields any text', async () => {
+    const cloudEvent = createCloudEvent({});
+
+    const visionResult = {
+      responses: [
+        {
+          fullTextAnnotation: {
+            text: '   ',
+            pages: [{ confidence: 0.1 }],
+          },
+        },
+        {},
+      ],
+    };
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain(
+      'Vision API result contains no extracted text'
+    );
+    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
+  });
+
+  it('should store partial results when some pages have text and others errors', async () => {
+    const cloudEvent = createCloudEvent({});
+
+    const visionResult = {
+      responses: [
+        {
+          fullTextAnnotation: {
+            text: 'Readable page',
+            pages: [{ confidence: 0.9 }],
+          },
+        },
+        {
+          error: {
+            code: 3,
+            message: 'Bad image data.',
+          },
+        },
+      ],
+    };
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([Buffer.from(JSON.stringify(visionResult))]);
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBeUndefined();
+    expect(result.textLength).toBe('Readable page'.length);
+    expect(result.pages).toBe(1);
+    expect(mockFirestore.collection().add).toHaveBeenCalled();
+  });
+
   it('should throw (retry) on transient storage failures', async () => {
     const cloudEvent = createCloudEvent({});
 
