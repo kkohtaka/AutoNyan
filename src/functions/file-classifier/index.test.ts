@@ -22,11 +22,15 @@ jest.mock('googleapis', () => ({
 jest.mock('./drive-operations');
 jest.mock('./classification');
 jest.mock('./firestore-operations');
+jest.mock('./rename');
 
 const mockListCategoryFolders = jest.fn();
+const mockListFileNamesInFolder = jest.fn();
 const mockMoveFileInDrive = jest.fn();
 const mockClassifyWithGemini = jest.fn();
 const mockUpdateDocumentWithClassification = jest.fn();
+const mockGenerateFileName = jest.fn();
+const mockResolveRenamedFileName = jest.fn();
 
 describe('fileClassifier', () => {
   let mockPublishMessage: jest.Mock;
@@ -49,6 +53,7 @@ describe('fileClassifier', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const driveOps = require('./drive-operations');
     driveOps.listCategoryFolders = mockListCategoryFolders;
+    driveOps.listFileNamesInFolder = mockListFileNamesInFolder;
     driveOps.moveFileInDrive = mockMoveFileInDrive;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
@@ -59,6 +64,20 @@ describe('fileClassifier', () => {
     const firestoreOps = require('./firestore-operations');
     firestoreOps.updateDocumentWithClassification =
       mockUpdateDocumentWithClassification;
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+    const rename = require('./rename');
+    rename.generateFileName = mockGenerateFileName;
+    rename.resolveRenamedFileName = mockResolveRenamedFileName;
+
+    // Defaults: name generation succeeds but the guards keep the original name
+    mockListFileNamesInFolder.mockResolvedValue([]);
+    mockGenerateFileName.mockResolvedValue({
+      fileName: '生成された名前',
+      confidence: 0.9,
+      reasoning: '内容から命名',
+    });
+    mockResolveRenamedFileName.mockReturnValue(null);
 
     // Set up environment variables
     process.env.PROJECT_ID = 'test-project';
@@ -92,7 +111,7 @@ describe('fileClassifier', () => {
     } as unknown as MessagePublishedData,
   });
 
-  it('should classify document and move to category folder', async () => {
+  it('should classify document and move to category folder with a renamed file name', async () => {
     const event = createPubSubEvent({
       firestoreDocId: 'doc123',
       fileId: 'file-123',
@@ -113,6 +132,18 @@ describe('fileClassifier', () => {
       reasoning: 'Document contains invoice-related keywords',
       summary: '請求書に関する文書です。',
     });
+
+    mockListFileNamesInFolder.mockResolvedValue([
+      '2024-01-15_請求書_ネコ商会.pdf',
+    ]);
+    mockGenerateFileName.mockResolvedValue({
+      fileName: '2024-01-31_請求書_サンプル商事',
+      confidence: 0.9,
+      reasoning: '既存の命名規則に合わせました',
+    });
+    mockResolveRenamedFileName.mockReturnValue(
+      '2024-01-31_請求書_サンプル商事.pdf'
+    );
 
     mockMoveFileInDrive.mockResolvedValue(undefined);
     mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
@@ -137,10 +168,30 @@ describe('fileClassifier', () => {
         { id: 'folder-contracts', name: '契約書' },
       ]
     );
+    expect(mockListFileNamesInFolder).toHaveBeenCalledWith(
+      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      'folder-invoices'
+    );
+    expect(mockGenerateFileName).toHaveBeenCalledWith(
+      'test-project',
+      '請求書 金額: 10000円 支払期限: 2024-01-31',
+      'invoice.pdf',
+      ['2024-01-15_請求書_ネコ商会.pdf']
+    );
+    expect(mockResolveRenamedFileName).toHaveBeenCalledWith(
+      {
+        fileName: '2024-01-31_請求書_サンプル商事',
+        confidence: 0.9,
+        reasoning: '既存の命名規則に合わせました',
+      },
+      'invoice.pdf',
+      ['2024-01-15_請求書_ネコ商会.pdf']
+    );
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
       expect.objectContaining({ mockGoogleAuthInstance: true }),
       'file-123',
-      'folder-invoices'
+      'folder-invoices',
+      '2024-01-31_請求書_サンプル商事.pdf'
     );
     expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
       expect.any(Object),
@@ -152,8 +203,133 @@ describe('fileClassifier', () => {
         classificationReasoning: 'Document contains invoice-related keywords',
         classifiedAt: expect.any(String),
         summary: '請求書に関する文書です。',
+        originalFileName: 'invoice.pdf',
+        renamedFileName: '2024-01-31_請求書_サンプル商事.pdf',
+        renameConfidence: 0.9,
+        renameReasoning: '既存の命名規則に合わせました',
       }
     );
+  });
+
+  it('should keep the original name when the rename guards reject the proposal', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    // Defaults: generateFileName succeeds, resolveRenamedFileName returns null
+
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    expect(mockMoveFileInDrive).toHaveBeenCalledWith(
+      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      'file-123',
+      'folder-invoices',
+      undefined
+    );
+    expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
+      expect.any(Object),
+      'extracted_texts/doc123',
+      expect.objectContaining({
+        originalFileName: 'invoice.pdf',
+        renamedFileName: null,
+        renameConfidence: 0.9,
+        renameReasoning: '内容から命名',
+      })
+    );
+  });
+
+  it('should keep the original name when name generation fails', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    mockGenerateFileName.mockRejectedValue(new Error('Gemini unavailable'));
+
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    const result = await fileClassifier(event);
+
+    expect(result.category).toBe('請求書');
+    expect(mockMoveFileInDrive).toHaveBeenCalledWith(
+      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      'file-123',
+      'folder-invoices',
+      undefined
+    );
+    expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
+      expect.any(Object),
+      'extracted_texts/doc123',
+      expect.objectContaining({
+        originalFileName: 'invoice.pdf',
+        renamedFileName: null,
+        renameConfidence: null,
+        renameReasoning: null,
+      })
+    );
+  });
+
+  it('should not fail when the move and rename call fails', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    mockResolveRenamedFileName.mockReturnValue('請求書_2024-01.pdf');
+    mockMoveFileInDrive.mockRejectedValue(
+      new Error('insufficient permissions')
+    );
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    const result = await fileClassifier(event);
+
+    expect(result.message).toContain('file move failed');
+    expect(result.category).toBe('請求書');
+    expect(mockUpdateDocumentWithClassification).toHaveBeenCalled();
   });
 
   it('should publish a success notification when NOTIFICATION_TOPIC is set', async () => {
@@ -278,10 +454,13 @@ describe('fileClassifier', () => {
     const result = await fileClassifier(event);
 
     expect(result.category).toBeNull();
+    expect(mockListFileNamesInFolder).not.toHaveBeenCalled();
+    expect(mockGenerateFileName).not.toHaveBeenCalled();
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
       expect.objectContaining({ mockGoogleAuthInstance: true }),
       'file-456',
-      'uncategorized-folder-id'
+      'uncategorized-folder-id',
+      undefined
     );
     expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
       expect.any(Object),
@@ -289,6 +468,10 @@ describe('fileClassifier', () => {
       expect.objectContaining({
         category: null,
         categoryFolderId: 'uncategorized-folder-id',
+        originalFileName: 'unknown.pdf',
+        renamedFileName: null,
+        renameConfidence: null,
+        renameReasoning: null,
       })
     );
   });

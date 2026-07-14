@@ -12,8 +12,13 @@ import {
 } from 'autonyan-shared';
 import { google } from 'googleapis';
 import { classifyWithGemini } from './classification';
-import { listCategoryFolders, moveFileInDrive } from './drive-operations';
+import {
+  listCategoryFolders,
+  listFileNamesInFolder,
+  moveFileInDrive,
+} from './drive-operations';
 import { updateDocumentWithClassification } from './firestore-operations';
+import { generateFileName, resolveRenamedFileName } from './rename';
 
 interface ClassificationEventData extends Record<string, unknown> {
   firestoreDocId: string;
@@ -107,6 +112,50 @@ export const fileClassifier = async (
       classification.categoryFolderId || uncategorizedFolderId;
     const targetFolderName = classification.categoryName || 'Uncategorized';
 
+    // Generate a content-derived file name, only when a category folder
+    // matched (files routed to Uncategorized keep their original name).
+    // Failures here are non-fatal: the file simply keeps its original name.
+    let renamedFileName: string | null = null;
+    let renameConfidence: number | null = null;
+    let renameReasoning: string | null = null;
+
+    if (classification.categoryFolderId) {
+      try {
+        const existingFileNames = await listFileNamesInFolder(
+          auth,
+          classification.categoryFolderId
+        );
+
+        logger.info('Generating file name with Gemini AI', {
+          referenceFileCount: existingFileNames.length,
+        });
+
+        const generated = await generateFileName(
+          projectId,
+          eventData.extractedText,
+          eventData.fileName,
+          existingFileNames
+        );
+
+        renameConfidence = generated.confidence;
+        renameReasoning = generated.reasoning;
+        renamedFileName = resolveRenamedFileName(
+          generated,
+          eventData.fileName,
+          existingFileNames
+        );
+
+        logger.info('File name generation result', {
+          generated,
+          renamedFileName,
+        });
+      } catch (renameError) {
+        logger.warn('Failed to generate file name (keeping original name)', {
+          error: renameError,
+        });
+      }
+    }
+
     // Update Firestore document with classification results FIRST
     // This ensures E2E tests can verify classification even if file move fails
     const databaseId = process.env.FIRESTORE_DATABASE_ID || '(default)';
@@ -124,6 +173,10 @@ export const fileClassifier = async (
       classificationReasoning: classification.reasoning,
       classifiedAt: new Date().toISOString(),
       summary: classification.summary,
+      originalFileName: eventData.fileName,
+      renamedFileName,
+      renameConfidence,
+      renameReasoning,
     });
 
     // Publish success notification (non-fatal)
@@ -155,15 +208,21 @@ export const fileClassifier = async (
       }
     }
 
-    // Move file in Google Drive AFTER Firestore update
+    // Move (and rename) file in Google Drive AFTER Firestore update
     // If move fails, classification is still considered successful (Firestore is already updated)
     let fileMoved = false;
     try {
       logger.info('Moving file to folder', {
         targetFolderName,
         targetFolderId,
+        renamedFileName,
       });
-      await moveFileInDrive(auth, eventData.fileId, targetFolderId);
+      await moveFileInDrive(
+        auth,
+        eventData.fileId,
+        targetFolderId,
+        renamedFileName ?? undefined
+      );
       fileMoved = true;
       logger.info('File moved successfully');
     } catch (moveError) {
