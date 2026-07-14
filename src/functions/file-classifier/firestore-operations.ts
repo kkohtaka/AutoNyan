@@ -7,6 +7,10 @@ export interface ClassificationUpdate {
   classificationReasoning: string;
   classifiedAt: string;
   summary: string;
+  originalFileName: string;
+  renamedFileName: string | null;
+  renameConfidence: number | null;
+  renameReasoning: string | null;
 }
 
 /**
@@ -29,5 +33,9 @@ export async function updateDocumentWithClassification(
     classificationReasoning: classification.classificationReasoning,
     classifiedAt: classification.classifiedAt,
     summary: classification.summary,
+    originalFileName: classification.originalFileName,
+    renamedFileName: classification.renamedFileName,
+    renameConfidence: classification.renameConfidence,
+    renameReasoning: classification.renameReasoning,
   });
 }
