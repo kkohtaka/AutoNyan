@@ -20,9 +20,10 @@ When you add a document to the watched folder, it travels through five steps:
    photographed pages saved as a PDF.
 3. **Classified** — the extracted text is matched against your categories, and
    AutoNyan chooses the one that fits best.
-4. **Filed** — the document is moved into the matching category folder. If
-   nothing fits well, it goes to an **Uncategorized** folder instead, so a
-   document is never lost.
+4. **Filed** — the document is moved into the matching category folder and
+   renamed to a short, content-based name that matches how the files already in
+   that folder are named. If nothing fits well, it goes to an **Uncategorized**
+   folder instead — with its original name — so a document is never lost.
 5. **Reported** — you receive an email summarizing what was processed, which
    category each document landed in, and a short summary of its contents.
 
