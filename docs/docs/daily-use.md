@@ -44,8 +44,10 @@ decides where it belongs:
    also produces a short summary of the document and a confidence figure for how
    sure it is about the category.
 3. **It files the document.** The file is **moved** out of the watched folder
-   and into the matching category folder. If nothing fits well, it goes to the
-   **Uncategorized** folder instead — so a document is never lost, even when
+   and into the matching category folder, and **renamed** to a short name that
+   describes its contents, following the naming style of the files already in
+   that folder. If nothing fits well, it goes to the **Uncategorized** folder
+   instead — keeping its original name — so a document is never lost, even when
    AutoNyan is unsure.
 
 A few things worth knowing:
@@ -56,6 +58,10 @@ A few things worth knowing:
   folder exists, then move the file there yourself.
 - **Files are moved, not copied.** After filing, the document is no longer in the
   watched folder — look for it in its category folder (or Uncategorized).
+- **Renaming is careful, not forced.** The new name always keeps the original
+  file extension, and when AutoNyan is not confident enough about a better name,
+  the file simply keeps its original one. Documents filed under Uncategorized
+  are never renamed.
 - **You stay in control of categories.** To create a new category, add a folder;
   to retire one, remove it. AutoNyan never invents categories on its own.
 
@@ -79,7 +85,8 @@ relevant folder.
 
 **When a document is processed successfully**, the email tells you:
 
-- the **file name** that was processed,
+- the **file name** that was processed (the original name, from before any
+  renaming),
 - the **category** it was filed under (or *Uncategorized* if nothing fit),
 - a **confidence** figure for that category,
 - the **reasoning** behind the choice, and
