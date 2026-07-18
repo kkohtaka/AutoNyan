@@ -101,6 +101,37 @@ export async function uploadTestFile(
 }
 
 /**
+ * Create a metadata-only Drive file with an exact name
+ *
+ * Used to seed reference file names for the rename stage: the classifier only
+ * reads the names of files in the destination folder, so the seeded files
+ * need no content.
+ *
+ * @param drive - Drive API client
+ * @param folderId - Parent folder ID
+ * @param fileName - Exact file name to create
+ * @returns Created file ID
+ */
+export async function createNamedTestFile(
+  drive: drive_v3.Drive,
+  folderId: string,
+  fileName: string
+): Promise<string> {
+  const response = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      parents: [folderId],
+      // Public custom property so cleanup sweeps can identify e2e artifacts
+      properties: { e2eTest: 'true' },
+    },
+    fields: 'id',
+    supportsAllDrives: true,
+  });
+
+  return response.data.id!;
+}
+
+/**
  * Move a Drive item to the trash
  *
  * E2E cleanup must trash instead of permanently deleting: in a shared drive,
