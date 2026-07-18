@@ -8,6 +8,7 @@ import { authenticateE2E } from './helpers/auth';
 import {
   uploadTestFile,
   createTestFolder,
+  createNamedTestFile,
   trashDriveItem,
 } from './helpers/drive-setup';
 import {
@@ -70,6 +71,16 @@ const PERMANENT_FAILURE_FIXTURES: FormatFixture[] = [
   },
 ];
 
+// Reference names seeded into the test category folder follow one distinctive
+// convention so the rename stage can infer it. Assertions never expect the
+// convention itself — Gemini naming is nondeterministic — only consistency
+// between Firestore and Drive.
+const REFERENCE_FILE_NAMES = [
+  '2026-04-10_請求書_サンプル商事.pdf',
+  '2026-05-12_請求書_テスト物産.pdf',
+  '2026-06-15_請求書_サンプル工業.pdf',
+];
+
 const isFullMatrix = process.env.E2E_FORMAT_MATRIX === 'full';
 const activeHappyPathFixtures = HAPPY_PATH_FIXTURES.filter(
   (fixture) => isFullMatrix || fixture.coreMatrix
@@ -96,6 +107,9 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     fileId: string;
     contentHash?: string;
   }[] = [];
+
+  // Reference files seeded into the category folder, trashed in afterAll.
+  const seededReferenceFileIds: string[] = [];
 
   const logger = new E2ELogger('full-pipeline');
   const TEST_TIMEOUT = 1500000; // 25 minutes: stage2(5m) + stage3(9m) + stage4(1m) + stage5(5m) + stage6(3m) + buffer
@@ -155,6 +169,23 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       categoryName: '請求書',
     });
 
+    // Seed the category folder so the rename stage's naming-convention
+    // inference path is exercised (an empty folder takes the content-only
+    // prompt branch instead).
+    logger.log('setup', 'Seeding reference files in test category folder');
+    for (const referenceFileName of REFERENCE_FILE_NAMES) {
+      const seededFileId = await createNamedTestFile(
+        drive,
+        categoryFolderId,
+        referenceFileName
+      );
+      seededReferenceFileIds.push(seededFileId);
+    }
+    logger.log('setup', 'Reference files seeded', {
+      count: seededReferenceFileIds.length,
+      names: REFERENCE_FILE_NAMES,
+    });
+
     logger.log('setup', 'E2E test setup complete', {
       projectId: process.env.PROJECT_ID,
       environment: process.env.ENVIRONMENT,
@@ -194,6 +225,24 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           { error }
         );
       }
+    }
+
+    // Cleanup seeded reference files (before their parent category folder)
+    for (const seededFileId of seededReferenceFileIds) {
+      try {
+        await trashDriveItem(drive, seededFileId);
+      } catch (error) {
+        logger.log(
+          'teardown',
+          'Failed to trash seeded reference file (may not exist)',
+          { seededFileId, error }
+        );
+      }
+    }
+    if (seededReferenceFileIds.length > 0) {
+      logger.log('teardown', 'Seeded reference files trashed', {
+        count: seededReferenceFileIds.length,
+      });
     }
 
     // Cleanup test category folder
@@ -427,6 +476,51 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         // File move is not required for test to pass - classification is the primary goal
         // expect(fileMoved).toBe(true); // Commented out - file move is best-effort
         expect(classifiedDoc!.category).toBeDefined(); // This is the critical check
+
+        // ========================================
+        // Stage 5b: Verify content-based rename consistency
+        // ========================================
+        // Gemini-generated names are nondeterministic, so assert only that
+        // Firestore and Drive agree — never an exact generated name.
+        logger.log('stage-5', 'Verifying content-based rename consistency');
+
+        expect(classifiedDoc!.originalFileName).toBe(testFileName);
+        expect(classifiedDoc).toHaveProperty('renamedFileName');
+        expect(classifiedDoc).toHaveProperty('renameConfidence');
+        expect(classifiedDoc).toHaveProperty('renameReasoning');
+
+        const renamedFileName = classifiedDoc!.renamedFileName as
+          | string
+          | null;
+
+        if (renamedFileName !== null) {
+          const extension = testFileName.match(/\.[^.]+$/)?.[0] ?? '';
+          expect(renamedFileName.endsWith(extension)).toBe(true);
+          expect(classifiedDoc!.renameConfidence).toBeGreaterThan(0);
+          expect(classifiedDoc!.renameReasoning).toBeTruthy();
+        }
+
+        // The rename rides on the same files.update call as the move, so the
+        // Drive name can only be verified when the best-effort move succeeded.
+        if (fileMoved) {
+          const movedFile = await drive.files.get({
+            fileId: testFileId,
+            fields: 'name',
+            supportsAllDrives: true,
+          });
+          expect(movedFile.data.name).toBe(renamedFileName ?? testFileName);
+
+          logger.log('stage-5', 'Drive file name consistent with Firestore', {
+            driveFileName: movedFile.data.name,
+            renamedFileName,
+            originalFileName: testFileName,
+          });
+        } else {
+          logger.log(
+            'stage-5',
+            'Skipping Drive name verification (file move did not complete)'
+          );
+        }
 
         // ========================================
         // Stage 6: Wait for notification dispatch
