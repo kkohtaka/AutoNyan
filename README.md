@@ -106,6 +106,22 @@ relevant Drive folder owner via the Gmail API.
    gcloud config set project YOUR_PROJECT_ID
    ```
 
+### Option 3: Ephemeral Remote Session
+
+For a container that starts with only Node.js — a Claude Code remote session, a
+throwaway VM — install the non-npm tooling explicitly:
+
+```bash
+npm install
+sudo npm run setup:dev-tools
+tflint --init --chdir=terraform/
+```
+
+Such environments usually restrict outbound network access. See
+[REMOTE_SESSION_SETUP.md](REMOTE_SESSION_SETUP.md) for the egress allowlist,
+the credentials that cannot be obtained headlessly, and a verification
+checklist.
+
 ### Configuration
 
 #### 1. Terraform Backend Setup
