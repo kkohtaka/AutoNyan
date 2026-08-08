@@ -85,8 +85,8 @@ relevant folder.
 
 **When a document is processed successfully**, the email tells you:
 
-- the **file name** that was processed (the original name, from before any
-  renaming),
+- the **file name** the document now has in Drive — and, when it was renamed,
+  its **original name** as well, so you can tell which document it was,
 - the **category** it was filed under (or *Uncategorized* if nothing fit),
 - a **confidence** figure for that category,
 - the **reasoning** behind the choice, and
