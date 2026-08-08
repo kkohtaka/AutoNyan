@@ -11,7 +11,11 @@ export interface RenderedEmail {
 export interface SuccessEmailData {
   firestoreDocId: string;
   fileId: string;
+  // Name the file actually has after processing.
   fileName: string;
+  // Set only when the file was renamed; its absence means the file kept its
+  // original name.
+  originalFileName?: string;
   category: string | null;
   confidence: number;
   reasoning: string;
@@ -116,9 +120,13 @@ export function renderSuccessEmail(data: SuccessEmailData): RenderedEmail {
 
   const subject = `[AutoNyan][${category}] 処理完了: ${data.fileName}`;
 
+  const renamedLine = data.originalFileName
+    ? `元のファイル名: ${data.originalFileName}\n`
+    : '';
+
   const text = `ファイル「${data.fileName}」の処理が完了しました。
 
-カテゴリ: ${category}
+${renamedLine}カテゴリ: ${category}
 分類信頼度: ${percent}%${isLowConfidence ? '（要確認）' : ''}
 分類理由: ${data.reasoning}
 
@@ -133,6 +141,9 @@ Firestore ドキュメント ID: ${data.firestoreDocId}`;
   const html = renderLayout(
     `<p style="margin:0 0 20px;">ファイル「<strong>${escapeHtml(data.fileName)}</strong>」の処理が完了しました。</p>` +
       '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">' +
+      (data.originalFileName
+        ? renderDetailRow('元のファイル名', escapeHtml(data.originalFileName))
+        : '') +
       renderDetailRow('カテゴリ', escapeHtml(category)) +
       renderDetailRow('分類信頼度', renderConfidenceBadge(data.confidence)) +
       renderDetailRow('分類理由', toHtmlLines(data.reasoning)) +

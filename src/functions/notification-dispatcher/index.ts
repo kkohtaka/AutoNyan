@@ -14,6 +14,7 @@ interface SuccessNotificationData extends Record<string, unknown> {
   firestoreDocId: string;
   fileId: string;
   fileName: string;
+  originalFileName?: string;
   category: string | null;
   confidence: number;
   reasoning: string;

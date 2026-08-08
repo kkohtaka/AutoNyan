@@ -81,6 +81,30 @@ describe('renderSuccessEmail', () => {
     expect(email.html).toContain('AutoNyan');
     expect(email.html).toContain('自動送信');
   });
+
+  it('shows the final name and the original name when the file was renamed', () => {
+    const email = renderSuccessEmail({
+      ...data,
+      fileName: '2026-08-01_請求書.pdf',
+      originalFileName: 'scan_0012.pdf',
+    });
+    expect(email.subject).toBe(
+      '[AutoNyan][請求書] 処理完了: 2026-08-01_請求書.pdf'
+    );
+    expect(email.text).toContain(
+      'ファイル「2026-08-01_請求書.pdf」の処理が完了しました。'
+    );
+    expect(email.text).toContain('元のファイル名: scan_0012.pdf');
+    expect(email.html).toContain('2026-08-01_請求書.pdf');
+    expect(email.html).toContain('元のファイル名');
+    expect(email.html).toContain('scan_0012.pdf');
+  });
+
+  it('shows a single file name and no rename hint when the name was kept', () => {
+    const email = renderSuccessEmail(data);
+    expect(email.text).not.toContain('元のファイル名');
+    expect(email.html).not.toContain('元のファイル名');
+  });
 });
 
 describe('renderFailureEmail', () => {
