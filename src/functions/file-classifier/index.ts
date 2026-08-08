@@ -179,35 +179,6 @@ export const fileClassifier = async (
       renameReasoning,
     });
 
-    // Publish success notification (non-fatal)
-    const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-    if (notificationTopicName) {
-      try {
-        const pubsub = new PubSub();
-        const notificationData = {
-          firestoreDocId: eventData.firestoreDocId,
-          fileId: eventData.fileId,
-          fileName: eventData.fileName,
-          category: classification.categoryName,
-          confidence: classification.confidence,
-          reasoning: classification.reasoning,
-          summary: classification.summary,
-          destinationFolderId: targetFolderId,
-        };
-        await pubsub.topic(notificationTopicName).publishMessage({
-          json: notificationData,
-          attributes: {
-            operation: 'success-notification',
-            fileId: eventData.fileId,
-          },
-        });
-      } catch (notifyError) {
-        logger.warn('Failed to publish success notification', {
-          error: notifyError,
-        });
-      }
-    }
-
     // Move (and rename) file in Google Drive AFTER Firestore update
     // If move fails, classification is still considered successful (Firestore is already updated)
     let fileMoved = false;
@@ -230,6 +201,41 @@ export const fileClassifier = async (
       logger.warn('Failed to move file in Drive (classification still saved)', {
         error: moveError,
       });
+    }
+
+    // Publish success notification (non-fatal) AFTER the Drive move, so the
+    // email never reports a name the file does not actually have: the rename
+    // only takes effect as part of the move.
+    const notificationTopicName = process.env.NOTIFICATION_TOPIC;
+    if (notificationTopicName) {
+      try {
+        const renameApplied = fileMoved && renamedFileName !== null;
+        const pubsub = new PubSub();
+        const notificationData = {
+          firestoreDocId: eventData.firestoreDocId,
+          fileId: eventData.fileId,
+          fileName: renameApplied ? renamedFileName : eventData.fileName,
+          // Only set when the file was actually renamed; the dispatcher treats
+          // its absence as "kept the original name".
+          ...(renameApplied ? { originalFileName: eventData.fileName } : {}),
+          category: classification.categoryName,
+          confidence: classification.confidence,
+          reasoning: classification.reasoning,
+          summary: classification.summary,
+          destinationFolderId: targetFolderId,
+        };
+        await pubsub.topic(notificationTopicName).publishMessage({
+          json: notificationData,
+          attributes: {
+            operation: 'success-notification',
+            fileId: eventData.fileId,
+          },
+        });
+      } catch (notifyError) {
+        logger.warn('Failed to publish success notification', {
+          error: notifyError,
+        });
+      }
     }
 
     const result = {

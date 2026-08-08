@@ -364,8 +364,88 @@ describe('fileClassifier', () => {
           operation: 'success-notification',
           fileId: 'file-123',
         }),
+        json: expect.objectContaining({
+          fileName: 'invoice.pdf',
+          category: '請求書',
+          destinationFolderId: 'folder-invoices',
+        }),
       })
     );
+    // Not renamed: the payload must not imply one
+    expect(mockPublishMessage.mock.calls[0][0].json).not.toHaveProperty(
+      'originalFileName'
+    );
+  });
+
+  it('should notify with the renamed file name and the original name', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書 金額: 10000円',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    mockResolveRenamedFileName.mockReturnValue('2024-01-31_請求書.pdf');
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          fileName: '2024-01-31_請求書.pdf',
+          originalFileName: 'invoice.pdf',
+        }),
+      })
+    );
+  });
+
+  it('should notify with the original name when the rename never took effect', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    mockResolveRenamedFileName.mockReturnValue('2024-01-31_請求書.pdf');
+    mockMoveFileInDrive.mockRejectedValue(
+      new Error('insufficient permissions')
+    );
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    const payload = mockPublishMessage.mock.calls[0][0].json;
+    expect(payload.fileName).toBe('invoice.pdf');
+    expect(payload).not.toHaveProperty('originalFileName');
   });
 
   it('should not fail when success notification publishing throws', async () => {

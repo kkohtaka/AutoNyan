@@ -190,6 +190,36 @@ describe('notificationDispatcher', () => {
       );
     });
 
+    it('should carry the renamed and original file names into the email', async () => {
+      const renamedData = {
+        ...successData,
+        fileName: '2024-01-31_請求書.pdf',
+        originalFileName: 'invoice.pdf',
+      };
+      mockParsePubSubEvent.mockReturnValue({ data: renamedData });
+
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            { emailAddress: 'user1@example.com', role: 'reader', type: 'user' },
+          ],
+        },
+      });
+
+      const event = buildEvent(renamedData, {
+        operation: 'success-notification',
+        fileId: 'file-123',
+      });
+      await notificationDispatcher(event);
+
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      const textPart = extractMimePart(decoded, 'text/plain');
+      expect(textPart).toContain('ファイル「2024-01-31_請求書.pdf」');
+      expect(textPart).toContain('元のファイル名: invoice.pdf');
+    });
+
     it('should send emails to Shared Drive organizers and fileOrganizers', async () => {
       mockParsePubSubEvent.mockReturnValue({ data: successData });
 
