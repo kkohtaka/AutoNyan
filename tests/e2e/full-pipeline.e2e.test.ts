@@ -501,14 +501,21 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         }
 
         // The rename rides on the same files.update call as the move, so the
-        // Drive name can only be verified when the best-effort move succeeded.
+        // generated name only takes effect when the best-effort move succeeded;
+        // otherwise the file — and every later stage reporting it — keeps the
+        // uploaded name.
+        const expectedFileName =
+          fileMoved && renamedFileName !== null
+            ? renamedFileName
+            : testFileName;
+
         if (fileMoved) {
           const movedFile = await drive.files.get({
             fileId: testFileId,
             fields: 'name',
             supportsAllDrives: true,
           });
-          expect(movedFile.data.name).toBe(renamedFileName ?? testFileName);
+          expect(movedFile.data.name).toBe(expectedFileName);
 
           logger.log('stage-5', 'Drive file name consistent with Firestore', {
             driveFileName: movedFile.data.name,
@@ -537,7 +544,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           `${process.env.ENVIRONMENT}-notification-dispatcher`,
           outputs.region,
           caseStartTime,
-          { message: 'Sent success notification', fileName: testFileName },
+          { message: 'Sent success notification', fileName: expectedFileName },
           { timeout: 180000, interval: 15000 }
         );
 
