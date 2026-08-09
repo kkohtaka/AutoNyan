@@ -30,10 +30,13 @@ Instead:
   (`.github/workflows/deploy.yml`), which already authenticates with Workload
   Identity Federation and stores no keys. A cloud session starts and follows a
   run rather than running `terraform apply` itself.
-- **Terraform plan review** reads the plan `.github/workflows/terraform-plan.yml`
-  already posts as a pull request comment, rather than running
+- **Terraform plan review** reads the plan from the run
+  `.github/workflows/terraform-plan.yml` already produces, rather than running
   `terraform plan` locally (which needs the GCS state backend and the
-  gitignored `terraform/environments/*.tfvars` / `*.backend.hcl`).
+  gitignored `terraform/environments/*.tfvars` / `*.backend.hcl`). Note that
+  the workflow's pull request comment carries only a status line and a link to
+  the run — the plan text itself stays in the job log, so reading a plan means
+  fetching that log, not the comment.
 
 A consequence: a cloud session never runs `terraform init`, `plan` or `apply`,
 so it never needs `terraform/environments/staging.tfvars` or
@@ -59,12 +62,17 @@ routine development:
 - `registry.terraform.io` is needed only by `terraform init`, which a cloud
   session never runs (deployment and plan review are delegated, per section 1).
 - The gcloud CLI distribution hosts (`packages.cloud.google.com`,
-  `dl.google.com`) are not needed — a cloud session does not install `gcloud`
-  (see `scripts/setup-dev-tools.sh`; it installs only the linters `npm run
-lint` needs).
+  `dl.google.com`) are not needed — a cloud session does not install
+  `gcloud` (see `scripts/setup-dev-tools.sh`; it installs only the linters
+  that `npm run lint` needs).
 - `drive.google.com` is not an API host. `src/shared/email-renderer.ts` uses
   it only to build human-facing links in notification emails; the session
   never fetches it.
+
+The bootstrap in section 3 does reach one host worth recording:
+`scripts/setup-dev-tools.sh` downloads tflint from GitHub Releases, which
+redirects to `objects.githubusercontent.com`. It resolved in a verified cloud
+session; if an environment ever blocks it, installing tflint is what breaks.
 
 If a future change genuinely needs a host outside the Trusted default, record
 it here with the command or dependency that needs it — don't assume the
@@ -73,21 +81,24 @@ Trusted default already covers it.
 ## 3. Bootstrap
 
 ```bash
-npm install                          # also installs the pre-push hook
-sudo ./scripts/setup-dev-tools.sh    # or: npm run setup:dev-tools
-tflint --init --chdir=terraform/
+npm install                     # also installs the pre-push hook
+./scripts/setup-dev-tools.sh    # or: npm run setup:dev-tools
 ```
 
-`npm install` runs automatically at the start of a cloud session via the
-`SessionStart` hook in `.claude/settings.json` — see #396. The other two
-commands install packages system-wide (`apt-get`, `/usr/local/bin`) and are
-not committed-repo-triggered, so they belong in the cloud environment's
-**Setup script** field, which runs once before Claude Code launches and is
-cached in the environment snapshot. Paste:
+A cloud session runs both of these for itself: the `SessionStart` hook in
+`.claude/settings.json` invokes `.claude/hooks/session-start-install.sh`,
+which runs them whenever `CLAUDE_CODE_REMOTE` is set — see #396. Nothing needs
+to go in the cloud environment's **Setup script** field; putting
+`setup-dev-tools.sh` there as well only repeats what the hook already does.
 
-```bash
-sudo ./scripts/setup-dev-tools.sh && tflint --init --chdir=terraform/
-```
+On an ephemeral machine that is not a cloud session, run the two commands by
+hand. The second installs system-wide (`apt-get`, `/usr/local/bin`), so it
+needs root: prefix it with `sudo` unless you are already root, as a cloud
+session is.
+
+Do not add a `tflint --init` step: with the `--chdir=terraform/` that
+`npm run lint` uses, it fetches nothing. `scripts/setup-dev-tools.sh` records
+why.
 
 ## 4. Verification checklist
 
@@ -116,7 +127,8 @@ Run in order and stop at the first failure.
 - [ ] The `deploy-staging` skill's cloud-session path starts a staging deploy
       via `workflow_dispatch` and reports the run's outcome
 - [ ] The `terraform-plan-review` skill's cloud-session path reviews the
-      staging plan from a pull request's plan comment
+      staging plan from the plan workflow run's job log (the pull request
+      comment only links to the run — see section 1)
 
 The last two checklist items depend on work that has not landed yet — see
 #399, #400 and #401. Until then, those skills' cloud-session paths are not
@@ -125,6 +137,12 @@ plan or deploy.
 
 ## 5. What a cloud session still cannot do
 
+- **Anything that shells out to `gh` or `gcloud`.** Neither is installed, and
+  `scripts/setup-dev-tools.sh` deliberately does not add them — the access
+  model in section 1 removes the need for `gcloud`, and GitHub work goes
+  through the GitHub MCP tools instead. The APM-managed skills (`commit`,
+  `create-pr`, `create-issue`, `debug-ci`) still assume `gh`, so they are
+  unavailable here until that changes upstream; see #398 and the note in #395.
 - **`npm run test:e2e` / `npm run test:e2e:check-drive`.** Both need
   `gcloud auth login --enable-gdrive-access`, an interactive browser flow that
   cannot run headless.
