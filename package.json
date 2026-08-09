@@ -32,6 +32,7 @@
     "format:terraform": "terraform fmt -recursive terraform/",
     "format:sh": "shfmt -w scripts/*.sh",
     "prepare": "./scripts/setup-git-hooks.sh",
+    "setup:dev-tools": "./scripts/setup-dev-tools.sh",
     "setup:git-hooks": "./scripts/setup-git-hooks.sh",
     "setup:terraform-backend": "./scripts/setup-backend.sh",
     "setup:terraform-variables": "./scripts/setup-terraform-variables.sh",
@@ -39,8 +40,8 @@
     "setup:share-drive-folders": "tsx scripts/share-drive-folders.ts"
   },
   "workspaces": [
-    "src/functions/*",
-    "src/shared"
+    "src/shared",
+    "src/functions/*"
   ],
   "devDependencies": {
     "@eslint/js": "^10.0.0",
