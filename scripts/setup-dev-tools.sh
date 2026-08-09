@@ -51,5 +51,7 @@ shfmt --version
 tflint --version | head -1
 terraform version | head -1
 
-echo ""
-echo "Next: run 'tflint --init --chdir=terraform/' to fetch tflint plugins."
+# Deliberately no `tflint --init` here: `npm run lint` invokes tflint with
+# --chdir=terraform/, where there is no .tflint.hcl to read plugin requirements
+# from, so an init would fetch nothing. It would also fail outright in a Claude
+# Code on the web session, whose proxy blocks api.github.com.
