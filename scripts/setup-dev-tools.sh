@@ -13,6 +13,10 @@ set -euo pipefail
 TFLINT_VERSION=${TFLINT_VERSION:-"v0.50.3"}
 TERRAFORM_VERSION=${TERRAFORM_VERSION:-"1.8.5"}
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+TFLINT_CONFIG="${SCRIPT_DIR}/../terraform/.tflint.hcl"
+TFLINT_PLUGIN_ROOT=${TFLINT_PLUGIN_DIR:-"${HOME}/.tflint.d/plugins"}
+
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
@@ -43,15 +47,40 @@ else
 	chmod +x /usr/local/bin/terraform
 fi
 
+# Plugins are unpacked straight from their GitHub release assets instead of via
+# `tflint --init`, whose installer resolves releases through api.github.com — a
+# host the Claude Code on the web proxy blocks, while release *asset* downloads
+# (used for tflint itself above) succeed. Versions are read from
+# terraform/.tflint.hcl so the pins live in exactly one place.
+#
+# The plugins land under $HOME, so lint must later run as the same user that
+# ran this script; pass TFLINT_PLUGIN_DIR to install somewhere shared instead.
+echo "  - tflint plugins"
+while read -r plugin_name plugin_version; do
+	plugin_dir="${TFLINT_PLUGIN_ROOT}/github.com/terraform-linters/tflint-ruleset-${plugin_name}/${plugin_version}"
+	plugin_bin="${plugin_dir}/tflint-ruleset-${plugin_name}"
+	if [ -x "${plugin_bin}" ]; then
+		echo "      ${plugin_name} ${plugin_version} already installed"
+		continue
+	fi
+	echo "      ${plugin_name} ${plugin_version}"
+	curl -fsSL -o "${TMP_DIR}/ruleset-${plugin_name}.zip" \
+		"https://github.com/terraform-linters/tflint-ruleset-${plugin_name}/releases/download/v${plugin_version}/tflint-ruleset-${plugin_name}_linux_amd64.zip"
+	mkdir -p "${plugin_dir}"
+	unzip -o -q "${TMP_DIR}/ruleset-${plugin_name}.zip" -d "${plugin_dir}"
+	chmod +x "${plugin_bin}"
+done < <(awk '
+	/^plugin "/ { name = $2; gsub(/"/, "", name); version = ""; next }
+	name != "" && $1 == "version" { version = $3; gsub(/"/, "", version); next }
+	name != "" && /^}/ { if (version != "") print name, version; name = "" }
+' "${TFLINT_CONFIG}")
+
 echo ""
 echo "Installed versions:"
 shellcheck --version | grep version: | tail -1
 yamllint --version
 shfmt --version
-tflint --version | head -1
 terraform version | head -1
-
-# Deliberately no `tflint --init` here: `npm run lint` invokes tflint with
-# --chdir=terraform/, where there is no .tflint.hcl to read plugin requirements
-# from, so an init would fetch nothing. It would also fail outright in a Claude
-# Code on the web session, whose proxy blocks api.github.com.
+# --chdir makes tflint read terraform/.tflint.hcl, so the rulesets it lists
+# confirm the plugins above are actually loadable.
+tflint --chdir="${SCRIPT_DIR}/../terraform" --version

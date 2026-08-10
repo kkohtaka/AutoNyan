@@ -168,6 +168,13 @@ jobs:
       - name: Run shfmt
         run: shfmt -d scripts/*.sh
 
+      # --chdir must match lint:terraform, or tflint reads a different directory
+      # than the one holding .tflint.hcl and installs nothing.
+      - name: Initialize TFLint plugins
+        run: tflint --chdir=terraform/ --init
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run Terraform linter
         run: npm run lint:terraform
 
