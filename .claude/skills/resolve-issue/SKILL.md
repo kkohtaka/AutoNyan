@@ -3,7 +3,7 @@ name: resolve-issue
 description: Turn a GitHub issue into a ready-to-merge change by reading the issue, confirming the approach, creating a correctly named branch, and delegating implementation, quality checks, commits, and PR creation to sibling skills
 argument-hint: "<issue-number>"
 disable-model-invocation: false
-allowed-tools: Bash(git *) Bash(gh *)
+allowed-tools: Bash(git *) Bash(gh *) mcp__github
 ---
 
 # Resolve Issue
@@ -14,7 +14,18 @@ implementation, quality checks, committing, and PR creation — is delegated to
 the sibling skills `lint-fix`, `test-fix`, `quality-gate`, `commit`, and
 `create-pr` (CONVENTIONS.md §4.4).
 
+Reading the issue works in both environments (CONVENTIONS.md §4.8): the
+devcontainer has `gh`, a cloud session does not and reads GitHub through the
+MCP tools instead. Everything between Step 2 and Step 5 needs only `git` and
+sibling skills, so it is environment-independent.
+
 ## Context
+
+**GitHub access mode:**
+
+```
+!`command -v gh >/dev/null 2>&1 && echo "gh CLI available" || echo "gh CLI unavailable — use the GitHub MCP tools"`
+```
 
 **Current branch:**
 
@@ -39,14 +50,21 @@ Follow these steps in order. Stop and ask the user if anything is unclear.
 If `$ARGUMENTS` is empty, stop and ask the user for the issue number before
 proceeding.
 
-Fetch the issue:
+Fetch the issue by the route the Context reported:
 
-```bash
-gh issue view <issue-number>
-```
+- **`gh` available** — the devcontainer:
 
-Read the full output: title, body, labels, and any linked issues. Understand
-what the issue asks for before moving on.
+  ```bash
+  gh issue view <issue-number>
+  ```
+
+- **`gh` unavailable** — a cloud session. Read the issue and its comments for
+  `kkohtaka/AutoNyan` with the GitHub MCP tools. If neither `gh` nor those
+  tools are available, stop and say so rather than guessing at the issue's
+  contents from its number.
+
+Read the whole issue either way: title, body, labels, and any linked issues.
+Understand what the issue asks for before moving on.
 
 ### Step 2 — Confirm the problem and approach
 
@@ -116,8 +134,16 @@ steps here.
 
 Wait for explicit approval.
 
-Once approved, delegate PR creation to the `create-pr` skill. Ensure the PR
-body includes a `## Related issue` section near the top with:
+Once approved, delegate PR creation to the `create-pr` skill.
+
+`create-pr` is APM-managed and still shells out to `gh`, so in a cloud session
+it cannot run. There, push with `git` and open the pull request with the GitHub
+MCP tools directly, applying the same body requirements as below. Do not edit
+`create-pr` to fix this — it is overwritten by the next `apm install`; the fix
+belongs in the `kkohtaka/agent-skills` package (see the APM-managed skills note
+in `CLAUDE.md`).
+
+Ensure the PR body includes a `## Related issue` section near the top with:
 
 ```
 Closes #<issue-number>

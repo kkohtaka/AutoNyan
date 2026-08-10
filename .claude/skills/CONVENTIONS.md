@@ -118,7 +118,31 @@ output. Never present an unverified or failed step as done.
 Design steps so the skill can be re-run after a mid-way failure without
 corrupting state (check-before-create, detect already-committed work, etc.).
 
-### 4.8 Language
+### 4.8 Dual-environment skills
+
+A skill runs both in the devcontainer and in a Claude Code on the web cloud
+session, and those environments do not offer the same tools: a cloud session
+has no `gh`, no `gcloud` and no Terraform state access, and reaches GitHub and
+Google Cloud through MCP tools instead (`REMOTE_SESSION_SETUP.md` explains
+why). When a skill depends on any of those, give it both routes rather than
+letting it fail in one environment:
+
+- **Probe, don't assume.** Detect the environment in `## Context` with a
+  read-only check — `command -v gh` and friends — and let the step branch on
+  what it reported. Never branch on a guess about where the skill is running.
+- **Guard `## Context` commands** that shell out to a tool which may be
+  missing, so the skill loads with a usable message instead of a command error.
+- **Keep the judgement in one place.** Only the way data is fetched differs;
+  the criteria a skill applies to that data must not be duplicated per route,
+  or the two routes drift apart.
+- **Say which route needs what**, so a reader is not left wondering why there
+  are two, and fail loudly when neither route is available (§4.6).
+- **APM-managed skills are not fixable here** (`commit`, `create-pr`,
+  `create-issue`, `debug-ci` all assume `gh`). A repository-owned skill that
+  delegates to one of them states what to do instead in a cloud session and
+  points at the `kkohtaka/agent-skills` package, rather than editing it.
+
+### 4.9 Language
 
 Skill Markdown (`SKILL.md`) is written in **English**, consistent with
 `CLAUDE.md`. Artifacts a skill produces (issues, PRs, commits) follow the
@@ -145,4 +169,6 @@ Before considering a skill done, verify:
 - [ ] `disable-model-invocation` set per §4.2.
 - [ ] Confirmation gates present for any outward/irreversible action (§4.3).
 - [ ] No duplicated behavior; delegations point to sibling skills (§4.4).
+- [ ] Tools that a cloud session lacks (`gh`, `gcloud`, local Terraform state)
+      are probed for and have a second route (§4.8).
 - [ ] Verified by manual invocation, with reproduction steps recorded.
