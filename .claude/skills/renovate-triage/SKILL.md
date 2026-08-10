@@ -2,7 +2,7 @@
 name: renovate-triage
 description: Triage open Renovate dependency PRs and the Dependency Dashboard — summarize each update, assess risk (dev vs runtime, major vs minor, CI status), recommend an action, and merge only approved PRs after explicit confirmation
 disable-model-invocation: false
-allowed-tools: Bash(gh *)
+allowed-tools: Bash(gh *) mcp__github
 ---
 
 # Renovate Triage
@@ -14,16 +14,26 @@ gated behind explicit user confirmation. CI-failure analysis is delegated to
 not write code to satisfy an update, force-merge without CI, or triage
 non-Renovate PRs.
 
+Every GitHub read and write below has two routes (CONVENTIONS.md §4.8): `gh` in
+the devcontainer, the GitHub MCP tools in a cloud session, which has no `gh`.
+The triage judgement is identical either way — only the way the data is fetched
+differs.
+
 ## Context
+
+**GitHub access mode:**
+```
+!`command -v gh >/dev/null 2>&1 && echo "gh CLI available" || echo "gh CLI unavailable — use the GitHub MCP tools"`
+```
 
 **Open pull requests (identify the Renovate-authored ones):**
 ```
-!`gh pr list --state open --json number,title,author,labels,headRefName,isDraft --limit 50`
+!`command -v gh >/dev/null 2>&1 && gh pr list --state open --json number,title,author,labels,headRefName,isDraft --limit 50 || echo "unavailable here — list open pull requests in Step 1 instead"`
 ```
 
 **Dependency Dashboard issue, if present:**
 ```
-!`gh issue list --state open --search "Dependency Dashboard in:title" --json number,title --limit 5`
+!`command -v gh >/dev/null 2>&1 && gh issue list --state open --search "Dependency Dashboard in:title" --json number,title --limit 5 || echo "unavailable here — search for it in Step 1 instead"`
 ```
 
 ## Your Task
@@ -32,13 +42,18 @@ Follow these steps in order. Stop and ask the user if anything is unclear.
 
 ### Step 1 — Collect the Renovate PRs
 
-From the Context, identify the open Renovate PRs (authored by the Renovate GitHub
-App bot, typically on `renovate/*` branches and labelled `dependencies`).
-Optionally read the Dependency Dashboard issue for the full backlog:
+Identify the open Renovate PRs (authored by the Renovate GitHub App bot,
+typically on `renovate/*` branches and labelled `dependencies`). Optionally read
+the Dependency Dashboard issue for the full backlog:
 
 ```bash
 gh issue view <dashboard-number>
 ```
+
+If the Context reported no `gh`, list the open pull requests and find the
+Dependency Dashboard issue (title search, state open) for `kkohtaka/AutoNyan`
+with the GitHub MCP tools instead. If neither route is available, stop and say
+so — do not triage from an assumed PR list.
 
 ### Step 2 — Summarize and check CI per PR
 
@@ -48,10 +63,17 @@ For each Renovate PR, summarize the dependency change and its CI status:
 gh pr view <number> --json title,body,labels,statusCheckRollup,files
 ```
 
+Without `gh`, read the same four things — the PR body, its labels, its changed
+files, and its check runs — with the GitHub MCP tools. The check runs are a
+separate call there; do not report CI status from the PR record alone.
+
 - Name the dependency, the version delta, and whether it is a **dev** or
   **runtime** dependency.
 - Report the CI check status. If a check **failed**, delegate the failure analysis
   to `debug-ci` rather than re-triaging logs here (CONVENTIONS.md §4.4).
+  `debug-ci` is APM-managed and shells out to `gh`, so in a cloud session it is
+  unavailable: report the failing check and its run link, and say the log
+  triage needs the devcontainer, rather than re-implementing `debug-ci` here.
 
 ### Step 3 — Group by risk and recommend
 
@@ -72,6 +94,10 @@ PRs using the project's merge method:
 ```bash
 gh pr merge <number> --squash
 ```
+
+Without `gh`, merge through the GitHub MCP tools, squash method, one approved PR
+at a time. The confirmation gate above applies unchanged — the route does not
+make the merge any less irreversible.
 
 Report the result of each merge honestly (CONVENTIONS.md §4.6), including any that
 failed or were skipped.
