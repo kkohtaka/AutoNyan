@@ -41,8 +41,8 @@ Instead:
 A consequence: a cloud session never runs `terraform init`, `plan` or `apply`,
 so it never needs `terraform/environments/staging.tfvars` or
 `staging.backend.hcl`. The `lint:terraform` script only needs the `terraform`
-and `tflint` binaries — `terraform fmt` and `tflint` read Terraform source,
-not those gitignored files.
+and `tflint` binaries plus tflint's ruleset plugins (section 3) — `terraform
+fmt` and `tflint` read Terraform source, not those gitignored files.
 
 This access model is why several skills behave differently depending on the
 environment — see each skill's own notes and the sub-issues of #395 for the
@@ -70,9 +70,15 @@ routine development:
   never fetches it.
 
 The bootstrap in section 3 does reach one host worth recording:
-`scripts/setup-dev-tools.sh` downloads tflint from GitHub Releases, which
-redirects to `objects.githubusercontent.com`. It resolved in a verified cloud
-session; if an environment ever blocks it, installing tflint is what breaks.
+`scripts/setup-dev-tools.sh` downloads tflint **and its ruleset plugins** from
+GitHub Releases, which redirects to `objects.githubusercontent.com`. It
+resolved in a verified cloud session; if an environment ever blocks it,
+installing tflint is what breaks.
+
+`api.github.com` is **not** needed and is not expected to work — the proxy
+blocks it. That is why the script unpacks the ruleset plugins from their
+release assets rather than running `tflint --init`, whose installer resolves
+releases through that API.
 
 If a future change genuinely needs a host outside the Trusted default, record
 it here with the command or dependency that needs it — don't assume the
@@ -96,9 +102,14 @@ hand. The second installs system-wide (`apt-get`, `/usr/local/bin`), so it
 needs root: prefix it with `sudo` unless you are already root, as a cloud
 session is.
 
-Do not add a `tflint --init` step: with the `--chdir=terraform/` that
-`npm run lint` uses, it fetches nothing. `scripts/setup-dev-tools.sh` records
-why.
+`setup-dev-tools.sh` also installs the tflint ruleset plugins that
+`terraform/.tflint.hcl` pins, so `npm run lint:terraform` enforces the full
+rule set here exactly as it does in CI. Do not replace that with
+`tflint --init`, which cannot work behind the proxy — the script records why.
+
+The plugins install under `$HOME`, so run the script as the user that will
+later run `npm run lint` (in a cloud session both are root), or set
+`TFLINT_PLUGIN_DIR` to a shared location for both.
 
 ## 4. Verification checklist
 
