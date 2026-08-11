@@ -155,6 +155,9 @@ jobs:
         uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: v0.50.3
+          # Must track the --chdir used by the lint steps below; the action's
+          # default points at a repository-root .tflint.hcl that no longer exists.
+          tflint_config_path: terraform/.tflint.hcl
 
       - name: Run YAML linter
         run: yamllint .github/ -c .yamllint.yml

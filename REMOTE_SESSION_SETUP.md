@@ -75,10 +75,12 @@ GitHub Releases, which redirects to `objects.githubusercontent.com`. It
 resolved in a verified cloud session; if an environment ever blocks it,
 installing tflint is what breaks.
 
-`api.github.com` is **not** needed and is not expected to work — the proxy
-blocks it. That is why the script unpacks the ruleset plugins from their
-release assets rather than running `tflint --init`, whose installer resolves
-releases through that API.
+`api.github.com` is reachable, but a session's GitHub API access is scoped to the
+repositories attached to that session — paths under `repos/{owner}/{repo}` for any
+other repository answer 403. That is why the script unpacks the ruleset plugins
+from their release assets, which carry no such scope, rather than running
+`tflint --init`, whose installer resolves releases through that API. No allowlist
+change lifts this: the constraint is the API scope, not the host.
 
 If a future change genuinely needs a host outside the Trusted default, record
 it here with the command or dependency that needs it — don't assume the
