@@ -44,16 +44,23 @@ Follow these steps in order. Stop and ask the user if anything is unclear.
 
 Identify the open Renovate PRs (authored by the Renovate GitHub App bot,
 typically on `renovate/*` branches and labelled `dependencies`). Optionally read
-the Dependency Dashboard issue for the full backlog:
+the Dependency Dashboard issue for the full backlog, by the route the Context
+reported:
 
-```bash
-gh issue view <dashboard-number>
-```
+- **`gh` available** — the devcontainer:
 
-If the Context reported no `gh`, list the open pull requests and find the
-Dependency Dashboard issue (title search, state open) for `kkohtaka/AutoNyan`
-with the GitHub MCP tools instead. If neither route is available, stop and say
-so — do not triage from an assumed PR list.
+  ```bash
+  gh issue view <dashboard-number>
+  ```
+
+- **`gh` unavailable** — a cloud session. List the open pull requests and find
+  the Dependency Dashboard issue for `kkohtaka/AutoNyan` with the GitHub MCP
+  tools. Their issue search is semantic and takes no state filter, so it
+  returns closed issues too — pick the open one from the results rather than
+  the first match.
+
+If neither route is available, stop and say so — do not triage from an assumed
+PR list.
 
 ### Step 2 — Summarize and check CI per PR
 
@@ -63,9 +70,12 @@ For each Renovate PR, summarize the dependency change and its CI status:
 gh pr view <number> --json title,body,labels,statusCheckRollup,files
 ```
 
-Without `gh`, read the same four things — the PR body, its labels, its changed
-files, and its check runs — with the GitHub MCP tools. The check runs are a
-separate call there; do not report CI status from the PR record alone.
+Without `gh`, read the same information with the GitHub MCP tools: the PR body,
+its labels, its changed files, and its CI state. CI is **two** separate calls
+there — the check runs **and** the commit statuses. `terraform/plan/staging` is
+reported as a commit status, not a check run, so a check-runs-only read misses a
+required context and wrongly looks green. Do not report CI status from the PR
+record alone.
 
 - Name the dependency, the version delta, and whether it is a **dev** or
   **runtime** dependency.
