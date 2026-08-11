@@ -38,6 +38,9 @@ allowed-tools: Bash(git *) Bash(gh *)  # see §4.1
 - `allowed-tools` is a space-separated list. Scope `Bash` with a prefix matcher
   (`Bash(npm *)`, `Bash(git *)`, `Bash(gh *)`, `Bash(terraform *)`,
   `Bash(gcloud *)`). Never use a bare unscoped `Bash`.
+- A grant may also name an MCP server (`mcp__github`), which allows every tool
+  that server exposes. Dual-environment skills (§4.8) need one per server they
+  reach.
 
 ## 3. Body structure
 
@@ -122,10 +125,12 @@ corrupting state (check-before-create, detect already-committed work, etc.).
 
 A skill runs both in the devcontainer and in a Claude Code on the web cloud
 session, and those environments do not offer the same tools: a cloud session
-has no `gh`, no `gcloud` and no Terraform state access, and reaches GitHub and
-Google Cloud through MCP tools instead (`REMOTE_SESSION_SETUP.md` explains
-why). When a skill depends on any of those, give it both routes rather than
-letting it fail in one environment:
+has no `gh`, no `gcloud` and no Terraform state access, and reaches GitHub
+through the GitHub MCP tools instead (`REMOTE_SESSION_SETUP.md` explains why).
+Google Cloud reads are intended to travel the same way through a managed
+connector, but that path is not yet verified — `REMOTE_SESSION_SETUP.md` §4
+tracks it. When a skill depends on any of those, give it both routes rather
+than letting it fail in one environment:
 
 - **Probe, don't assume.** Detect the environment in `## Context` with a
   read-only check — `command -v gh` and friends — and let the step branch on
