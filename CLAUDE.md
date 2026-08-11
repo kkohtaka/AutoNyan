@@ -524,9 +524,14 @@ The exact detection rules live in the workflows' change-detection steps — Test
 The ruleset requires two contexts, each reported by a distinct workflow:
 
 - **`test`** — reported by the aggregation `test` job in `.github/workflows/test.yml`. It runs with `if: always()` and reports success even when the lint/test matrix was skipped for a code-unrelated PR.
-- **`terraform/plan/staging`** — reported by the "Set final status" step in `.github/workflows/terraform-plan.yml`. That workflow self-skips the actual plan for no-infrastructure PRs but still posts `success`. For PRs it is dispatched by the `trigger-terraform-plan` job in `test.yml`, which therefore must still fire when `test` succeeded even if the matrix was skipped.
+- **`terraform/plan/staging`** — reported by the `report-plan-status` job in `.github/workflows/terraform-plan.yml`. That workflow self-skips the actual plan for no-infrastructure PRs but still posts `success`. For PRs it is dispatched by the `trigger-terraform-plan` job in `test.yml`, which therefore must still fire when `test` succeeded even if the matrix was skipped.
 
-This was the regression in #344: a skip cascade left `terraform/plan/staging` unreported on code-unrelated PRs. When changing the skip/gating graph, preserve this invariant for both contexts.
+**Two distinct ways the invariant breaks — check a change against both:**
+
+- **Skipping.** A conditional cascades a skip into the job that reports the check, so nothing posts it. This was the regression in #344: a skip cascade left `terraform/plan/staging` unreported on code-unrelated PRs. Guard with `if: always()` plus an explicit conclusion, not with `needs` alone.
+- **Eviction.** A concurrency group holds exactly one *pending* entry: queueing a third run cancels the second, and a cancelled run never reaches its reporting step. This was #413, observed when a Renovate batch dispatched several staging plans within the same minute. `cancel-in-progress: false` does not help — it protects a *running* entry, and cannot express a queue deeper than one. **The reporter for a required check must therefore sit outside any concurrency group its target job belongs to.** `terraform-plan.yml` does this by declaring `terraform-staging` per job rather than per workflow, so eviction cancels only the plan job while `report-plan-status` survives to post a terminal state.
+
+Serialization itself is not the problem and must stay: plan and apply share one Terraform state lock in GCS, so the `terraform-staging` group cannot be keyed per pull request. What must never be inside the group is the *reporting*.
 
 ### Debugging CI/CD Workflows
 

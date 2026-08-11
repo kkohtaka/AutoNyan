@@ -37,16 +37,12 @@ permissions:
   statuses: write
   actions: write
 
-concurrency:
-  # Use the same concurrency group as staging deploy to ensure mutual exclusion.
-  # Plan and Apply both acquire the same Terraform state lock in GCS,
-  # so only one operation (plan OR apply) can run at a time.
-  # The composite key also ensures environment-level deployment serialization.
-  group: terraform-staging
-  cancel-in-progress: false
-
 jobs:
-  terraform-plan:
+  # Resolves the target ref outside the terraform-staging concurrency group, so
+  # the reporter below still knows which commit to report on when the plan job
+  # is evicted before it ever runs. An evicted job produces no outputs, so
+  # nothing the reporter depends on may live inside the group.
+  pr-details:
     # Security: the issue_comment path checks out untrusted PR HEAD and runs it
     # with privileged GCP (WIF) credentials. Restrict the `/terraform plan`
     # command to the repository OWNER only. COLLABORATOR/MEMBER are intentionally
@@ -59,11 +55,12 @@ jobs:
        github.event.comment.author_association == 'OWNER') ||
       (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment:
-      name: staging
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
+    outputs:
+      ref: ${{ steps.pr.outputs.ref }}
+      sha: ${{ steps.pr.outputs.sha }}
+      repo: ${{ steps.pr.outputs.repo }}
+      # Empty string for a master push or a manual dispatch with no PR.
+      number: ${{ steps.pr.outputs.number }}
 
     steps:
       - name: Get PR details
@@ -71,46 +68,73 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
+            let details;
             if (context.eventName === 'issue_comment') {
               const { data: pr } = await github.rest.pulls.get({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: context.issue.number
               });
-              return {
+              details = {
                 ref: pr.head.ref,
                 sha: pr.head.sha,
                 repo: pr.head.repo.full_name,
-                number: context.issue.number
+                number: String(context.issue.number)
               };
-            } else if (context.eventName === 'workflow_dispatch') {
+            } else {
               const inputs = context.payload.inputs;
               if (inputs.pr_number) {
                 // Auto-triggered from Test workflow with PR info
-                return {
+                details = {
                   ref: inputs.pr_ref,
                   sha: inputs.pr_sha,
                   repo: context.repo.full_name,
-                  number: parseInt(inputs.pr_number)
+                  number: String(parseInt(inputs.pr_number))
                 };
               } else {
                 // Manual dispatch or push to master
-                return {
+                details = {
                   ref: context.ref.replace('refs/heads/', ''),
                   sha: context.sha,
                   repo: context.repo.full_name,
-                  number: null
+                  number: ''
                 };
               }
             }
 
+            for (const [key, value] of Object.entries(details)) {
+              core.setOutput(key, value);
+            }
+
+  terraform-plan:
+    needs: [pr-details]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+    concurrency:
+      # Use the same concurrency group as staging deploy to ensure mutual exclusion.
+      # Plan and Apply both acquire the same Terraform state lock in GCS,
+      # so only one operation (plan OR apply) can run at a time.
+      #
+      # Declared per job, not per workflow, so that eviction from this group
+      # cancels only this job. The reporter below stays outside the group and
+      # still posts a terminal required status. See the CI invariant in CLAUDE.md.
+      group: terraform-staging
+      cancel-in-progress: false
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    outputs:
+      plan_exit_code: ${{ steps.plan.outputs.plan_exit_code || steps.skip.outputs.plan_exit_code }}
+      needs_terraform: ${{ steps.detect.outputs.needs_terraform }}
+
+    steps:
       - name: Comment acknowledgment for manual trigger
         if: github.event_name == 'issue_comment'
         uses: actions/github-script@v8
         with:
           script: |
-            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
-            const issueNumber = prDetails.number;
+            const issueNumber = Number('${{ needs.pr-details.outputs.number }}');
 
             await github.rest.issues.createComment({
               issue_number: issueNumber,
@@ -127,11 +151,10 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              sha: prDetails.sha,
+              sha: '${{ needs.pr-details.outputs.sha }}',
               state: 'pending',
               context: 'terraform/plan/staging',
               description: 'Terraform plan (staging) is running...',
@@ -142,7 +165,7 @@ jobs:
       - name: Checkout PR code
         uses: actions/checkout@v6
         with:
-          ref: ${{ fromJson(steps.pr.outputs.result).sha }}
+          ref: ${{ needs.pr-details.outputs.sha }}
           fetch-depth: 0
 
       - name: Detect if Terraform plan is needed
@@ -153,7 +176,7 @@ jobs:
           if [ -n "${{ inputs.pr_number }}" ]; then
             # This is a PR - fetch master and compare
             git fetch origin master:master
-            CHANGED_FILES=$(git diff --name-only master...${{ fromJson(steps.pr.outputs.result).sha }})
+            CHANGED_FILES=$(git diff --name-only master...${{ needs.pr-details.outputs.sha }})
           else
             # This is a push to master - check the commit changes
             if git rev-parse HEAD^ >/dev/null 2>&1; then
@@ -261,7 +284,7 @@ jobs:
           echo "No Terraform plan is required." >> plan_output.txt
 
       - name: Comment PR with plan results
-        if: steps.pr.outputs.result && fromJson(steps.pr.outputs.result).number != null
+        if: needs.pr-details.outputs.number != ''
         uses: actions/github-script@v8
         with:
           script: |
@@ -276,8 +299,7 @@ jobs:
               ? `*Triggered by comment from @${{ github.event.comment.user.login }}*`
               : `*Auto-triggered after Test workflow success*`;
 
-            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
-            const issueNumber = prDetails.number;
+            const issueNumber = Number('${{ needs.pr-details.outputs.number }}');
 
             const workflowUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
@@ -299,41 +321,6 @@ jobs:
               repo: context.repo.repo,
               body: body
             });
-
-      # Posts the required `terraform/plan/staging` check (success even when the
-      # plan is skipped for a no-infrastructure PR). `if: always()` keeps this
-      # terminal status guaranteed. See the CI invariant in CLAUDE.md.
-      - name: Set final status
-        if: always()
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
-            const exitCode = '${{ steps.plan.outputs.plan_exit_code || steps.skip.outputs.plan_exit_code }}';
-            const wasSkipped = '${{ steps.detect.outputs.needs_terraform }}' === 'false';
-            const success = exitCode === '0';
-
-            const state = success ? 'success' : 'failure';
-            const description = wasSkipped
-              ? 'Terraform plan (staging) skipped (no infrastructure changes)'
-              : (success
-                ? 'Terraform plan (staging) completed successfully'
-                : 'Terraform plan (staging) failed');
-
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: prDetails.sha,
-              state: state,
-              context: 'terraform/plan/staging',
-              description: description,
-              target_url: `${context.serverUrl}/${context.repo.owner}/` +
-                          `${context.repo.repo}/actions/runs/${context.runId}`
-            });
-
-            if (!success) {
-              core.setFailed('Terraform plan (staging) failed');
-            }
 
       - name: Cleanup Terraform lock on failure
         if: failure() && steps.detect.outputs.needs_terraform == 'true' && steps.plan.conclusion == 'failure'
@@ -371,12 +358,11 @@ jobs:
         if: |
           (steps.plan.outputs.plan_exit_code == '0' || steps.skip.outputs.plan_exit_code == '0') &&
           github.event_name == 'workflow_dispatch' &&
-          fromJson(steps.pr.outputs.result).ref == 'master'
+          needs.pr-details.outputs.ref == 'master'
         uses: actions/github-script@v8
         with:
           script: |
-            const prDetails = JSON.parse('${{ steps.pr.outputs.result }}');
-            const deployRef = prDetails.ref;
+            const deployRef = '${{ needs.pr-details.outputs.ref }}';
 
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
@@ -390,3 +376,57 @@ jobs:
             });
 
             console.log(`Triggered Staging Deploy workflow for ref ${deployRef} to staging environment`);
+
+  # Sole reporter of the required `terraform/plan/staging` check, deliberately
+  # outside the terraform-staging concurrency group. That group holds only one
+  # pending entry, so a queued plan is cancelled the moment the next one
+  # queues; a reporter inside the group would be cancelled with it and the
+  # required check would stay pending forever, leaving the PR BLOCKED with no
+  # failing job to point at. `if: always()` covers every plan conclusion,
+  # cancellation included. See the CI invariant in CLAUDE.md.
+  report-plan-status:
+    needs: [pr-details, terraform-plan]
+    if: always() && needs.pr-details.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set final status
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const planResult = '${{ needs.terraform-plan.result }}';
+            const exitCode = '${{ needs.terraform-plan.outputs.plan_exit_code }}';
+            const wasSkipped = '${{ needs.terraform-plan.outputs.needs_terraform }}' === 'false';
+            const success = planResult === 'success' && exitCode === '0';
+
+            // `error` rather than `failure` when the plan never ran: the plan
+            // says nothing about the commit, and the distinction tells a reader
+            // to re-dispatch rather than to look for a broken plan.
+            const ranAtAll = planResult === 'success' || planResult === 'failure';
+            const state = success ? 'success' : (ranAtAll ? 'failure' : 'error');
+
+            let description;
+            if (success) {
+              description = wasSkipped
+                ? 'Terraform plan (staging) skipped (no infrastructure changes)'
+                : 'Terraform plan (staging) completed successfully';
+            } else if (ranAtAll) {
+              description = 'Terraform plan (staging) failed';
+            } else {
+              description = `Terraform plan (staging) did not run (${planResult}) - re-run with /terraform plan`;
+            }
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ needs.pr-details.outputs.sha }}',
+              state: state,
+              context: 'terraform/plan/staging',
+              description: description,
+              target_url: `${context.serverUrl}/${context.repo.owner}/` +
+                          `${context.repo.repo}/actions/runs/${context.runId}`
+            });
+
+            if (!success) {
+              core.setFailed(description);
+            }
