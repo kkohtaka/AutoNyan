@@ -40,8 +40,12 @@ the point of this skill and is applied identically either way.
 **Deployed Cloud Functions (gcloud route only — to resolve the target name and region):**
 
 ```
-!`command -v gcloud >/dev/null 2>&1 && gcloud functions list --format="table(name,state,environment,region)" 2>/dev/null || echo "n/a — resolve the function name from its naming convention (see Step 1)"`
+!`command -v gcloud >/dev/null 2>&1 && gcloud functions list --format="table(name.segment(5):label=NAME,state,environment,name.segment(3):label=REGION)" 2>/dev/null || echo "n/a — resolve the function name from its naming convention (see Step 1)"`
 ```
+
+Both columns are segments of the resource name (`projects/P/locations/REGION/functions/NAME`)
+because the API returns no separate `region` field: projecting `region` directly
+prints an empty column, and Step 1 would then have no region to take.
 
 **Terraform region default (the module default only — an environment may override it; see Step 1):**
 
@@ -89,7 +93,11 @@ From `$ARGUMENTS`, determine the function name, its region, and the environment.
 Functions are named `{environment}-{stage}` (e.g. `staging-drive-scanner`).
 
 On the `gcloud` route, use the function list in Context to narrow it down and
-take the region it reports, which is the deployed region.
+take the region it reports, which is where the function is actually deployed.
+Never fall back to the Terraform default in Context for this: an environment
+overrides it, and the deployed region is routinely not the default. If the list
+is empty or the target is ambiguous, confirm with the user before reading logs
+rather than guessing a region.
 
 On the MCP route there is no function list. Derive the name from the convention
 above and the workspace directories under `src/functions/`. The region needs the
@@ -120,10 +128,11 @@ indistinguishable from a healthy function.
   ```
 
   Keep the parentheses and the explicit `AND`. Adjacent terms are an implicit
-  `AND` and the two groups mix `AND` with `OR`, so without them the result
-  depends on operator precedence: read the wrong way, the query matches every
-  entry in the region and the triage reports another function's errors as this
-  one's.
+  `AND` and the two groups mix `AND` with `OR`. Checked against the API, a
+  trailing implicit `AND` does apply across a whole `OR`, so the explicit form
+  returns the same entries — the parentheses state the intent rather than repair
+  a wrong result. They stay because this filter is copied and edited by hand and
+  nothing in the query language guarantees that grouping.
 
   Gen2 functions run on Cloud Run underneath, so their entries can carry either
   `resource.type="cloud_function"` or `resource.type="cloud_run_revision"`
@@ -132,23 +141,30 @@ indistinguishable from a healthy function.
   function is quiet. Widen it and say so before concluding anything from silence.
 
 The functions log through the shared structured logger (`src/shared/logger.ts`),
-which writes one JSON line per entry, so expect a JSON payload with a `severity`
-and a `message` field rather than free text.
+which writes one JSON line per entry, so the entries carry a JSON payload with a
+`severity` and a `message` field rather than free text. The MCP route sees that
+payload; `gcloud` prints it already flattened into its `LEVEL` and `LOG` columns.
 
 ### Step 3 — Read error-level logs
 
 - **`gcloud` available**:
 
   ```bash
-  gcloud functions logs read FUNCTION_NAME --region=REGION --filter="severity>=ERROR" --limit=50
+  gcloud functions logs read FUNCTION_NAME --region=REGION --min-log-level=error --limit=50
   ```
 
-  For an actively-failing function you can stream with
-  `gcloud functions logs read FUNCTION_NAME --region=REGION --follow`.
+  Use `--min-log-level`, not `--filter="severity>=ERROR"`. `--filter` is the
+  generic client-side filter, applied to the printed rows — whose keys are
+  `level`, `name`, `execution_id`, `time_utc` and `log`, with no `severity` among
+  them. It therefore matches nothing and reports `Listed 0 items` on a function
+  that is failing, which is the silent absence Step 4 warns about. Only
+  `--min-log-level` reaches the Logging API.
 
 - **`gcloud` unavailable**: add `AND severity>=ERROR` to the Step 2 filter,
-  outside the parenthesised groups. There is no streaming equivalent — re-query
-  instead of waiting on a follow.
+  outside the parenthesised groups — which is where `--min-log-level` puts it in
+  the request `gcloud` sends.
+
+Neither route streams; re-run the command to pick up new entries.
 
 ### Step 4 — Classify against the common debugging scenarios
 
@@ -170,6 +186,13 @@ were **confirmed rather than defaulted** — re-reading the same unverified regi
 proves nothing — and on the MCP route that the filter was not narrowed to a
 single `resource.type`. If the region was never confirmed against the
 environment, report an inconclusive query, not a quiet function.
+
+The two routes fail differently here, which is itself evidence. A wrong region on
+the `gcloud` route prints `WARNING: There is no function named ... in region ...`
+before `Listed 0 items`, so an empty result *without* that warning is a real
+silence. The MCP route has no such signal — an empty result there is
+indistinguishable from a mistargeted query, so it has to be ruled out by
+re-checking the query, not by reading the emptiness.
 
 ### Step 5 — Report the triage
 
