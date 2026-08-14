@@ -70,7 +70,7 @@ resource "google_cloudfunctions2_function" "drive_scanner" {
   location    = var.region
 
   build_config {
-    runtime     = "nodejs20"
+    runtime     = "nodejs24"
     entry_point = "driveScanner"
     source {
       storage_source {

@@ -57,7 +57,7 @@ resource "google_cloudfunctions2_function" "notification_dispatcher" {
   description = "Dispatch email notifications on document processing success and failure (${var.environment})"
 
   build_config {
-    runtime     = "nodejs20"
+    runtime     = "nodejs24"
     entry_point = "notificationDispatcher"
     source {
       storage_source {

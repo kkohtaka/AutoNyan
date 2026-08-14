@@ -56,7 +56,7 @@ resource "google_cloudfunctions2_function" "doc_processor" {
   location    = var.region
 
   build_config {
-    runtime     = "nodejs20"
+    runtime     = "nodejs24"
     entry_point = "docProcessor"
     source {
       storage_source {

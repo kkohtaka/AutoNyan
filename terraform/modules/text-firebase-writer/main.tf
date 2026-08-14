@@ -46,7 +46,7 @@ resource "google_cloudfunctions2_function" "text_firebase_writer" {
   description = "Store Vision API text extraction results to Firestore (${var.environment})"
 
   build_config {
-    runtime     = "nodejs20"
+    runtime     = "nodejs24"
     entry_point = "textFirebaseWriter"
     source {
       storage_source {

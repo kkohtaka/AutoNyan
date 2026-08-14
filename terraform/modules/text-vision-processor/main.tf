@@ -46,7 +46,7 @@ resource "google_cloudfunctions2_function" "text_vision_processor" {
   description = "Process documents with Vision API for text extraction (${var.environment})"
 
   build_config {
-    runtime     = "nodejs20"
+    runtime     = "nodejs24"
     entry_point = "textVisionProcessor"
     source {
       storage_source {
