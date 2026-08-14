@@ -482,7 +482,9 @@ const topicName = process.env.TOPIC_NAME || 'default-topic';
 - Plans against **staging** environment
 - Smart detection: skips if only non-infrastructure files changed
 - Validates Terraform configuration
-- Posts plan output as PR comment (if applicable)
+- Posts a PR comment with the plan's outcome and a link to the run. The plan
+  text itself stays in the job log — it is not in the comment and not uploaded
+  as an artifact, so reviewing a plan from outside the run means reading that log
 
 **Stage 3: Build Workflow**
 - Auto-triggered after Terraform Plan success
