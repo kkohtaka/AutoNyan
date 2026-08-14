@@ -354,10 +354,10 @@ time (the build is plain `tsc`). Run functions against test events with all GCP
 services mocked.
 
 **Deployed function:** use the `debug-function-logs` skill — it reads logs with
-`gcloud` and maps findings to the common failure modes (timeout → module
-config, permission error → service-account IAM, event not triggering →
-trigger / PubSub-Storage permissions, module not found → workspace build
-output).
+`gcloud`, or through the Cloud Logging MCP server where `gcloud` is absent, and
+maps findings to the common failure modes (timeout → module config, permission
+error → service-account IAM, event not triggering → trigger / PubSub-Storage
+permissions, module not found → workspace build output).
 
 **CI failures:** use the `debug-ci` skill.
 
