@@ -43,7 +43,7 @@ the point of this skill and is applied identically either way.
 !`command -v gcloud >/dev/null 2>&1 && gcloud functions list --format="table(name,state,environment,region)" 2>/dev/null || echo "n/a — resolve the function name from its naming convention (see Step 1)"`
 ```
 
-**Terraform region default (a starting guess when the region is not known):**
+**Terraform region default (the module default only — an environment may override it; see Step 1):**
 
 ```
 !`grep -A4 'variable "region"' terraform/variables.tf 2>/dev/null | grep default || echo "unknown"`
@@ -58,16 +58,24 @@ Follow these steps in order. Stop and ask the user if anything is unclear.
 Skip this step on the `gcloud` route.
 
 The Cloud Logging MCP server needs setup that no pull request can deliver, so
-check it is there before reading anything, and name what is missing rather than
-letting a tool call fail opaquely:
+probe for it before reading anything, and name what is missing rather than
+letting a tool call fail opaquely. List the session's connectors and look for
+Cloud Logging among them — do not assume it is there because this is a cloud
+session. Three things have to be in place, and only the first is observable
+from here:
 
 - The Cloud Logging MCP server (`https://logging.googleapis.com/mcp`) is added
   as a custom connector and enabled for this session.
+- An OAuth client exists in the target project with
+  `https://claude.ai/api/mcp/auth_callback` as an authorized redirect URI —
+  Google's MCP servers do not support Dynamic Client Registration, so the
+  connector cannot be added without it.
 - The account has `roles/mcp.toolUser` plus a read-only logging role on the
   target project.
 
-`REMOTE_SESSION_SETUP.md` §4 tracks this setup and #395 carries the checklist.
-If the connector is absent, say exactly that and stop — the missing piece is
+#395's Prerequisites checklist is where this setup is tracked;
+`REMOTE_SESSION_SETUP.md` §4 only carries the item that verifies it works. If
+the connector is absent, say exactly that and stop — the missing piece is
 configuration, not something to work around by guessing at log contents.
 
 You also need the **project id**, which a cloud session cannot discover from the
@@ -80,12 +88,18 @@ rather than inferring one.
 From `$ARGUMENTS`, determine the function name, its region, and the environment.
 Functions are named `{environment}-{stage}` (e.g. `staging-drive-scanner`).
 
-On the `gcloud` route, use the function list in Context to narrow it down. On the
-MCP route there is no function list — derive the name from the convention above
-and the workspace directories under `src/functions/`, and take the region from
-the Terraform default in Context. Confirm both with the user before reading logs
-if either is ambiguous; querying the wrong resource returns an empty result that
-looks like a healthy function.
+On the `gcloud` route, use the function list in Context to narrow it down and
+take the region it reports, which is the deployed region.
+
+On the MCP route there is no function list. Derive the name from the convention
+above and the workspace directories under `src/functions/`. The region needs the
+same treatment as the project id in Step 0: every resource is placed with
+`var.region`, and an environment overrides it from the gitignored
+`terraform/environments/*.tfvars`, so the value in Context is the module
+default, not evidence of where this environment is deployed. **Confirm the
+region with the user** — do not read it as unambiguous just because a single
+default was printed. Querying the wrong region returns an empty result that is
+indistinguishable from a healthy function.
 
 ### Step 2 — Read recent logs
 
@@ -101,9 +115,15 @@ looks like a healthy function.
   filter it implies is what to express there:
 
   ```
-  resource.labels.function_name="FUNCTION_NAME" OR resource.labels.service_name="FUNCTION_NAME"
-  resource.labels.region="REGION" OR resource.labels.location="REGION"
+  (resource.labels.function_name="FUNCTION_NAME" OR resource.labels.service_name="FUNCTION_NAME")
+  AND (resource.labels.region="REGION" OR resource.labels.location="REGION")
   ```
+
+  Keep the parentheses and the explicit `AND`. Adjacent terms are an implicit
+  `AND` and the two groups mix `AND` with `OR`, so without them the result
+  depends on operator precedence: read the wrong way, the query matches every
+  entry in the region and the triage reports another function's errors as this
+  one's.
 
   Gen2 functions run on Cloud Run underneath, so their entries can carry either
   `resource.type="cloud_function"` or `resource.type="cloud_run_revision"`
@@ -126,8 +146,9 @@ and a `message` field rather than free text.
   For an actively-failing function you can stream with
   `gcloud functions logs read FUNCTION_NAME --region=REGION --follow`.
 
-- **`gcloud` unavailable**: add `severity>=ERROR` to the Step 2 filter. There is
-  no streaming equivalent — re-query instead of waiting on a follow.
+- **`gcloud` unavailable**: add `AND severity>=ERROR` to the Step 2 filter,
+  outside the parenthesised groups. There is no streaming equivalent — re-query
+  instead of waiting on a follow.
 
 ### Step 4 — Classify against the common debugging scenarios
 
@@ -145,8 +166,10 @@ Map the log evidence to one of the four scenarios documented in `CLAUDE.md`:
 "Event not triggering" is the one diagnosis that rests on an *absence* of log
 entries, so it is the one a mistargeted query can fabricate. Before reporting it,
 confirm the query was right: that the function name and region resolved in Step 1
-are correct, and on the MCP route that the filter was not narrowed to a single
-`resource.type`.
+were **confirmed rather than defaulted** — re-reading the same unverified region
+proves nothing — and on the MCP route that the filter was not narrowed to a
+single `resource.type`. If the region was never confirmed against the
+environment, report an inconclusive query, not a quiet function.
 
 ### Step 5 — Report the triage
 
