@@ -263,7 +263,7 @@ resource "google_cloudfunctions2_function" "my_function" {
   location = var.region
 
   build_config {
-    runtime     = "nodejs20"
+    runtime     = "nodejs24"
     entry_point = "myFunction"  # Must match the actual exported function name in the implementation
     source {
       storage_source {

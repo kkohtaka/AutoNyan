@@ -45,7 +45,7 @@ resource "google_cloudfunctions2_function" "file_classifier" {
   description = "Classify documents using AI and move them to categorized folders in Google Drive (${var.environment})"
 
   build_config {
-    runtime     = "nodejs20"
+    runtime     = "nodejs24"
     entry_point = "fileClassifier"
     source {
       storage_source {
