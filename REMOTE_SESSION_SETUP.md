@@ -137,16 +137,18 @@ Run in order and stop at the first failure.
 
 **Deployment and plan review (GitHub Actions):**
 
-- [ ] The `deploy-staging` skill's cloud-session path starts a staging deploy
-      via `workflow_dispatch` and reports the run's outcome
+- [ ] The `deploy-staging` skill's cloud-session path follows a staging Deploy
+      run and reports its outcome. It cannot start the run — `workflow_dispatch`
+      needs the Actions write permission the session's token does not carry, so
+      the skill hands the dispatch back to the user (#420)
 - [ ] The `terraform-plan-review` skill's cloud-session path reviews the
       staging plan from the plan workflow run's job log (the pull request
       comment only links to the run — see section 1)
 
-The last two checklist items depend on work that has not landed yet — see
-#399, #400 and #401. Until then, those skills' cloud-session paths are not
-available; use the devcontainer for infrastructure changes that need a real
-plan or deploy.
+All three cloud-session paths have landed (#399, #400, #401); what is unchecked
+above is verification, not implementation. The Cloud Logging item additionally
+needs the connector prerequisites in section 1 to be configured before it can
+be checked at all.
 
 ## 5. What a cloud session still cannot do
 

@@ -361,6 +361,79 @@ permissions, module not found → workspace build output).
 
 **CI failures:** use the `debug-ci` skill.
 
+### In a Cloud Session
+
+The workflows above also run from a Claude Code on the web cloud session, which
+starts with only Node.js and a fresh clone: no `gh`, no `gcloud`, no Terraform
+state access, and restricted network egress. `REMOTE_SESSION_SETUP.md` holds the
+access model, the bootstrap, and the network constraints — this section records
+only what changes for the workflows and skills above, so the reasoning stays in
+one place.
+
+**How each workflow differs:**
+
+- **Feature Development** — the middle of the loop is unchanged once the
+  `SessionStart` bootstrap has run: edit, `quality-gate`, branch, commit. Only
+  the ends differ, because `commit` and `create-pr` shell out to `gh`.
+- **Adding a New Function** — unchanged; `add-function` only writes files.
+- **Infrastructure Change** — split in two. Editing Terraform and running
+  `npm run lint:terraform` work; `terraform plan` and `apply` do not, since
+  neither the state backend nor the gitignored `terraform/environments/*` files
+  are reachable. Review reads the plan a pull request already produced, and
+  applying is delegated to the Deploy workflow.
+- **Debugging** — deployed-function logs come from the Cloud Logging MCP server
+  rather than `gcloud`. CI failures cannot use `debug-ci`; read the run, its
+  jobs, and its logs through the GitHub MCP tools instead.
+- **Renovate triage** — works, reading and merging through the GitHub MCP tools.
+
+**Per-skill availability:**
+
+| Skill | Cloud session | Note |
+| --- | --- | --- |
+| `add-ci-role` | Different path | Editing the `ROLES` array and this document works; applying the grant needs `gcloud` and project-level IAM — devcontainer only |
+| `add-function` | Works as-is | Writes files only |
+| `commit` | Unavailable | APM-managed, assumes `gh`; commit with `git` directly |
+| `create-issue` | Unavailable | APM-managed, assumes `gh`; file the issue with the GitHub MCP tools |
+| `create-pr` | Unavailable | APM-managed, assumes `gh`; open the pull request with the GitHub MCP tools, applying the same body requirements |
+| `debug-ci` | Unavailable | APM-managed, assumes `gh`; read runs and logs with the GitHub MCP tools |
+| `debug-function-logs` | Different path | Reads through the Cloud Logging MCP server; needs the connector and the project id (below) |
+| `deploy-staging` | Different path, partial | Follows a Deploy run and reports its outcome, but cannot start one (below) |
+| `docs-sync-check` | Works as-is | Needs only `git` |
+| `e2e-verify` | Unavailable | Needs an interactive Drive login (below) |
+| `lint-fix` | Works as-is | After the bootstrap installs the linters |
+| `quality-gate` | Works as-is | After the bootstrap installs the linters |
+| `renovate-triage` | Different path | GitHub MCP tools instead of `gh`; its `debug-ci` delegation is unavailable |
+| `resolve-issue` | Different path, partial | Reads the issue through the GitHub MCP tools; the `create-pr` step it delegates to is unavailable |
+| `terraform-plan-review` | Different path | Reads the plan from the plan run's job log |
+| `test-fix` | Works as-is | After the bootstrap installs dependencies |
+
+**Constraints that remain, and what causes each:**
+
+- **No `gh`.** `commit`, `create-pr`, `create-issue`, and `debug-ci` are
+  APM-managed (see above) and assume it, so the fix belongs in the
+  `kkohtaka/agent-skills` package, not here. Editing them in this repository is
+  overwritten by the next `apm install`.
+- **No Google Cloud credential in the session.** Cloud environments have no
+  secrets store, so a service account key must never be placed in one. This is a
+  deliberate design constraint, which is why reads go through a managed
+  connector and writes go through the Actions pipeline.
+- **The Cloud Logging connector is configuration, not code.** The OAuth client,
+  the IAM grant, and adding the server produce no pull request. The project id
+  is a second prerequisite: it has no default in Terraform and lives in a
+  gitignored tfvars file, so a cloud session must be told it rather than
+  discovering it the way the `gcloud` path does.
+- **A session cannot dispatch a workflow.** Dispatching needs the Actions
+  **write** permission; the session's GitHub App token is read-only for Actions,
+  while every read against Actions works. So a deploy is started by the user and
+  followed by the session.
+- **Interactive Drive login cannot run headless.** This is what rules out the
+  E2E suite and `npm run setup:share-drive-folders`.
+
+**One gotcha when reading CI state through MCP:** check runs and commit statuses
+are different APIs, and `terraform/plan/staging` is reported as a *commit
+status*. Reading only check runs shows a pull request as fully green when a
+required check is still pending — see the Required Status Check Invariant below.
+
 ## Infrastructure Patterns
 
 ### Terraform Backend Pattern
