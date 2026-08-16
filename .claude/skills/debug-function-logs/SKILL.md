@@ -69,7 +69,13 @@ session. Three things have to be in place, and only the first is observable
 from here:
 
 - The Cloud Logging MCP server (`https://logging.googleapis.com/mcp`) is added
-  as a custom connector and enabled for this session.
+  as a custom connector and enabled for this session, registered under the
+  server name `logging`. This skill's `allowed-tools` grant is server-level
+  (`mcp__logging`), and a custom connector's server name is chosen when it is
+  added rather than derived from its URL — so a connector added under any other
+  name leaves the grant matching nothing. The symptom is a permission prompt on
+  every log read, not an absent connector, which is why it is worth
+  distinguishing here.
 - An OAuth client exists in the target project with
   `https://claude.ai/api/mcp/auth_callback` as an authorized redirect URI —
   Google's MCP servers do not support Dynamic Client Registration, so the
