@@ -397,6 +397,7 @@ jobs:
             const planResult = '${{ needs.terraform-plan.result }}';
             const exitCode = '${{ needs.terraform-plan.outputs.plan_exit_code }}';
             const wasSkipped = '${{ needs.terraform-plan.outputs.needs_terraform }}' === 'false';
+            const prNumber = '${{ needs.pr-details.outputs.number }}';
             const success = planResult === 'success' && exitCode === '0';
 
             // `error` rather than `failure` when the plan never ran: the plan
@@ -413,7 +414,13 @@ jobs:
             } else if (ranAtAll) {
               description = 'Terraform plan (staging) failed';
             } else {
-              description = `Terraform plan (staging) did not run (${planResult}) - re-run with /terraform plan`;
+              // `/terraform plan` is an issue_comment command, so it can only be
+              // given on a pull request. A master-branch eviction has no PR to
+              // comment on and must be re-dispatched from the workflow instead.
+              const remedy = prNumber
+                ? 're-run with /terraform plan'
+                : 're-run the Terraform Plan (Staging) workflow';
+              description = `Terraform plan (staging) did not run (${planResult}) - ${remedy}`;
             }
 
             await github.rest.repos.createCommitStatus({
