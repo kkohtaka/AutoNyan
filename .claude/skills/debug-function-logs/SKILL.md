@@ -3,7 +3,7 @@ name: debug-function-logs
 description: Triage a deployed Cloud Function by reading its logs — with gcloud in the devcontainer, or through the Cloud Logging MCP server in a cloud session — and mapping the findings to the common debugging scenarios (timeout, permission error, event not triggering, module not found)
 argument-hint: "[function-name] [environment]"
 disable-model-invocation: false
-allowed-tools: Bash(gcloud *) mcp__logging
+allowed-tools: Bash(gcloud *) mcp__Cloud_Logging
 ---
 
 # Debug Function Logs
@@ -69,19 +69,20 @@ session. Three things have to be in place, and only the first is observable
 from here:
 
 - The Cloud Logging MCP server (`https://logging.googleapis.com/mcp`) is added
-  as a custom connector and enabled for this session, registered under the
-  server name `logging`. This skill's `allowed-tools` grant is server-level
-  (`mcp__logging`), and a custom connector's server name is chosen when it is
-  added rather than derived from its URL — so a connector added under any other
-  name leaves the grant matching nothing. The symptom is a permission prompt on
-  every log read, not an absent connector, which is why it is worth
-  distinguishing here.
+  as a custom connector and enabled for this session. A custom connector takes
+  its server name from the display name it is given when it is added, not from
+  its URL: added as `Cloud Logging`, it registers as `Cloud_Logging` and its
+  tools appear as `mcp__Cloud_Logging__*` — the name this skill's server-level
+  `allowed-tools` grant carries. A connector added under a different display
+  name leaves that grant matching nothing, and the symptom is a permission
+  prompt on every log read rather than the absent-connector case above.
 - An OAuth client exists in the target project with
   `https://claude.ai/api/mcp/auth_callback` as an authorized redirect URI —
   Google's MCP servers do not support Dynamic Client Registration, so the
   connector cannot be added without it.
-- The account has `roles/mcp.toolUser` plus a read-only logging role on the
-  target project.
+- The account has `roles/mcp.toolUser` plus `roles/logging.viewer` on the
+  target project. The read-only role is enough; the log-reading tools do not
+  need `roles/logging.admin`.
 
 #395's Prerequisites checklist is where this setup is tracked;
 `REMOTE_SESSION_SETUP.md` §4 only carries the item that verifies it works. If

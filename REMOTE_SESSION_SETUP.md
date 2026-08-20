@@ -133,10 +133,14 @@ Run in order and stop at the first failure.
 **Google Cloud reads (MCP):**
 
 - [ ] The Cloud Logging connector is registered under the server name
-      `logging`, matching the `mcp__logging` grant in `debug-function-logs`.
-      Unlike the GitHub server's name, which a cloud session confirmed, this one
-      is chosen when the custom connector is added — a mismatch prompts for
-      permission on every log read instead of failing outright
+      `Cloud_Logging`, matching the `mcp__Cloud_Logging` grant in
+      `debug-function-logs`. A custom connector takes its server name from the
+      display name given when it is added (`Cloud Logging`), not from its URL —
+      a mismatch prompts for permission on every log read instead of failing
+      outright
+- [ ] The account's `roles/mcp.toolUser` and `roles/logging.viewer` on the
+      target project are enough to list log names and read entries; no
+      `roles/logging.admin` is needed
 - [ ] The `debug-function-logs` skill's cloud-session path reads logs from a
       deployed staging function
 
