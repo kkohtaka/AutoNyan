@@ -7,12 +7,7 @@ import { docProcessor } from './index';
 const mockStorage = {
   bucket: jest.fn().mockReturnValue({
     file: jest.fn().mockReturnValue({
-      createWriteStream: jest.fn().mockReturnValue({
-        write: jest.fn().mockImplementation((buffer, callback) => {
-          process.nextTick(() => callback(null));
-        }),
-        end: jest.fn(),
-      }),
+      save: jest.fn().mockResolvedValue(undefined),
       getMetadata: jest.fn().mockResolvedValue([{ size: '1024' }]),
       exists: jest.fn().mockResolvedValue([false]),
     }),
@@ -68,6 +63,50 @@ describe('docProcessor', () => {
     delete process.env.ENVIRONMENT;
     delete process.env.NOTIFICATION_TOPIC;
   });
+
+  // Self-referencing so the chained .on('data').on('end') calls both fire.
+  const mockDriveDownload = () => {
+    const mockStream: any = {
+      on: jest.fn().mockImplementation((event, callback) => {
+        if (event === 'data') {
+          process.nextTick(() => callback(Buffer.from('test file content')));
+        } else if (event === 'end') {
+          process.nextTick(() => callback());
+        }
+        return mockStream;
+      }),
+    };
+
+    mockDrive.files.get
+      .mockResolvedValueOnce({
+        data: {
+          id: 'file123',
+          name: 'test-document.pdf',
+          mimeType: 'application/pdf',
+          size: '1024',
+          modifiedTime: '2023-01-01T00:00:00.000Z',
+        },
+      })
+      .mockResolvedValueOnce({ data: mockStream });
+  };
+
+  const buildCloudEvent = (): CloudEvent<MessagePublishedData> => ({
+    id: 'test-event-id',
+    source: 'test-source',
+    specversion: '1.0',
+    type: 'google.cloud.pubsub.topic.v1.messagePublished',
+    time: '2023-01-01T00:00:00.000Z',
+    data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
+      'base64'
+    ) as any,
+  });
+
+  // Drain the Drive download's nextTick chain so the upload is reached.
+  const flushAsync = async () => {
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => process.nextTick(resolve));
+    }
+  };
 
   test('should process CloudEvent and copy file to Cloud Storage', async () => {
     // Mock Drive API responses
@@ -322,54 +361,65 @@ describe('docProcessor', () => {
   });
 
   test('should skip upload when object already exists in Cloud Storage', async () => {
-    // Self-referencing stream mock so chained .on('data').on('end') both fire
-    const mockStream: any = {
-      on: jest.fn().mockImplementation((event, callback) => {
-        if (event === 'data') {
-          process.nextTick(() => callback(Buffer.from('test file content')));
-        } else if (event === 'end') {
-          process.nextTick(() => callback());
-        }
-        return mockStream;
-      }),
-    };
-
-    mockDrive.files.get
-      .mockResolvedValueOnce({
-        data: {
-          id: 'file123',
-          name: 'test-document.pdf',
-          mimeType: 'application/pdf',
-          size: '1024',
-          modifiedTime: '2023-01-01T00:00:00.000Z',
-        },
-      })
-      .mockResolvedValueOnce({
-        data: mockStream,
-      });
-
-    // Object already exists in the bucket
+    mockDriveDownload();
     mockStorage.bucket().file().exists.mockResolvedValueOnce([true]);
 
-    const cloudEvent: CloudEvent<MessagePublishedData> = {
-      id: 'test-event-id',
-      source: 'test-source',
-      specversion: '1.0',
-      type: 'google.cloud.pubsub.topic.v1.messagePublished',
-      time: '2023-01-01T00:00:00.000Z',
-      data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
-        'base64'
-      ) as any,
-    };
-
-    const result = await docProcessor(cloudEvent);
+    const result = await docProcessor(buildCloudEvent());
 
     expect(result.message).toContain(
       'already exists in Cloud Storage, skipped upload'
     );
     expect(result.fileId).toBe('file123');
-    expect(
-      mockStorage.bucket().file().createWriteStream
-    ).not.toHaveBeenCalled();
+    expect(mockStorage.bucket().file().save).not.toHaveBeenCalled();
+  }, 20000);
+
+  test('should not read object metadata before the upload completes', async () => {
+    mockDriveDownload();
+
+    const callOrder: string[] = [];
+    let completeUpload!: () => void;
+    const uploadFinished = new Promise<void>((resolve) => {
+      completeUpload = resolve;
+    });
+
+    mockStorage
+      .bucket()
+      .file()
+      .save.mockImplementationOnce(async () => {
+        callOrder.push('save:start');
+        await uploadFinished;
+        callOrder.push('save:complete');
+      });
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockImplementationOnce(async () => {
+        callOrder.push('getMetadata');
+        return [{ size: '1024' }];
+      });
+
+    const pending = docProcessor(buildCloudEvent());
+
+    await flushAsync();
+    expect(callOrder).toEqual(['save:start']);
+
+    completeUpload();
+    await pending;
+
+    expect(callOrder).toEqual(['save:start', 'save:complete', 'getMetadata']);
+  }, 20000);
+
+  test('should reject when the upload fails', async () => {
+    mockDriveDownload();
+
+    mockStorage
+      .bucket()
+      .file()
+      .save.mockRejectedValueOnce(new Error('upload stream failed'));
+
+    await expect(docProcessor(buildCloudEvent())).rejects.toThrow(
+      'upload stream failed'
+    );
+    expect(mockStorage.bucket().file().getMetadata).not.toHaveBeenCalled();
   }, 20000);
 });

@@ -126,8 +126,11 @@ export const docProcessor = async (
         objectName,
       });
     } else {
-      // Create a writable stream to Cloud Storage
-      const stream = storageFile.createWriteStream({
+      // save() resolves only once the upload has completed, so the metadata
+      // read below cannot race it. A manual createWriteStream() resolves as
+      // soon as the buffer is accepted, which made every new object fail its
+      // first attempt with "No such object" until the PubSub retry.
+      await storageFile.save(fileBuffer, {
         metadata: {
           contentType: file.mimeType || 'application/octet-stream',
           metadata: {
@@ -142,19 +145,6 @@ export const docProcessor = async (
         },
       });
 
-      // Write the buffered content to Cloud Storage
-      await new Promise<void>((resolve, reject) => {
-        stream.write(fileBuffer, (error) => {
-          if (error) {
-            reject(error);
-          } else {
-            stream.end();
-            resolve();
-          }
-        });
-      });
-
-      // Get the uploaded file metadata
       [metadata] = await storageFile.getMetadata();
       logger.info('Successfully uploaded new object to bucket', { objectName });
     }
