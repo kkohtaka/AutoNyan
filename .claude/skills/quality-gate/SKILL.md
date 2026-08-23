@@ -62,26 +62,34 @@ Record: **lint — PASS** or **lint — FAIL**.
 Run each formatter in check-only mode. These commands verify but never write:
 
 ```bash
-# TypeScript / JavaScript
-npm run format:ts -- --check 2>&1 || true
+# TypeScript (the src/ workspaces — the same scope as format:ts)
+npx prettier --check 'src/**/*.ts' 2>&1 || true
 
 # YAML
-npm run format:yaml -- --check 2>&1 || true
+npx prettier --check '.github/**/*.{yml,yaml}' 2>&1 || true
 
 # JSON
-npm run format:json -- --check 2>&1 || true
+npx prettier --check '**/*.json' 2>&1 || true
 
 # Shell scripts
-npm run format:sh -- -d 2>&1 || true
+shfmt -d scripts/*.sh 2>&1 || true
 
 # Terraform (already check-only in the format script)
 terraform fmt -check=true -recursive terraform/ 2>&1 || true
 ```
 
-> `npm run format:ts -- --check` passes `--check` to prettier, turning
-> `--write` into a dry-run that lists unformatted files and exits non-zero.
-> `npm run format:sh -- -d` passes `-d` (diff mode) to shfmt instead of
-> `-w` (write). `terraform fmt -check=true` is already read-only.
+> Invoke the tools directly rather than passing a check flag through the
+> `format:*` npm scripts. `npm run format:json -- --check` expands to
+> `prettier --write '**/*.json' --check`, and prettier honours `--write`
+> regardless: it rewrites the files and still exits 0, so the check both edits
+> the tree and can never fail. `npm run format:sh -- -d` appends `-d` after the
+> glob in `shfmt -w scripts/*.sh`, which shfmt reads as a path and rejects with
+> `lstat -d: no such file or directory`, failing whatever the formatting is.
+>
+> The TypeScript glob is `src/**/*.ts`, not `**/*.ts`: `format:ts` runs per
+> workspace, so files outside `src/` (`tests/`, `scripts/`) are outside the
+> scope `npm run format` and CI enforce, and flagging them would report a
+> failure the project's own formatter never fixes.
 
 Collect each sub-check result. The overall formatting check passes only if all
 five sub-checks pass.
