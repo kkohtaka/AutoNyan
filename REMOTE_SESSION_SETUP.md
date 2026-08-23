@@ -44,6 +44,30 @@ so it never needs `terraform/environments/staging.tfvars` or
 and `tflint` binaries plus tflint's ruleset plugins (section 3) — `terraform
 fmt` and `tflint` read Terraform source, not those gitignored files.
 
+**Connector prerequisites.** The Cloud Logging connector is configuration
+rather than code, so nothing in this repository installs it. Configured once per
+Google Cloud project:
+
+- An OAuth client in the project, with `https://claude.ai/api/mcp/auth_callback`
+  as an authorized redirect URI. Google's MCP servers do not support Dynamic
+  Client Registration, so the client has to exist before the connector is added.
+- `roles/mcp.toolUser` and `roles/logging.viewer` on the principal that
+  authorizes the connector. `roles/logging.viewer` is enough — listing log names
+  and reading entries both succeed without `roles/logging.admin`. Grant them
+  with `gcloud projects add-iam-policy-binding --condition=None`: this project's
+  IAM policy already carries conditional bindings, so gcloud otherwise refuses
+  to guess and prompts for a condition. `scripts/setup-github-actions.sh` passes
+  the same flag for the same reason.
+- `https://logging.googleapis.com/mcp` added as a custom connector, with the
+  display name `Cloud Logging` so it registers under the server name the
+  `debug-function-logs` grant expects (section 4).
+- The target project id, which a session cannot discover: it has no default in
+  `terraform/variables.tf` and its value lives in the gitignored
+  `terraform/environments/*.tfvars`, so the session has to be told it.
+
+Adding a connector reaches an already-running cloud session on **resume** — no
+new session is needed to pick it up.
+
 This access model is why several skills behave differently depending on the
 environment — see each skill's own notes and the sub-issues of #395 for the
 current state of that work.
@@ -81,6 +105,13 @@ other repository answer 403. That is why the script unpacks the ruleset plugins
 from their release assets, which carry no such scope, rather than running
 `tflint --init`, whose installer resolves releases through that API. No allowlist
 change lifts this: the constraint is the API scope, not the host.
+
+Two hosts a session will reach for and not get are Google Cloud's own
+documentation: **`docs.cloud.google.com` and `codelabs.developers.google.com`
+are blocked by the proxy.** No command here needs them, so this is not an
+allowlist request — it is recorded because the reflex on meeting an unfamiliar
+Google Cloud surface is to go read the doc, and in a cloud session that reflex
+returns nothing. Settle such questions by observation instead.
 
 If a future change genuinely needs a host outside the Trusted default, record
 it here with the command or dependency that needs it — don't assume the
