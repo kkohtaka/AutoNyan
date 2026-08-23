@@ -129,11 +129,28 @@ to learn the outcome, and read the log for the plan itself.
      is rejected for exceeding the token limit before you can read it.
   3. Read that job's logs with the content returned inline and an explicit tail
      large enough to reach the start of the plan — the default tail is far
-     shorter than a plan job's log, and truncates the plan mid-way. A tail long
-     enough usually exceeds the token limit too; the tool then spools the whole
-     response to a file on disk and prints its path, which is the outcome to
-     aim for. Write the `logs_content` field of that JSON out to
-     `/tmp/tf-plan-raw.txt` rather than reading the log into context.
+     shorter than a plan job's log, and truncates the plan mid-way. Size the
+     tail against what actually dominates that log: `terraform:plan` runs
+     `npm run build:function` first, and zipping `node_modules` for every
+     function emits thousands of `adding: ...` lines ahead of the plan. A tail
+     long enough usually exceeds the token limit too; the tool then spools the
+     whole response to a file on disk and prints its path, which is the outcome
+     to aim for.
+  4. That spooled file is JSON, and its `logs_content` field carries the log
+     with `\n` escaped rather than as real newlines — decode it instead of
+     treating the file as text, then confirm the window reached the plan:
+
+     ```bash
+     python3 -c "import json,sys; sys.stdout.write(json.load(open('<spooled-path>'))['logs_content'])" \
+       > /tmp/tf-plan-raw.txt
+     grep -c 'Terraform will perform the following actions' /tmp/tf-plan-raw.txt
+     ```
+
+     A count of 0 means the tail stopped short of the plan — enlarge it and
+     fetch again. Check this before Step 3: a window that caught the trailing
+     `Plan: N to add...` line but not the action section above it yields a
+     review of a plan whose changes were never read, which is the silent empty
+     review §4.6 forbids.
 
 If neither route is available, stop and say so.
 
@@ -172,9 +189,12 @@ that genuinely has no changes says `No changes.` and is Step 3's business.)
 
 State which commit the plan describes, and say so plainly if the pull request
 has been pushed to since — a plan read from an older SHA does not describe the
-current head. The log itself carries the SHA it planned, in the `prDetails`
-JSON the reporting step embeds; compare that against the head SHA rather than
-trusting that the newest run belongs to the current head.
+current head. Take that SHA from the workflow **run** object's `head_sha` and
+compare it against the pull request's head SHA, rather than trusting that the
+newest run belongs to the current head. Do not look for it in the plan job's
+log: the `prDetails` JSON carrying it is emitted by the reporting step, which
+runs in a separate job (`report-plan-status`), so the log that holds the plan
+does not hold the SHA the plan was produced from.
 
 ### Step 3 — Categorize pending changes
 
