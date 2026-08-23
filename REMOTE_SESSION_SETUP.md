@@ -150,16 +150,17 @@ Run in order and stop at the first failure.
 
 **Local quality gates** (no Google Cloud access needed):
 
-- [ ] `npm run build` exits 0 in a single pass on a clean tree
-- [ ] `npm run lint` exits 0 (all five linters, including `lint:terraform`)
-- [ ] `npm run test:coverage` exits 0
-- [ ] The `quality-gate` skill reports PASS for lint, formatting and tests
+- [x] `npm run build` exits 0 in a single pass on a clean tree
+- [x] `npm run lint` exits 0 (all five linters, including `lint:terraform`)
+- [x] `npm run test:coverage` exits 0
+- [x] The `quality-gate` skill reports PASS for lint, formatting and tests
 
 **Git:**
 
-- [ ] A branch created during the session pushes to `origin` successfully
-      (the GitHub proxy restricts `git push` to the session's current working
-      branch)
+- [x] A branch created mid-session pushes to `origin` successfully, creating a
+      new ref and transferring new objects. The proxy does not restrict pushes
+      to the session's own working branch, as was assumed before this was
+      measured — but it does refuse to delete a ref (section 5)
 
 **Google Cloud reads (MCP):**
 
@@ -204,6 +205,12 @@ be checked at all.
 - **`npm run setup:share-drive-folders`.** Same reason — it is a one-time,
   workstation-only task; once folders are shared, the grant persists across
   deployments.
+- **Delete a remote ref.** `git push origin --delete <branch>` and
+  `git push origin :refs/heads/<branch>` both die with `send-pack: unexpected
+  disconnect while reading sideband packet`, while creating and updating refs
+  over the same proxy succeeds, and the GitHub MCP tool surface has no
+  branch-delete tool. A session therefore cannot clean up after itself: any
+  throwaway branch it pushes outlives it and has to be removed by hand.
 - **Anything that writes GCP IAM, billing, or other project-level
   configuration directly.** Only the GitHub Actions deploy pipeline (Workload
   Identity Federation) writes to the staging project; a cloud session has no
