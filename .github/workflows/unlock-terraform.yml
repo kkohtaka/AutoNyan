@@ -27,6 +27,13 @@ jobs:
   unlock:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Deleting the state lock is destructive and gated only by the `confirm`
+    # input, which the caller supplies. The environment's required reviewer is
+    # the gate a caller cannot satisfy on its own. `production` is not reusable
+    # here: its deployment policy admits tag refs only, and this workflow is
+    # dispatched from a branch.
+    environment:
+      name: terraform-unlock
 
     steps:
       - name: Validate confirmation
