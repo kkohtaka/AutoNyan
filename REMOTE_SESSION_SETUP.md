@@ -178,18 +178,25 @@ Run in order and stop at the first failure.
 
 **Deployment and plan review (GitHub Actions):**
 
-- [ ] The `deploy-staging` skill's cloud-session path follows a staging Deploy
-      run and reports its outcome. It cannot start the run — `workflow_dispatch`
-      needs the Actions write permission the session's token does not carry, so
-      the skill hands the dispatch back to the user (#420)
-- [ ] The `terraform-plan-review` skill's cloud-session path reviews the
+- [x] The `deploy-staging` skill's cloud-session path follows a staging Deploy
+      run and reports its outcome — verified against run 32621449624, reading
+      all 13 steps of the `deploy` job and the `✅ Deployment to staging
+      completed successfully` line the reporting step emits. It cannot start the
+      run: `workflow_dispatch` needs the Actions write permission the session's
+      token does not carry, and that is permanent rather than pending, since a
+      GitHub App's permission scopes are fixed by its publisher and no account
+      or repository setting can widen them. The user dispatches, the skill takes
+      over (#420)
+- [x] The `terraform-plan-review` skill's cloud-session path reviews the
       staging plan from the plan workflow run's job log (the pull request
-      comment only links to the run — see section 1)
+      comment only links to the run — see section 1) — verified against PR #421,
+      whose plan reported 12 in-place updates with no replacements
 
-All three cloud-session paths have landed (#399, #400, #401); what is unchecked
-above is verification, not implementation. The Cloud Logging item additionally
-needs the connector prerequisites in section 1 to be configured before it can
-be checked at all.
+All three cloud-session paths have landed (#399, #400, #401). The deployment and
+plan-review paths are now verified as well, within the split described above.
+What remains unchecked is the Cloud Logging group: implementation is done, and
+the connector prerequisites in section 1 are configured, so those items need
+only to be exercised and ticked.
 
 ## 5. What a cloud session still cannot do
 

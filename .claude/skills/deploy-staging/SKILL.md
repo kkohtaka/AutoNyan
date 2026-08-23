@@ -23,11 +23,14 @@ session. The confirmation gate is the same on both routes and is never skipped
 on either: `terraform:apply` runs with `-auto-approve`, and a dispatched
 workflow has no prompt of its own, so this skill's gate is the only one there is.
 
-Route B is currently **half available from a cloud session**: reading a run —
-its jobs, steps and logs — works, but *starting* one does not, because
-dispatching needs an Actions write permission the session's GitHub App token
-does not carry (Step 4B). Until that changes, a cloud session hands the dispatch
-back to the user and takes over from Step 5.
+Route B is **split from a cloud session**: reading a run — its jobs, steps and
+logs — works, but *starting* one does not, because dispatching needs an Actions
+write permission the session's GitHub App token does not carry (Step 4B). Treat
+that split as the design rather than a gap waiting to close: a GitHub App's
+permission scopes are declared by the app's publisher, so no repository or
+account setting can add `actions: write` to the token a session holds. The user
+dispatches; the skill takes over from Step 5 and drives the run to a reported
+outcome.
 
 ## Context
 
