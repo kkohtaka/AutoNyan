@@ -217,10 +217,11 @@ Run in order and stop at the first failure.
       `pull_request_read` / `get_review_comments` — verified against PR #225,
       whose two threads both reported resolved
 - [x] A reply posted with `add_reply_to_pull_request_comment` lands *inside* the
-      existing inline thread rather than as a pull request comment — verified on
+      existing inline thread rather than as a pull request comment — observed on
       PR #225, whose thread went from one comment to two while the PR's thread
-      count stayed at two. The input is the numeric `discussion_r…` id, not the
-      GraphQL `PRRT_…` thread node id
+      count stayed at two. The probe reply was deleted afterwards, so #225 no
+      longer shows it; re-checking this means posting a fresh reply. The input is
+      the numeric `discussion_r…` id, not the GraphQL `PRRT_…` thread node id
 - [x] Issues and issue comments can be filtered by author, server-side
       (`search_issues` with `author:`) and client-side (`user.login` is present
       on both). Bot logins are not spelled consistently across tools —
@@ -271,7 +272,10 @@ only to be exercised and ticked.
   update-method parameter — it merges the base into the head, producing a merge
   commit that `master`'s rebase-only, linear-history ruleset does not allow. The
   only remaining route is a local `git` rebase and a force push, which is a
-  judgement call rather than something to automate.
+  judgement call rather than something to automate. Little is lost by leaving a
+  branch behind its base: the ruleset sets `strict_required_status_checks_policy`
+  to `false`, so being out of date is not a merge blocker — report the condition
+  rather than trying to clear it.
 - **`npm run test:e2e` / `npm run test:e2e:check-drive`.** Both need
   `gcloud auth login --enable-gdrive-access`, an interactive browser flow that
   cannot run headless.
