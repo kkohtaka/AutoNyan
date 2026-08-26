@@ -234,6 +234,27 @@ Run in order and stop at the first failure.
       `terraform/plan/staging` is a commit status (see the Required Status Check
       Invariant in `CLAUDE.md`)
 
+**APM-managed skills (agent-skills v0.2.0), measured in a cloud session:**
+
+- [x] The route probe each of the four skills carries selects route B here: `gh`
+      and `hub` are both absent, the repository falls back to the git remote
+      (`kkohtaka/AutoNyan`), and the default branch to the
+      `git ls-remote --symref` probe (`master`)
+- [x] `debug-ci` runs entirely on route B — verified against PR #443:
+      `pull_request_read` for the checks, `actions_list` (`list_workflow_jobs`)
+      for run 32934121007's 16 jobs, `actions_get` (`get_workflow_job`), and
+      `get_job_logs` with `return_content` for the log text itself
+- [x] `create-issue` loses only its label listing on route B, as its note says:
+      the Context probe reports `(unavailable on this route)`, and `get_label`
+      answers for a name you already know but cannot enumerate the set
+- [x] `commit` and `create-pr` push with the session's own credentials —
+      `git push -u origin` created a branch on the remote. Budget about five
+      minutes for it: the pre-push hook runs build, lint and coverage first, so
+      the push looks hung well past a two-minute command timeout
+- [ ] The submit calls themselves — `create_pull_request` and `issue_write` —
+      are present in the session but unexercised, since running either creates a
+      real pull request or issue
+
 **Deployment and plan review (GitHub Actions):**
 
 - [x] The `deploy-staging` skill's cloud-session path follows a staging Deploy
@@ -254,7 +275,8 @@ All three cloud-session paths have landed (#399, #400, #401). The deployment and
 plan-review paths are now verified as well, within the split described above.
 What remains unchecked is the Cloud Logging group: implementation is done, and
 the connector prerequisites in section 1 are configured, so those items need
-only to be exercised and ticked.
+only to be exercised and ticked. The one unchecked APM-managed item stays that
+way by choice — exercising it would leave a real pull request or issue behind.
 
 ## 5. What a cloud session still cannot do
 
