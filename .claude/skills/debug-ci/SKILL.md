@@ -3,7 +3,7 @@ name: debug-ci
 description: Fetch CI results for a PR or workflow run, identify failed jobs and steps, and surface relevant log excerpts so a failure can be diagnosed. Use when a CI check is red and you need to know why.
 argument-hint: "[pr-number | run-id]"
 disable-model-invocation: false
-allowed-tools: Bash(gh *) Bash(git *) WebFetch
+allowed-tools: Bash(gh *) Bash(git *) Bash(sed *) Bash(grep *) Bash(command *) mcp__github WebFetch
 ---
 
 # Debug CI
@@ -13,27 +13,61 @@ re-run, or push anything.
 
 ## Context
 
+**GitHub route probe (which transport this environment has):**
+
+```
+!`command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1 && echo "route A — gh CLI available" || echo "route B — no usable gh CLI; use the GitHub MCP server"`
+```
+
+**Repository (`owner/name`), resolved from the git remote:**
+
+```
+!`command -v gh >/dev/null 2>&1 && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || git remote get-url origin 2>/dev/null | sed -E 's#^[a-zA-Z+]+://##; s#^[^/:]*[:/]##; s#\.git$##' | grep -E '^[^/]+/[^/]+$' || echo "(unresolved — pass owner/repo explicitly)"`
+```
+
+> On route A this is `gh repo view`, exactly as before. The route-B fallback
+> parses the remote URL and is host-agnostic (it works for GitHub Enterprise
+> too); it validates the result against `owner/repo` so a remote it cannot parse
+> reports `(unresolved)` instead of a plausible-looking wrong value.
+
 **Current branch:**
 
 ```
 !`git branch --show-current`
 ```
 
-**Recent workflow runs on this branch:**
+**Recent workflow runs on this branch (route A only):**
 
 ```
-!`gh run list --branch "$(git branch --show-current)" --limit 5 2>/dev/null || echo "(gh not authenticated or no runs found)"`
+!`command -v gh >/dev/null 2>&1 && gh run list --branch "$(git branch --show-current)" --limit 5 2>/dev/null || echo "(unavailable on this route — list runs in Step 2)"`
 ```
 
-**Open PRs for this branch:**
+**Open PRs for this branch (route A only):**
 
 ```
-!`gh pr status 2>/dev/null || echo "(gh not authenticated or no PR found)"`
+!`command -v gh >/dev/null 2>&1 && gh pr status 2>/dev/null || echo "(unavailable on this route — resolve the target in Step 1)"`
 ```
+
+> Every `gh` block is guarded so this skill loads cleanly in an environment
+> without the CLI. On route B the same information comes from the GitHub MCP
+> server in Steps 1–4.
 
 ## Your Task
 
 Follow these steps in order. Stop and ask the user if anything is unclear.
+
+**Routes.** Two transports reach the GitHub API, and every step below names the
+call for each. Use the one the Context probe reported:
+
+| Route | Environment | Transport |
+| --- | --- | --- |
+| A | local checkout / devcontainer | the `gh` CLI |
+| B | Claude Code cloud session | the GitHub MCP server |
+
+The GitHub MCP server is observed as `github`; its tool names are the same
+whatever the connector is named. `owner` and `repo` for every MCP call come from
+the Context repository line. The analysis and the report are identical on both
+routes — only the fetch differs.
 
 ### Step 1 — Resolve the target
 
@@ -42,40 +76,42 @@ Determine what to investigate from `$ARGUMENTS` and the Context above:
 - **PR number provided** (e.g. `$ARGUMENTS` is `123`): use that PR directly.
 - **Run ID provided** (e.g. `$ARGUMENTS` is a long numeric ID like `12345678`):
   use that workflow run directly.
-- **No argument**: look at the Context output.
-  - If there is exactly one open PR for this branch, use it.
-  - If there are recent runs shown, pick the latest failing one.
+- **No argument**: find the candidates.
+  - Route A: use the Context output — if there is exactly one open PR for this
+    branch, use it; otherwise pick the latest failing run shown.
+  - Route B: list runs for this branch with `actions_list`
+    (`method: "list_workflow_runs"`, `workflow_runs_filter: {branch: "<current
+    branch>"}`) and pick the latest failing one; use `list_pull_requests`
+    (`head: "<owner>:<branch>"`) if you need the PR instead.
   - If the target is still ambiguous (multiple PRs, no failures visible), ask
     the user: "Which PR number or run ID should I investigate?"
 
 ### Step 2 — List check / job statuses
 
-Use `gh` as the primary tool; fall back to WebFetch on the GitHub URL if `gh`
-output is incomplete.
-
 **If you resolved a PR number:**
 
-```bash
-gh pr checks <pr-number>
-```
-
-```bash
-gh run list --limit 10 --json databaseId,name,status,conclusion,headBranch \
-  --jq '.[] | "\(.databaseId)  \(.name)  \(.status)  \(.conclusion)"'
-```
+- Route A:
+  ```bash
+  gh pr checks <pr-number>
+  ```
+  ```bash
+  gh run list --limit 10 --json databaseId,name,status,conclusion,headBranch \
+    --jq '.[] | "\(.databaseId)  \(.name)  \(.status)  \(.conclusion)"'
+  ```
+- Route B: call `pull_request_read` **twice** — once with
+  `method: "get_check_runs"` and once with `method: "get_status"`, both with
+  `pullNumber`. Both are required: a check reported as a *commit status* rather
+  than a *check run* is invisible to the check-runs API alone, so querying only
+  one of them can hide the very check that is red.
 
 **If you resolved a run ID:**
 
-```bash
-gh run view <run-id>
-```
-
-**WebFetch alternative** — when `gh` output is truncated or unauthenticated:
-
-```
-WebFetch URL: https://github.com/<owner>/<repo>/pull/<pr-number>/checks
-Prompt: "List all checks with their status and identify the failed jobs and matrix entries"
-```
+- Route A:
+  ```bash
+  gh run view <run-id>
+  ```
+- Route B: `actions_get` with `method: "get_workflow_run"` and
+  `resource_id: "<run-id>"`.
 
 Identify:
 - Which jobs failed (mark them clearly).
@@ -84,60 +120,57 @@ Identify:
 
 ### Step 3 — Drill into each failed job
 
-For each failed job, get the step-level detail:
+List the run's jobs to get their IDs and conclusions:
 
-```bash
-gh run view <run-id> --job <job-id>
-```
+- Route A:
+  ```bash
+  gh run view <run-id> --json jobs \
+    --jq '.jobs[] | "\(.databaseId)  \(.name)  \(.conclusion)"'
+  ```
+- Route B: `actions_list` with `method: "list_workflow_jobs"` and
+  `resource_id: "<run-id>"`.
 
-```bash
-# List jobs with IDs
-gh run view <run-id> --json jobs \
-  --jq '.jobs[] | "\(.databaseId)  \(.name)  \(.conclusion)"'
-```
+Then get the step-level detail for each failed job:
+
+- Route A:
+  ```bash
+  gh run view <run-id> --job <job-id>
+  ```
+- Route B: `actions_get` with `method: "get_workflow_job"` and
+  `resource_id: "<job-id>"`.
 
 Find the first step that shows `failure` and note its name — that is where to
 look for the root cause.
 
 ### Step 4 — Extract the relevant log excerpt
 
-Attempt log extraction in this order:
+- Route A:
+  ```bash
+  gh run view <run-id> --log --job <job-id> 2>/dev/null \
+    | grep -E "(FAIL|Error|error|heap out of memory|Cannot find|SyntaxError|AssertionError)" \
+    | tail -60
+  ```
+- Route B: `get_job_logs` with `return_content: true` and either
+  `job_id: <job-id>` for one job, or `run_id: <run-id>` with
+  `failed_only: true` to get every failed job in the run at once. Use
+  `tail_lines` to keep the response small (start around 200) and raise it only
+  if the failure is not visible in the tail. Then scan the returned text for the
+  same error markers as route A.
 
-**Option A — stream logs via `gh` (fastest):**
-
-```bash
-gh run view <run-id> --log --job <job-id> 2>/dev/null \
-  | grep -E "(FAIL|Error|error|heap out of memory|Cannot find|SyntaxError|AssertionError)" \
-  | tail -60
-```
-
-**Option B — download the log archive via GitHub API** (use when Option A is
-empty or the job produced a large binary archive):
-
-```bash
-# IMPORTANT: use "token" prefix, NOT "Bearer" — "Bearer" causes 401 Bad credentials
-curl -L -H "Authorization: token ${GITHUB_TOKEN}" \
-  "https://api.github.com/repos/<owner>/<repo>/actions/runs/<run-id>/logs" \
-  -o /tmp/ci-logs.zip
-
-unzip -p /tmp/ci-logs.zip "*<job-name>*" \
-  | grep -E "(FAIL|Error|heap out of memory|Cannot find|SyntaxError|AssertionError)" \
-  | tail -60
-```
-
-If `GITHUB_TOKEN` is not set, remind the user to export it:
-
-```bash
-export GITHUB_TOKEN="$(gh auth token)"
-```
-
-**Option C — WebFetch** (fallback when neither `gh` nor the API archive is
-accessible):
+**Last resort — WebFetch** (public repositories only; it is unauthenticated and
+sees nothing in a private repo). Note that on route A this is now the only
+fallback when the `gh --log` output comes back empty — the previous
+`GITHUB_TOKEN` log-archive download was removed because it obtained its token
+from `gh auth token` and so could never work on route B:
 
 ```
 WebFetch URL: https://github.com/<owner>/<repo>/actions/runs/<run-id>
 Prompt: "Show job statuses, error messages, and which steps failed with relevant log lines"
 ```
+
+If neither route is available — no `gh`, and no GitHub MCP server in this
+session — stop and say so plainly, naming both routes you tried. Do not present
+a partial or guessed diagnosis as a complete one.
 
 ### Step 5 — Report the diagnosis
 

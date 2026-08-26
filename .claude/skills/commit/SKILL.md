@@ -2,8 +2,8 @@
 name: commit
 description: Create one or more incremental conventional commits on a properly named branch, without pushing or opening a PR
 argument-hint: "[commit-scope-hint]"
-disable-model-invocation: true
-allowed-tools: Bash(git *) Bash(gh *)
+disable-model-invocation: false
+allowed-tools: Bash(git *) Bash(sed *) Bash(grep *)
 ---
 
 # Commit
@@ -12,10 +12,18 @@ allowed-tools: Bash(git *) Bash(gh *)
 
 Collect the information needed to group and commit the changes.
 
+This skill uses `git` only, so it behaves identically in a local checkout and
+in a Claude Code cloud session — it needs neither the `gh` CLI nor the GitHub
+MCP server.
+
 **Remote default branch (strip the `origin/` prefix when using it):**
 ```
-!`git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || gh repo view --json defaultBranchRef -q '"origin/" + .defaultBranchRef.name' 2>/dev/null || echo "(unresolved — run: git remote set-head origin --auto)"`
+!`git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || git ls-remote --symref origin HEAD 2>/dev/null | sed -n 's#^ref: refs/heads/\(.*\)[[:space:]]HEAD$#origin/\1#p' | grep . || echo "(unresolved — run: git remote set-head origin --auto)"`
 ```
+
+> The second command asks the remote directly. A fresh clone — which is what a
+> cloud session starts from — often has no local `origin/HEAD` ref, and
+> `git ls-remote` resolves the default branch there without mutating anything.
 
 **Working tree status:**
 ```
@@ -58,13 +66,17 @@ First, fetch the latest remote state:
 git fetch origin
 ```
 
-If the default branch could not be resolved in Context, fix the local
-`origin/HEAD` ref and re-resolve before continuing:
+If the default branch could not be resolved in Context — both the local ref and
+the `git ls-remote` probe came up empty — set the local `origin/HEAD` ref and
+re-resolve before continuing:
 
 ```bash
 git remote set-head origin --auto
 git symbolic-ref --short refs/remotes/origin/HEAD
 ```
+
+If that still fails, stop and tell the user the default branch could not be
+resolved by any route; do not guess `main` or `master`.
 
 **Case A — current branch is NOT suitable** (it is the default branch, or its
 name does not describe the work):

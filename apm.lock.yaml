@@ -1,13 +1,13 @@
 lockfile_version: '1'
-generated_at: '2026-07-07T15:51:13.540607+00:00'
+generated_at: '2026-08-26T05:19:31.808012+00:00'
 apm_version: 0.23.1
 dependencies:
 - repo_url: kkohtaka/agent-skills
   name: agent-skills
   host: github.com
-  resolved_commit: 4d3775c17249ef1401f987b6c76d2037da498d8f
-  resolved_ref: v0.1.0
-  version: 0.1.0
+  resolved_commit: 4183940fd2486ed9426f72f902196b86659328a6
+  resolved_ref: v0.2.0
+  version: 0.3.0
   package_type: apm_package
   deployed_files:
   - .claude/skills/commit
@@ -19,8 +19,8 @@ dependencies:
   - .claude/skills/debug-ci
   - .claude/skills/debug-ci/SKILL.md
   deployed_file_hashes:
-    .claude/skills/commit/SKILL.md: sha256:d7562b5f65e4cbc020cea17966be4727ab84ebaf15f3452c5d032aa18ea1fe3d
-    .claude/skills/create-issue/SKILL.md: sha256:af3edda5c5f219aa901e4111cbb493a104bd425b1f620cd92f3de3cae9d8e6a9
-    .claude/skills/create-pr/SKILL.md: sha256:5e185a06936b80c8c8c83c8d5a09f15837fbffed1c9ca05eac5751b7d1655980
-    .claude/skills/debug-ci/SKILL.md: sha256:aaef397a0bcb56d76b69a9dd37c5d2a0004df8ba5ae4f9c2e2fe90d5dbd9e546
-  content_hash: sha256:377ad21c3755369e7dc4e968f41fb77b2e20f8cb1df07f4de3c2fc26b5ff31b3
+    .claude/skills/commit/SKILL.md: sha256:b634ed66090a2bf913058f73cb3c91fcd33276d08d7d07cdf0128db9f23cde3c
+    .claude/skills/create-issue/SKILL.md: sha256:a4d51c39d9a79fd4ae946773e8426955143a44286b468343e5f3fbf743b04360
+    .claude/skills/create-pr/SKILL.md: sha256:ba69b134c70c6e28d5920b419f9ced4aebdbb7e49e801f7012399b17ed1730f6
+    .claude/skills/debug-ci/SKILL.md: sha256:3833bc790ad299d4526e6a2abe2d8e4278c462c09ded2c67499a730c2aab9f5f
+  content_hash: sha256:cab1b31cb47b7d8940275a0ca59d2b7dcf96d3812fe421a3ed86ddda2b16f32a

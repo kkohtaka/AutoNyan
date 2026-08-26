@@ -6,7 +6,7 @@ targets:
 - claude
 dependencies:
   apm:
-  - kkohtaka/agent-skills#v0.1.0
+  - kkohtaka/agent-skills#v0.2.0
   mcp: []
 includes: auto
 scripts: {}
