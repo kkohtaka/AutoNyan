@@ -136,12 +136,10 @@ Wait for explicit approval.
 
 Once approved, delegate PR creation to the `create-pr` skill.
 
-`create-pr` is APM-managed and still shells out to `gh`, so in a cloud session
-it cannot run. There, push with `git` and open the pull request with the GitHub
-MCP tools directly, applying the same body requirements as below. Do not edit
-`create-pr` to fix this — it is overwritten by the next `apm install`; the fix
-belongs in the `kkohtaka/agent-skills` package (see the APM-managed skills note
-in `CLAUDE.md`).
+`create-pr` runs in a cloud session too — it probes for `gh` and falls back to
+the GitHub MCP server. Do not edit it here in any case; it is overwritten by the
+next `apm install`, and the fix belongs in the `kkohtaka/agent-skills` package
+(see the APM-managed skills note in `CLAUDE.md`).
 
 Ensure the PR body includes a `## Related issue` section near the top with:
 

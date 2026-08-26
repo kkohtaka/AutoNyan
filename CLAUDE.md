@@ -372,9 +372,10 @@ one place.
 
 **How each workflow differs:**
 
-- **Feature Development** — the middle of the loop is unchanged once the
-  `SessionStart` bootstrap has run: edit, `quality-gate`, branch, commit. Only
-  the ends differ, because `commit` and `create-pr` shell out to `gh`.
+- **Feature Development** — unchanged once the `SessionStart` bootstrap has run:
+  edit, `quality-gate`, branch, commit, open the pull request. `commit` is
+  `git`-only and `create-pr` probes for `gh` and falls back to the GitHub MCP
+  server, so the loop no longer breaks at its ends.
 - **Adding a New Function** — unchanged; `add-function` only writes files.
 - **Infrastructure Change** — split in two. Editing Terraform and running
   `npm run lint:terraform` work; `terraform plan` and `apply` do not, since
@@ -382,8 +383,8 @@ one place.
   are reachable. Review reads the plan a pull request already produced, and
   applying is delegated to the Deploy workflow.
 - **Debugging** — deployed-function logs come from the Cloud Logging MCP server
-  rather than `gcloud`. CI failures cannot use `debug-ci`; read the run, its
-  jobs, and its logs through the GitHub MCP tools instead.
+  rather than `gcloud`. CI failures use `debug-ci` as usual; it reads the run,
+  its jobs, and its logs through the GitHub MCP tools on this route.
 - **Renovate triage** — works, reading and merging through the GitHub MCP tools.
 
 **Per-skill availability:**
@@ -392,27 +393,29 @@ one place.
 | --- | --- | --- |
 | `add-ci-role` | Different path | Editing the `ROLES` array and this document works; applying the grant needs `gcloud` and project-level IAM — devcontainer only |
 | `add-function` | Works as-is | Writes files only |
-| `commit` | Unavailable | APM-managed, assumes `gh`; commit with `git` directly |
-| `create-issue` | Unavailable | APM-managed, assumes `gh`; file the issue with the GitHub MCP tools |
-| `create-pr` | Unavailable | APM-managed, assumes `gh`; open the pull request with the GitHub MCP tools, applying the same body requirements |
-| `debug-ci` | Unavailable | APM-managed, assumes `gh`; read runs and logs with the GitHub MCP tools |
+| `commit` | Works as-is | Uses `git` only — needs neither `gh` nor the GitHub MCP server |
+| `create-issue` | Different path | Probes for `gh`, falls back to the GitHub MCP server; the label set comes from the REST endpoint, which no MCP tool exposes |
+| `create-pr` | Different path | Probes for `gh`, falls back to the GitHub MCP server; `git push` itself works on either route |
+| `debug-ci` | Different path | Probes for `gh`, falls back to the GitHub MCP server for runs, jobs, and job logs |
 | `debug-function-logs` | Different path | Reads through the Cloud Logging MCP server; needs the connector and the project id (below) |
 | `deploy-staging` | Different path, partial | Follows a Deploy run and reports its outcome, but cannot start one (below) |
 | `docs-sync-check` | Works as-is | Needs only `git` |
 | `e2e-verify` | Unavailable | Needs an interactive Drive login (below) |
 | `lint-fix` | Works as-is | After the bootstrap installs the linters |
 | `quality-gate` | Works as-is | After the bootstrap installs the linters |
-| `renovate-triage` | Different path | GitHub MCP tools instead of `gh`; its `debug-ci` delegation is unavailable |
-| `resolve-issue` | Different path, partial | Reads the issue through the GitHub MCP tools; the `create-pr` step it delegates to is unavailable |
+| `renovate-triage` | Different path | GitHub MCP tools instead of `gh`; its `debug-ci` delegation works on this route |
+| `resolve-issue` | Different path | Reads the issue through the GitHub MCP tools; the `create-pr` step it delegates to works on this route |
 | `terraform-plan-review` | Different path | Reads the plan from the plan run's job log |
 | `test-fix` | Works as-is | After the bootstrap installs dependencies |
 
 **Constraints that remain, and what causes each:**
 
-- **No `gh`.** `commit`, `create-pr`, `create-issue`, and `debug-ci` are
-  APM-managed (see above) and assume it, so the fix belongs in the
-  `kkohtaka/agent-skills` package, not here. Editing them in this repository is
-  overwritten by the next `apm install`.
+- **No `gh`.** No longer a blocker: since agent-skills `v0.2.0` the four
+  APM-managed skills probe for `gh` and fall back to the GitHub MCP server. The
+  probe is what selects the route, so nothing here needs to know which
+  environment it is in. Any further fix still belongs in the
+  `kkohtaka/agent-skills` package — editing those four skill directories in this
+  repository is overwritten by the next `apm install`.
 - **No Google Cloud credential in the session.** Cloud environments have no
   secrets store, so a service account key must never be placed in one. This is a
   deliberate design constraint, which is why reads go through a managed

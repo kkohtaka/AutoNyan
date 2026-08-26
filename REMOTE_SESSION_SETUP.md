@@ -262,8 +262,9 @@ only to be exercised and ticked.
   `scripts/setup-dev-tools.sh` deliberately does not add them — the access
   model in section 1 removes the need for `gcloud`, and GitHub work goes
   through the GitHub MCP tools instead. The APM-managed skills (`commit`,
-  `create-pr`, `create-issue`, `debug-ci`) still assume `gh`, so they are
-  unavailable here until that changes upstream; see #398 and the note in #395.
+  `create-pr`, `create-issue`, `debug-ci`) no longer assume `gh`: since
+  agent-skills `v0.2.0` each probes for it and falls back to the GitHub MCP
+  server, so all four are usable here.
 - **Run an arbitrary GraphQL query against GitHub.** `POST /graphql` answers 403
   by policy, not for want of a credential (section 1), so no token or header
   changes it.
