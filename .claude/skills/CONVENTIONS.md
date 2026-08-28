@@ -85,9 +85,18 @@ explicitly rather than shelling out.
   runs `terraform apply`, deploys, or merges. The user must invoke these by
   name.
 - **`false` (model may auto-invoke)** — read-only / advisory skills that only
-  run, inspect, and report without mutating anything.
+  run, inspect, and report without mutating anything, plus the one exception in
+  §4.3: a skill that exists to be started by an unattended session.
 
 A skill that both inspects and fixes counts as having side effects → `true`.
+
+`true` is stronger than "the model will not choose this skill on its own": the
+skill is absent from the session's available-skills list altogether, the `Skill`
+tool refuses it by name, and a scheduled prompt consisting of only `/<name>`
+starts a session that then does nothing. That was measured, not assumed —
+`REMOTE_SESSION_SETUP.md` §1 records the experiment and its control. So a skill
+meant to be started by an unattended session cannot carry the flag; §4.3's
+exception says what carries the safety in its place.
 
 ### 4.3 Confirmation gates
 
@@ -106,13 +115,25 @@ writes in its own body, and MUST:
 - carry a **`Prohibited`** section naming the destructive or judgement-heavy
   operations it must never perform — force push, deleting a branch, closing an
   issue, merging a PR, `terraform apply`, resolving review threads;
-- still set `disable-model-invocation: true` per §4.2. The exception drops the
-  confirmation prompt, not the requirement to be invoked by name.
+- set `disable-model-invocation: false`, against the §4.2 default for a skill
+  with side effects. `true` would make the skill unreachable from the very
+  session that is supposed to run it, so the invocation gate is not available
+  here at any price;
+- compensate for the missing gate by scoping `allowed-tools` (§4.1) to exactly
+  the tools the enumerated writes need, and by writing a `description` that says
+  the skill is started by a scheduled session — so it does not read as an
+  invitation to auto-invoke during ordinary interactive work.
 
-The safety property becomes "the skill enumerated this write in advance", which
-a reviewer can check in the diff. The exception covers only the unattended
-skill's own actions: a sibling skill it delegates to (§4.4) keeps its own gates
-when a human invokes it.
+The scheduled session starts the skill with a prompt that is the single line
+`/<name>`; that is the reliable way in, and it works only because the flag is
+`false`.
+
+The safety property becomes "the skill enumerated this write in advance, and
+could not have made any other", which a reviewer can check in the diff: the
+enumeration, the `Prohibited` section, and the narrowed `allowed-tools` together
+replace what the confirmation prompt and the invocation gate did for an ordinary
+skill. The exception covers only the unattended skill's own actions: a sibling
+skill it delegates to (§4.4) keeps its own gates when a human invokes it.
 
 ### 4.4 Delegation, not duplication
 
@@ -193,7 +214,9 @@ Before considering a skill done, verify:
 - [ ] Ordinary skill: confirmation gates present for any outward/irreversible
       action (§4.3).
 - [ ] Unattended skill: outward actions enumerated, `Prohibited` section
-      present, `disable-model-invocation: true` (§4.3 exception).
+      present, `allowed-tools` narrowed to those actions, scheduled-invocation
+      `description`, and `disable-model-invocation: false` so the scheduled
+      session can start it at all (§4.3 exception).
 - [ ] No duplicated behavior; delegations point to sibling skills (§4.4).
 - [ ] Tools that a cloud session lacks (`gh`, `gcloud`, local Terraform state)
       are probed for and have a second route (§4.8).
