@@ -96,6 +96,24 @@ before executing, even within an explicitly invoked skill. This always
 includes: `git push`, opening a PR or issue, `terraform apply`, any deploy, and
 merging a PR. State exactly what will happen, then wait.
 
+**Exception — skills that run unattended.** A skill written to be invoked by a
+scheduled or otherwise unattended session has nobody to confirm with, so a
+confirmation gate would simply stall it. Such a skill instead pre-authorizes its
+writes in its own body, and MUST:
+
+- **enumerate** every outward action it is permitted to take, and state that
+  anything not enumerated is forbidden;
+- carry a **`Prohibited`** section naming the destructive or judgement-heavy
+  operations it must never perform — force push, deleting a branch, closing an
+  issue, merging a PR, `terraform apply`, resolving review threads;
+- still set `disable-model-invocation: true` per §4.2. The exception drops the
+  confirmation prompt, not the requirement to be invoked by name.
+
+The safety property becomes "the skill enumerated this write in advance", which
+a reviewer can check in the diff. The exception covers only the unattended
+skill's own actions: a sibling skill it delegates to (§4.4) keeps its own gates
+when a human invokes it.
+
 ### 4.4 Delegation, not duplication
 
 Skills compose by name rather than re-implementing shared behavior. When a step
@@ -172,7 +190,10 @@ Before considering a skill done, verify:
 - [ ] Frontmatter follows §2 (keys, order, scoped `allowed-tools`).
 - [ ] `## Context` uses read-only commands only (§3, §4.5).
 - [ ] `disable-model-invocation` set per §4.2.
-- [ ] Confirmation gates present for any outward/irreversible action (§4.3).
+- [ ] Ordinary skill: confirmation gates present for any outward/irreversible
+      action (§4.3).
+- [ ] Unattended skill: outward actions enumerated, `Prohibited` section
+      present, `disable-model-invocation: true` (§4.3 exception).
 - [ ] No duplicated behavior; delegations point to sibling skills (§4.4).
 - [ ] Tools that a cloud session lacks (`gh`, `gcloud`, local Terraform state)
       are probed for and have a second route (§4.8).
