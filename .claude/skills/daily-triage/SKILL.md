@@ -116,6 +116,10 @@ What matters, and what each fact implies:
   (Step 6C).
 - `dismiss_stale_reviews_on_push: true` and `require_last_push_approval: true` —
   any push to a branch invalidates its approval.
+- `require_extra_approval_for_unattributed_changes: true` — a commit GitHub
+  cannot attribute to a user account raises the approval count. An unattended
+  push is exactly the kind of commit that trips this, so it belongs in the
+  blocker list Step 6C reports, not only in the review count.
 - `allowed_merge_methods: ["rebase"]` with `required_linear_history` — merge
   commits are rejected outright.
 - `copilot_code_review.review_draft_pull_requests: false` — **a draft pull
@@ -191,9 +195,12 @@ post it again: carry it into the digest's `継続中` list instead (Step 8).
 At most **three** implementation pull requests per run. For each issue:
 
 1. Delegate the issue reading, branch creation, and implementation to
-   `resolve-issue`. Its own confirmation gates are subsumed by this skill's
-   pre-authorization for the duration of this run (`CONVENTIONS.md` §4.3) — they
-   still apply when a human invokes it directly.
+   `resolve-issue`, and **stop the delegation there** — its own final step hands
+   pull request creation to `create-pr`, which is unreachable from this session
+   (see `## Context`), so step 6 below opens the pull request instead. Its
+   confirmation gates are subsumed by this skill's pre-authorization for the
+   duration of this run (`CONVENTIONS.md` §4.3) — they still apply when a human
+   invokes it directly.
 2. Branch from `origin/master` after `git fetch origin master`, named per
    `CLAUDE.md` (`feat/`, `fix/`, `docs/`, `refactor/`, `chore/`, `ci/`, `test/`).
 3. Follow the existing architecture and `CLAUDE.md`'s Comment Policy — comments
@@ -293,8 +300,10 @@ still computing it — re-read once before concluding anything.
   clear it here: `update_pull_request_branch` merges the base into the head,
   producing a merge commit the linear-history ruleset rejects, and the rebase
   variant exists only in GraphQL, which answers 403 by policy.
-- **`BLOCKED`** — the cause is almost always an unresolved thread or an approval
-  dismissed by a later push. Report the actual cause, not the status word.
+- **`BLOCKED`** — the cause is almost always an unresolved thread, an approval
+  dismissed by a later push, or an approval short of the count that
+  `require_extra_approval_for_unattributed_changes` raised. Report the actual
+  cause, not the status word.
 
 ### Step 7 — Check that nothing was dropped
 
