@@ -218,8 +218,13 @@ At most **three** implementation pull requests per run. For each issue:
 
    ```bash
    git fetch origin master
-   git diff origin/master...HEAD --stat   # empty = already on master, do not reuse
+   git diff origin/master HEAD --stat   # empty = already on master, do not reuse
    ```
+
+   **Two dots, not three.** `git diff origin/master...HEAD` diffs from the
+   *merge base*, so after a rebase-merge it still reports the branch's own
+   changes and gives the same wrong answer the SHA count does. Only the two-dot
+   form compares the trees themselves, which is the question being asked.
 
 3. Follow the existing architecture and `CLAUDE.md`'s Comment Policy — comments
    record *why*, never *what*.
