@@ -11,7 +11,12 @@ fi
 
 cd "${CLAUDE_PROJECT_DIR:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"}"
 
-npm install
+# `npm ci` rather than `npm install`: the cloud image's Node is older than the
+# `>=24.15.0` this project requires, and its npm rewrites package-lock.json
+# (dropping the `libc` fields npm 11 writes), leaving every session with a dirty
+# tree that an unattended routine can sweep into a commit. `npm ci` installs
+# from the lockfile without ever writing it.
+npm ci
 
 # `npm run lint` shells out to shellcheck, yamllint, shfmt, tflint and
 # terraform, none of which ship in the cloud image.
