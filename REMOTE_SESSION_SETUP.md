@@ -320,6 +320,13 @@ unattended run. Reproduce by re-running each of these in a cloud session:
       login returns exactly one user id, which is the DM target
 - [x] The quality gate Step 5 depends on passes here — `npm run lint` and
       `npm run test:coverage` both exit 0, and neither dirties the tree
+- [x] Step 5's "has this branch already landed?" check is `git diff
+      origin/master HEAD` with **two** dots. Measured on a branch whose content
+      had just been rebase-merged: the SHA count `git log origin/master..HEAD`
+      listed the commit as unmerged, the three-dot `git diff origin/master...HEAD`
+      reported 95 insertions because it diffs from the merge base, and only the
+      two-dot form came back empty — the correct answer. Both wrong forms
+      reproduce #452
 - [ ] An actual unattended `/daily-triage` run, with the maintainer watching,
       takes only the writes `## Permitted writes` enumerates. Not yet done —
       it must not run while the local scheduled task is still enabled, or the
