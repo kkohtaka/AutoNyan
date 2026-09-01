@@ -396,6 +396,7 @@ one place.
 | `commit` | Works as-is | Uses `git` only — needs neither `gh` nor the GitHub MCP server |
 | `create-issue` | Different path | Probes for `gh`, falls back to the GitHub MCP server; the label set comes from the REST endpoint, which no MCP tool exposes |
 | `create-pr` | Different path | Probes for `gh`, falls back to the GitHub MCP server; `git push` itself works on either route |
+| `daily-triage` | Cloud session only | The scheduled triage routine; deliberately single-route (`CONVENTIONS.md` §4.8 exception), so it has no devcontainer path |
 | `debug-ci` | Different path | Probes for `gh`, falls back to the GitHub MCP server for runs, jobs, and job logs |
 | `debug-function-logs` | Different path | Reads through the Cloud Logging MCP server; needs the connector and the project id (below) |
 | `deploy-staging` | Different path, partial | Follows a Deploy run and reports its outcome, but cannot start one (below) |
