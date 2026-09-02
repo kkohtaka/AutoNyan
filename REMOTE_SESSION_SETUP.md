@@ -117,6 +117,23 @@ routine's skill, but the skill it names must not carry
 `disable-model-invocation: true` — which the unattended exception in
 `.claude/skills/CONVENTIONS.md` §4.3 currently requires it to.
 
+**What the flag gates is the originator, not the route.** A gated skill still
+loads normally when a person types `/<name>` themselves in an interactive
+session — measured with `/create-issue`, which loaded and ran to completion
+while remaining absent from the same session's available-skills list. So the
+three cases are:
+
+| Started by | Gated skill |
+| --- | --- |
+| The model, via the `Skill` tool | Refused |
+| A scheduled routine's prompt | Does nothing |
+| A person typing `/<name>` interactively | **Runs normally** |
+
+This is why the flag remains the right default for a skill with side effects
+(§4.2) and is still fatal for an unattended one: a scheduled routine has no
+person to type the command. Read "cannot be started" above as scoped to the
+unattended case, which is the only one this document is about.
+
 **Connector prerequisites.** The Cloud Logging connector is configuration
 rather than code, so nothing in this repository installs it. Configured once per
 Google Cloud project:
@@ -327,10 +344,17 @@ unattended run. Reproduce by re-running each of these in a cloud session:
       reported 95 insertions because it diffs from the merge base, and only the
       two-dot form came back empty — the correct answer. Both wrong forms
       reproduce #452
-- [ ] An actual unattended `/daily-triage` run, with the maintainer watching,
-      takes only the writes `## Permitted writes` enumerates. Not yet done —
-      it must not run while the local scheduled task is still enabled, or the
-      two duplicate each other's comments and pull requests
+- [x] An actual `/daily-triage` run, with the maintainer watching, takes only
+      the writes `## Permitted writes` enumerates. Run 2026-09-01 after the
+      local scheduled task was disabled, so the two could not duplicate each
+      other. Audited against a baseline captured beforehand: the only writes
+      were one issue comment (#440) and one Slack DM to the maintainer. Branch
+      count unchanged at 8, `master` unmoved, no pull request opened (Step 5's
+      budget of three went unused because nothing open was actionable as code),
+      no force push, no merge, no thread resolved, no draft taken out of draft.
+      Step 4's re-send suppression was exercised for real: #453's open wording
+      question was recognized as already reported and carried into the digest's
+      `継続中` list instead of being re-posted
 
 **Deployment and plan review (GitHub Actions):**
 
