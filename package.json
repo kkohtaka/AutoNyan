@@ -32,6 +32,7 @@
     "format:terraform": "terraform fmt -recursive terraform/",
     "format:sh": "shfmt -w scripts/*.sh",
     "prepare": "./scripts/setup-git-hooks.sh",
+    "setup:node": "./scripts/setup-node.sh",
     "setup:dev-tools": "./scripts/setup-dev-tools.sh",
     "setup:git-hooks": "./scripts/setup-git-hooks.sh",
     "setup:terraform-backend": "./scripts/setup-backend.sh",
