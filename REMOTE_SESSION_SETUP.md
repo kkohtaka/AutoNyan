@@ -183,11 +183,15 @@ routine development:
   it only to build human-facing links in notification emails; the session
   never fetches it.
 
-The bootstrap in section 3 does reach one host worth recording:
-`scripts/setup-dev-tools.sh` downloads tflint **and its ruleset plugins** from
-GitHub Releases, which redirects to `objects.githubusercontent.com`. It
-resolved in a verified cloud session; if an environment ever blocks it,
-installing tflint is what breaks.
+The bootstrap in section 3 reaches two hosts worth recording, both of which
+resolved in a verified cloud session:
+
+- `scripts/setup-dev-tools.sh` downloads tflint **and its ruleset plugins** from
+  GitHub Releases, which redirects to `objects.githubusercontent.com`. If an
+  environment ever blocks it, installing tflint is what breaks.
+- `scripts/setup-node.sh` downloads the Node.js binary release and its
+  `SHASUMS256.txt` from `nodejs.org`. There is no substitute host: the
+  `nodejs/node` GitHub releases carry source only, no binary assets.
 
 `api.github.com` is reachable (section 1 covers what authenticates those
 requests), but a session's GitHub API access is scoped to the repositories
@@ -211,30 +215,52 @@ Trusted default already covers it.
 ## 3. Bootstrap
 
 ```bash
+./scripts/setup-node.sh         # or: npm run setup:node
 npm ci                          # also installs the pre-push hook
 ./scripts/setup-dev-tools.sh    # or: npm run setup:dev-tools
 ```
 
-**`npm ci`, not `npm install`.** The cloud image ships Node 22 and 20 only,
-while this project requires `>=24.15.0` (`.nvmrc` pins 24.20.0). Nothing
-enforces that — there is no `.npmrc` with `engine-strict` — so `npm install`
-succeeds and quietly rewrites `package-lock.json`, dropping the `libc` fields
-that npm 11 writes. Measured: 48 deleted lines, reproducible on every fresh
-session. That left every cloud session starting with a dirty tree, which an
-unattended routine can sweep into a commit. `npm ci` installs from the lockfile
-without ever writing it, and still runs `prepare`, so the pre-push hook is
-installed either way.
+**Node comes first, and comes from `.nvmrc`.** The cloud image's own Node is
+older than the `>=24.15.0` this project requires — it ships a 22 on `PATH` and a
+20 at `/usr/local/bin/node` — so everything after it would otherwise run on a
+different major than CI, the devcontainer and the deployed Cloud Functions, all
+three of which already derive their Node from `.nvmrc`. `setup-node.sh` reads
+that file (never a hardcoded version, so a Renovate bump moves the cloud session
+too), downloads the matching binary release from `nodejs.org`, verifies its
+`SHASUMS256.txt` checksum, and unpacks it under `/opt`.
 
-A cloud session runs both of these for itself: the `SessionStart` hook in
+It then **shadows `node`, `npm`, `npx` and `corepack` in whichever directory
+currently wins on `PATH`**, rather than prepending a directory of its own. That
+is not a stylistic choice: a cloud session's shells inherit a `PATH` fixed when
+the container started and re-source neither `/etc/profile.d` nor `~/.bashrc`, so
+a prepended directory — or an `nvm alias default`, measured — reaches nothing.
+The image does carry an nvm at `/opt/nvm`, and `nvm install` reads `.nvmrc`
+correctly, but its effect dies with the shell that ran it.
+
+**`npm ci`, not `npm install`.** `npm ci` installs from the lockfile without
+ever writing it, which is what an ephemeral fresh clone wants regardless of the
+Node version, and it still runs `prepare`, so the pre-push hook is installed
+either way. This started as the fix for a lockfile hole (#454): under the image's
+older npm, `npm install` quietly rewrote `package-lock.json`, dropping the `libc`
+fields npm 11 writes — 48 deleted lines on every fresh session, leaving a dirty
+tree that an unattended routine could sweep into a commit. Raising Node closes
+that hole at the cause; `npm ci` remains correct on its own terms.
+
+`.npmrc` sets `engine-strict=true` so a Node that does not satisfy `engines`
+fails the install loudly (`EBADENGINE`) instead of proceeding and rewriting the
+lockfile. It applies to every environment, not just cloud sessions — that is the
+point: nothing else announces a version skew.
+
+A cloud session runs all three of these for itself: the `SessionStart` hook in
 `.claude/settings.json` invokes `.claude/hooks/session-start-install.sh`,
 which runs them whenever `CLAUDE_CODE_REMOTE` is set — see #396. Nothing needs
 to go in the cloud environment's **Setup script** field; putting
 `setup-dev-tools.sh` there as well only repeats what the hook already does.
 
-On an ephemeral machine that is not a cloud session, run the two commands by
-hand. The second installs system-wide (`apt-get`, `/usr/local/bin`), so it
-needs root: prefix it with `sudo` unless you are already root, as a cloud
-session is.
+On an ephemeral machine that is not a cloud session, run the three commands by
+hand. The first two write to `/opt` and system-wide (`apt-get`,
+`/usr/local/bin`), so they need root: prefix them with `sudo` unless you are
+already root, as a cloud session is.
 
 `setup-dev-tools.sh` also installs the tflint ruleset plugins that
 `terraform/.tflint.hcl` pins, so `npm run lint:terraform` enforces the full
@@ -251,6 +277,8 @@ Run in order and stop at the first failure.
 
 **Local quality gates** (no Google Cloud access needed):
 
+- [x] `node -v` matches `.nvmrc`, and `npm install` — not just `npm ci` — leaves
+      `package-lock.json` unmodified
 - [x] `npm run build` exits 0 in a single pass on a clean tree
 - [x] `npm run lint` exits 0 (all five linters, including `lint:terraform`)
 - [x] `npm run test:coverage` exits 0
