@@ -1,4 +1,7 @@
 {
+  "permissions": {
+    "allow": ["mcp__Slack__slack_send_message"]
+  },
   "hooks": {
     "PostToolUse": [
       {
