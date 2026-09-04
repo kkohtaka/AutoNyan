@@ -99,6 +99,36 @@ Reaching the maintainer's own DM needs no channel lookup: `slack_search_users`
 resolves the login to a user id, and that user id can be passed straight to
 `slack_read_channel` / `slack_send_message` as the `channel_id`.
 
+**`allowed-tools` restricts; `permissions.allow` grants.** The two are separate
+layers and neither implies the other. A skill's `allowed-tools` frontmatter
+narrows what that skill may reach and pre-approves nothing; the permission
+prompt is suppressed only by a `permissions.allow` rule in a settings file.
+So a skill can name an MCP tool in `allowed-tools`, pass every review, and still
+stall an unattended session on the prompt for that same tool. Measured on
+2026-09-03: the scheduled `/daily-triage` run completed every GitHub write
+without a prompt and blocked on `mcp__Slack__slack_send_message`.
+
+Consequences for an unattended routine:
+
+- Every MCP tool it calls needs an entry in the checked-in
+  `.claude/settings.json`. `.claude/settings.local.json` is not a route — a
+  cloud session starts from a fresh clone, so a gitignored local settings file
+  never exists there. Nor is raising `permissions.defaultMode`: `auto` and
+  `bypassPermissions` take effect only from user or managed settings, or
+  `--permission-mode`, not from project settings.
+- The rule must spell the tool exactly as `/mcp` reports it in the session that
+  will run the routine; a name that does not match is ignored silently — the
+  same failure class as the connector rename above.
+- An `mcp__` rule carrying a parenthesised argument matcher is discarded
+  outright, so an MCP grant is per-tool and all-or-nothing. A restriction on
+  *which* Slack destination a routine may post to therefore cannot be expressed
+  mechanically and stays textual, in the skill's `Prohibited` section.
+- An organization-level `ask` control on a tool overrides allow rules entirely,
+  in every permission mode. `/mcp` shows whether one applies.
+- **An agent cannot make this edit.** Writes to `.claude/settings.json` are
+  refused by the sandbox classifier — an agent must not widen its own
+  permissions — so the maintainer applies the allowlist by hand.
+
 **A skill marked `disable-model-invocation: true` cannot be started in an
 unattended session.** Such a skill is absent from the session's available-skills
 list, and invoking it through the `Skill` tool is refused outright:

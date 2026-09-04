@@ -122,7 +122,12 @@ writes in its own body, and MUST:
 - compensate for the missing gate by scoping `allowed-tools` (§4.1) to exactly
   the tools the enumerated writes need, and by writing a `description` that says
   the skill is started by a scheduled session — so it does not read as an
-  invitation to auto-invoke during ordinary interactive work.
+  invitation to auto-invoke during ordinary interactive work;
+- have every tool it needs covered by `permissions.allow` in
+  `.claude/settings.json`. Scoping `allowed-tools` restricts what the skill may
+  reach and grants nothing, so without the allowlist entry the routine stalls on
+  a permission prompt nobody is there to answer — see `REMOTE_SESSION_SETUP.md`
+  §1 for why the two layers are independent.
 
 The scheduled session starts the skill with a prompt that is the single line
 `/<name>`; that is the reliable way in, and it works only because the flag is
