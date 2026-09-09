@@ -142,6 +142,44 @@ describe('driveScanner', () => {
       delete process.env.NOTIFICATION_TOPIC;
     });
 
+    it('propagates the E2E flag to the doc-process message', async () => {
+      const cloudEvent = buildEvent({
+        folderId: 'test-folder-id',
+        isE2E: true,
+      });
+
+      mockDriveGet.mockResolvedValue({
+        data: {
+          id: 'test-folder-id',
+          name: 'Test Folder',
+          mimeType: 'application/vnd.google-apps.folder',
+        },
+      });
+      mockDriveList.mockResolvedValue({
+        data: {
+          files: [
+            {
+              id: 'file1',
+              name: 'document1.pdf',
+              mimeType: 'application/pdf',
+              size: '1024',
+              modifiedTime: '2023-01-01T00:00:00.000Z',
+              webViewLink: 'https://drive.google.com/file/d/file1/view',
+            },
+          ],
+          nextPageToken: undefined,
+        },
+      });
+      mockPublishMessage.mockResolvedValue('message-id-1');
+
+      await driveScanner(cloudEvent);
+
+      const messageData = JSON.parse(
+        mockPublishMessage.mock.calls[0][0].data.toString()
+      );
+      expect(messageData.isE2E).toBe(true);
+    });
+
     it('should successfully process CloudEvent and return result', async () => {
       const cloudEvent = buildEvent({
         folderId: 'test-folder-id',

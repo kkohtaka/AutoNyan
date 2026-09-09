@@ -42,6 +42,7 @@ export const textVisionProcessor = async (
 ): Promise<Result> => {
   let originalFileId = '';
   let originalFileName = '';
+  let isE2E = false;
 
   try {
     logger.info('Received Storage object data', { storageObjectData });
@@ -73,6 +74,7 @@ export const textVisionProcessor = async (
 
     originalFileId = String(metadata.metadata?.originalFileId || '');
     originalFileName = String(metadata.metadata?.originalFileName || '');
+    isE2E = String(metadata.metadata?.isE2E) === 'true';
     const contentHash = metadata.metadata?.contentHash;
 
     if (!originalFileId || !originalFileName || !contentHash) {
@@ -298,6 +300,7 @@ export const textVisionProcessor = async (
               fileName: originalFileName,
               stageName: 'text-vision-processor',
               errorMessage: errorResponse.error,
+              ...(isE2E ? { isE2E: true } : {}),
             },
             attributes: {
               operation: 'failure-notification',

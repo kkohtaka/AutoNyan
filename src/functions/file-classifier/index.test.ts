@@ -98,6 +98,7 @@ describe('fileClassifier', () => {
     fileName: string;
     extractedText: string;
     confidence: number;
+    isE2E?: boolean;
   }): CloudEvent<MessagePublishedData> => ({
     specversion: '1.0',
     id: 'test-event-id',
@@ -330,6 +331,36 @@ describe('fileClassifier', () => {
     expect(result.message).toContain('file move failed');
     expect(result.category).toBe('請求書');
     expect(mockUpdateDocumentWithClassification).toHaveBeenCalled();
+  });
+
+  it('propagates the E2E flag to the success notification', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書 金額: 10000円',
+      confidence: 1,
+      isE2E: true,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'invoice',
+      summary: '請求書です。',
+    });
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    expect(mockPublishMessage.mock.calls[0][0].json.isE2E).toBe(true);
   });
 
   it('should publish a success notification when NOTIFICATION_TOPIC is set', async () => {

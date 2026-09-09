@@ -64,6 +64,7 @@ export const textFirebaseWriter = async (
 ): Promise<Result> => {
   let originalFileId = '';
   let originalFileName = '';
+  let isE2E = false;
 
   try {
     logger.info('Received Storage object data', { storageObjectData });
@@ -125,6 +126,7 @@ export const textFirebaseWriter = async (
     const originalMimeType = String(
       originalMetadata.metadata?.originalMimeType || ''
     );
+    isE2E = String(originalMetadata.metadata?.isE2E) === 'true';
 
     if (!originalFileId || !originalFileName) {
       throw new PermanentError(
@@ -237,6 +239,7 @@ export const textFirebaseWriter = async (
           fileName: originalFileName,
           extractedText: extractedText,
           confidence: overallConfidence,
+          ...(isE2E ? { isE2E: true } : {}),
         };
 
         const topic = pubsub.topic(classifierTopicName);
@@ -301,6 +304,7 @@ export const textFirebaseWriter = async (
               fileName: originalFileName,
               stageName: 'text-firebase-writer',
               errorMessage: errorResponse.error,
+              ...(isE2E ? { isE2E: true } : {}),
             },
             attributes: {
               operation: 'failure-notification',
