@@ -26,6 +26,7 @@ interface ClassificationEventData extends Record<string, unknown> {
   fileName: string;
   extractedText: string;
   confidence: number;
+  isE2E?: boolean;
 }
 
 interface Result {
@@ -44,6 +45,8 @@ interface Result {
 export const fileClassifier = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
+  let isE2E = false;
+
   try {
     logger.info('Received PubSub event', { cloudEvent });
 
@@ -58,6 +61,8 @@ export const fileClassifier = async (
       'fileName',
       'extractedText',
     ]);
+
+    isE2E = eventData.isE2E === true;
 
     // Get environment variables
     const projectId = getProjectId();
@@ -223,6 +228,7 @@ export const fileClassifier = async (
           reasoning: classification.reasoning,
           summary: classification.summary,
           destinationFolderId: targetFolderId,
+          ...(isE2E ? { isE2E: true } : {}),
         };
         await pubsub.topic(notificationTopicName).publishMessage({
           json: notificationData,
@@ -273,6 +279,7 @@ export const fileClassifier = async (
               fileName: '',
               stageName: 'file-classifier',
               errorMessage: errorResponse.error,
+              ...(isE2E ? { isE2E: true } : {}),
             },
             attributes: { operation: 'failure-notification' },
           });

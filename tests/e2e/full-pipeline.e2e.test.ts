@@ -316,8 +316,12 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       folderId: caseFolderId,
     });
 
+    // isE2E rides the pipeline so notification-dispatcher can prefix the mail
+    // this run sends, keeping it out of the production notification stream.
     await topic.publishMessage({
-      data: Buffer.from(JSON.stringify({ folderId: caseFolderId })),
+      data: Buffer.from(
+        JSON.stringify({ folderId: caseFolderId, isE2E: true })
+      ),
     });
 
     logger.log('stage-1', 'Drive Scanner triggered successfully');
@@ -549,6 +553,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         );
 
         expect(notificationLog).toBeTruthy();
+        expect(String(notificationLog!.subject)).toContain('[AutoNyan E2E]');
 
         logger.log('stage-6', 'Notification Dispatcher completed', {
           logEntry: notificationLog,
@@ -642,6 +647,9 @@ describe('AutoNyan E2E - Full Pipeline', () => {
           );
 
           expect(failureNotificationLog).toBeTruthy();
+          expect(String(failureNotificationLog!.subject)).toContain(
+            '[AutoNyan E2E]'
+          );
 
           logger.log('stage-3-negative', 'Failure notification dispatched', {
             logEntry: failureNotificationLog,

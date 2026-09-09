@@ -117,6 +117,38 @@ describe('notificationDispatcher', () => {
       destinationFolderId: 'dest-folder-id',
     };
 
+    it('uses the E2E subject prefix when the payload carries the flag', async () => {
+      const e2eData = { ...successData, isE2E: true };
+      mockParsePubSubEvent.mockReturnValue({ data: e2eData });
+
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            { emailAddress: 'user1@example.com', role: 'reader', type: 'user' },
+          ],
+        },
+      });
+
+      await notificationDispatcher(
+        buildEvent(e2eData, {
+          operation: 'success-notification',
+          fileId: 'file-123',
+        })
+      );
+
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      const subjectLine =
+        decoded.split('\r\n').find((l: string) => l.startsWith('Subject:')) ||
+        '';
+      const subject = Buffer.from(
+        subjectLine.match(/=\?UTF-8\?B\?([^?]+)\?=/)?.[1] || '',
+        'base64'
+      ).toString('utf8');
+      expect(subject).toContain('[AutoNyan E2E][請求書]');
+    });
+
     it('should send emails to destination folder viewers', async () => {
       mockParsePubSubEvent.mockReturnValue({ data: successData });
 

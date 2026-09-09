@@ -10,6 +10,7 @@ const mockStorage = {
       save: jest.fn().mockResolvedValue(undefined),
       getMetadata: jest.fn().mockResolvedValue([{ size: '1024' }]),
       exists: jest.fn().mockResolvedValue([false]),
+      setMetadata: jest.fn().mockResolvedValue(undefined),
     }),
   }),
 };
@@ -90,13 +91,15 @@ describe('docProcessor', () => {
       .mockResolvedValueOnce({ data: mockStream });
   };
 
-  const buildCloudEvent = (): CloudEvent<MessagePublishedData> => ({
+  const buildCloudEvent = (
+    extra: Record<string, unknown> = {}
+  ): CloudEvent<MessagePublishedData> => ({
     id: 'test-event-id',
     source: 'test-source',
     specversion: '1.0',
     type: 'google.cloud.pubsub.topic.v1.messagePublished',
     time: '2023-01-01T00:00:00.000Z',
-    data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
+    data: Buffer.from(JSON.stringify({ fileId: 'file123', ...extra })).toString(
       'base64'
     ) as any,
   });
@@ -359,6 +362,32 @@ describe('docProcessor', () => {
       'ENVIRONMENT environment variable is required'
     );
   });
+
+  test('records the E2E flag in the uploaded object metadata', async () => {
+    mockDriveDownload();
+
+    await docProcessor(buildCloudEvent({ isE2E: true }));
+
+    expect(mockStorage.bucket().file().save).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          metadata: expect.objectContaining({ isE2E: 'true' }),
+        }),
+      })
+    );
+  }, 20000);
+
+  test('refreshes a stale E2E flag on an already-present object', async () => {
+    mockDriveDownload();
+    mockStorage.bucket().file().exists.mockResolvedValueOnce([true]);
+
+    await docProcessor(buildCloudEvent({ isE2E: true }));
+
+    expect(mockStorage.bucket().file().setMetadata).toHaveBeenCalledWith({
+      metadata: { isE2E: 'true' },
+    });
+  }, 20000);
 
   test('should skip upload when object already exists in Cloud Storage', async () => {
     mockDriveDownload();
