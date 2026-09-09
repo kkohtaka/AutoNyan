@@ -22,6 +22,21 @@ describe('renderSuccessEmail', () => {
     );
   });
 
+  it('uses the E2E prefix when the notification comes from an E2E run', () => {
+    expect(renderSuccessEmail({ ...data, isE2E: true }).subject).toBe(
+      '[AutoNyan E2E][請求書] 処理完了: invoice.pdf'
+    );
+  });
+
+  it('keeps the normal prefix when isE2E is false or absent', () => {
+    expect(renderSuccessEmail({ ...data, isE2E: false }).subject).toBe(
+      '[AutoNyan][請求書] 処理完了: invoice.pdf'
+    );
+    expect(renderSuccessEmail(data).subject).toBe(
+      '[AutoNyan][請求書] 処理完了: invoice.pdf'
+    );
+  });
+
   it('falls back to 未分類 when category is null', () => {
     const email = renderSuccessEmail({ ...data, category: null });
     expect(email.subject).toContain('[未分類]');
@@ -120,6 +135,21 @@ describe('renderFailureEmail', () => {
     expect(email.text).toContain('エラー内容: Invalid file data');
     expect(email.html).toContain('doc-processor');
     expect(email.html).toContain('Invalid file data');
+  });
+
+  it('uses the E2E prefix when the notification comes from an E2E run', () => {
+    expect(renderFailureEmail({ ...data, isE2E: true }).subject).toBe(
+      '[AutoNyan E2E] ドキュメント処理失敗: '
+    );
+  });
+
+  it('keeps the normal prefix when isE2E is false or absent', () => {
+    expect(renderFailureEmail({ ...data, isE2E: false }).subject).toBe(
+      '[AutoNyan] ドキュメント処理失敗: '
+    );
+    expect(renderFailureEmail(data).subject).toBe(
+      '[AutoNyan] ドキュメント処理失敗: '
+    );
   });
 
   it('links to the file when fileId is present', () => {
