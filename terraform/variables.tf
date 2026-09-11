@@ -60,3 +60,9 @@ variable "notification_from_email" {
   description = "Google Workspace email address to send notifications from (must be authorized for Domain-Wide Delegation)"
   type        = string
 }
+
+variable "email_subject_prefix" {
+  description = "Subject prefix for notification emails. Empty selects the per-environment default below"
+  type        = string
+  default     = ""
+}

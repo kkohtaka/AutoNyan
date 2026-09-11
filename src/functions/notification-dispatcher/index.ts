@@ -20,7 +20,6 @@ interface SuccessNotificationData extends Record<string, unknown> {
   reasoning: string;
   summary: string;
   destinationFolderId: string;
-  isE2E?: boolean;
 }
 
 interface FailureNotificationData extends Record<string, unknown> {
@@ -29,7 +28,6 @@ interface FailureNotificationData extends Record<string, unknown> {
   fileName?: string;
   stageName: string;
   errorMessage: string;
-  isE2E?: boolean;
 }
 
 interface NotificationMessage extends Record<string, unknown> {
@@ -176,7 +174,6 @@ async function handleSuccessNotification(
   logger.info('Sent success notification', {
     recipientCount: emailAddresses.length,
     fileName: data.fileName,
-    // Asserted by the E2E suite to confirm the E2E subject prefix.
     subject: email.subject,
   });
 }

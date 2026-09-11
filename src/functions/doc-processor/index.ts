@@ -17,7 +17,6 @@ import { google } from 'googleapis';
 interface DocProcessMessage extends Record<string, unknown> {
   fileId: string;
   metadata?: Record<string, unknown>;
-  isE2E?: boolean;
 }
 
 interface Result {
@@ -35,7 +34,6 @@ export const docProcessor = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   let parsedFileId = '';
-  let isE2E = false;
 
   try {
     logger.info('Received CloudEvent', { cloudEvent });
@@ -49,7 +47,6 @@ export const docProcessor = async (
 
     const { fileId } = messageData;
     parsedFileId = fileId;
-    isE2E = messageData.isE2E === true;
 
     logger.info('Parsed message data', { messageData });
 
@@ -125,13 +122,6 @@ export const docProcessor = async (
     if (exists) {
       // Object already exists, get its metadata
       [metadata] = await storageFile.getMetadata();
-      // documents/<contentHash> is shared by every run that uploads identical
-      // bytes, so a flag left by an earlier run would mislabel this run's
-      // notification. The run in flight is the one that emails, so it wins.
-      if (String(metadata.metadata?.isE2E ?? 'false') !== String(isE2E)) {
-        await storageFile.setMetadata({ metadata: { isE2E: String(isE2E) } });
-        [metadata] = await storageFile.getMetadata();
-      }
       logger.info('Object already exists in bucket, skipping upload', {
         objectName,
       });
@@ -151,8 +141,6 @@ export const docProcessor = async (
             originalModifiedTime: file.modifiedTime || new Date().toISOString(),
             scanTimestamp: new Date().toISOString(),
             contentHash: contentHash,
-            // Stringified: Cloud Storage custom metadata values are strings.
-            isE2E: String(isE2E),
           },
         },
       });
@@ -197,7 +185,6 @@ export const docProcessor = async (
               fileName: '',
               stageName: 'doc-processor',
               errorMessage: errorResponse.error,
-              ...(isE2E ? { isE2E: true } : {}),
             },
             attributes: {
               operation: 'failure-notification',

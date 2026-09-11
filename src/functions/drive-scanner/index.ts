@@ -49,9 +49,6 @@ const DOCUMENT_MIME_TYPES = [
 interface DriveScanMessage extends Record<string, unknown> {
   folderId: string;
   metadata?: Record<string, unknown>;
-  // Set by the E2E suite so downstream notifications can be told apart from
-  // production ones; absent on every real scan.
-  isE2E?: boolean;
 }
 
 interface Result {
@@ -68,7 +65,6 @@ export const driveScanner = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   let parsedFolderId = '';
-  let isE2E = false;
 
   try {
     logger.info('Received CloudEvent', { cloudEvent });
@@ -82,7 +78,6 @@ export const driveScanner = async (
 
     const { folderId } = messageData;
     parsedFolderId = folderId;
-    isE2E = messageData.isE2E === true;
 
     logger.info('Parsed message data', { messageData });
 
@@ -172,7 +167,6 @@ export const driveScanner = async (
           webViewLink: file.webViewLink,
           folderId: folderId,
           scanTimestamp: new Date().toISOString(),
-          ...(isE2E ? { isE2E: true } : {}),
         };
 
         const dataBuffer = Buffer.from(JSON.stringify(messageData));
@@ -241,7 +235,6 @@ export const driveScanner = async (
               folderId: parsedFolderId,
               stageName: 'drive-scanner',
               errorMessage: errorResponse.error,
-              ...(isE2E ? { isE2E: true } : {}),
             },
             attributes: { operation: 'failure-notification' },
           });

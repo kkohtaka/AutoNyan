@@ -78,6 +78,7 @@ resource "google_cloudfunctions2_function" "notification_dispatcher" {
       PROJECT_ID              = var.project_id
       ENVIRONMENT             = var.environment
       NOTIFICATION_FROM_EMAIL = var.notification_from_email
+      EMAIL_SUBJECT_PREFIX    = var.email_subject_prefix
     }
     secret_environment_variables {
       key        = "NOTIFICATION_SA_KEY"

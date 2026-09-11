@@ -21,8 +21,6 @@ export interface SuccessEmailData {
   reasoning: string;
   summary: string;
   destinationFolderId: string;
-  // Set only for notifications originating from an E2E run.
-  isE2E?: boolean;
 }
 
 export interface FailureEmailData {
@@ -31,22 +29,20 @@ export interface FailureEmailData {
   fileName?: string;
   stageName: string;
   errorMessage: string;
-  // Set only for notifications originating from an E2E run.
-  isE2E?: boolean;
 }
 
 // Below this confidence the badge switches to a warning style so recipients
 // know to double-check the classification.
 const LOW_CONFIDENCE_THRESHOLD = 0.7;
 
-// E2E runs send real mail through the same pipeline as production, so their
-// notifications need a prefix a recipient can filter on; anything without the
-// flag keeps the original prefix.
+// Non-production deployments send real mail through the same pipeline as
+// production, so they set EMAIL_SUBJECT_PREFIX to a prefix a recipient can
+// filter on. Read per call rather than at module load so a deployment's
+// configuration is picked up wherever the renderer is used.
 const DEFAULT_SUBJECT_PREFIX = '[AutoNyan]';
-const E2E_SUBJECT_PREFIX = '[AutoNyan E2E]';
 
-function subjectPrefix(isE2E?: boolean): string {
-  return isE2E ? E2E_SUBJECT_PREFIX : DEFAULT_SUBJECT_PREFIX;
+function subjectPrefix(): string {
+  return process.env.EMAIL_SUBJECT_PREFIX || DEFAULT_SUBJECT_PREFIX;
 }
 
 const FONT_FAMILY =
@@ -132,7 +128,7 @@ export function renderSuccessEmail(data: SuccessEmailData): RenderedEmail {
   const fileUrl = driveFileUrl(data.fileId);
   const folderUrl = driveFolderUrl(data.destinationFolderId);
 
-  const subject = `${subjectPrefix(data.isE2E)}[${category}] 処理完了: ${data.fileName}`;
+  const subject = `${subjectPrefix()}[${category}] 処理完了: ${data.fileName}`;
 
   const renamedLine = data.originalFileName
     ? `元のファイル名: ${data.originalFileName}\n`
@@ -174,7 +170,7 @@ Firestore ドキュメント ID: ${data.firestoreDocId}`;
 }
 
 export function renderFailureEmail(data: FailureEmailData): RenderedEmail {
-  const subject = `${subjectPrefix(data.isE2E)} ドキュメント処理失敗: ${data.fileName || data.fileId || data.folderId || ''}`;
+  const subject = `${subjectPrefix()} ドキュメント処理失敗: ${data.fileName || data.fileId || data.folderId || ''}`;
 
   const textLines = [
     'ドキュメント処理中にエラーが発生しました。',

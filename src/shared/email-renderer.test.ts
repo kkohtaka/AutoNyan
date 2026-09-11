@@ -4,6 +4,16 @@ import {
   SuccessEmailData,
 } from './email-renderer';
 
+const originalPrefix = process.env.EMAIL_SUBJECT_PREFIX;
+
+afterEach(() => {
+  if (originalPrefix === undefined) {
+    delete process.env.EMAIL_SUBJECT_PREFIX;
+  } else {
+    process.env.EMAIL_SUBJECT_PREFIX = originalPrefix;
+  }
+});
+
 describe('renderSuccessEmail', () => {
   const data: SuccessEmailData = {
     firestoreDocId: 'doc-abc123',
@@ -22,16 +32,19 @@ describe('renderSuccessEmail', () => {
     );
   });
 
-  it('uses the E2E prefix when the notification comes from an E2E run', () => {
-    expect(renderSuccessEmail({ ...data, isE2E: true }).subject).toBe(
+  it('uses the configured prefix when EMAIL_SUBJECT_PREFIX is set', () => {
+    process.env.EMAIL_SUBJECT_PREFIX = '[AutoNyan E2E]';
+    expect(renderSuccessEmail(data).subject).toBe(
       '[AutoNyan E2E][請求書] 処理完了: invoice.pdf'
     );
   });
 
-  it('keeps the normal prefix when isE2E is false or absent', () => {
-    expect(renderSuccessEmail({ ...data, isE2E: false }).subject).toBe(
+  it('keeps the default prefix when EMAIL_SUBJECT_PREFIX is unset or empty', () => {
+    delete process.env.EMAIL_SUBJECT_PREFIX;
+    expect(renderSuccessEmail(data).subject).toBe(
       '[AutoNyan][請求書] 処理完了: invoice.pdf'
     );
+    process.env.EMAIL_SUBJECT_PREFIX = '';
     expect(renderSuccessEmail(data).subject).toBe(
       '[AutoNyan][請求書] 処理完了: invoice.pdf'
     );
@@ -137,16 +150,19 @@ describe('renderFailureEmail', () => {
     expect(email.html).toContain('Invalid file data');
   });
 
-  it('uses the E2E prefix when the notification comes from an E2E run', () => {
-    expect(renderFailureEmail({ ...data, isE2E: true }).subject).toBe(
+  it('uses the configured prefix when EMAIL_SUBJECT_PREFIX is set', () => {
+    process.env.EMAIL_SUBJECT_PREFIX = '[AutoNyan E2E]';
+    expect(renderFailureEmail(data).subject).toBe(
       '[AutoNyan E2E] ドキュメント処理失敗: '
     );
   });
 
-  it('keeps the normal prefix when isE2E is false or absent', () => {
-    expect(renderFailureEmail({ ...data, isE2E: false }).subject).toBe(
+  it('keeps the default prefix when EMAIL_SUBJECT_PREFIX is unset or empty', () => {
+    delete process.env.EMAIL_SUBJECT_PREFIX;
+    expect(renderFailureEmail(data).subject).toBe(
       '[AutoNyan] ドキュメント処理失敗: '
     );
+    process.env.EMAIL_SUBJECT_PREFIX = '';
     expect(renderFailureEmail(data).subject).toBe(
       '[AutoNyan] ドキュメント処理失敗: '
     );
