@@ -305,6 +305,31 @@ Comments (in code, Terraform, and CI workflows) follow these project rules:
   future maintainer from making a breaking change). Keep it only when the
   benefit clearly wins.
 
+### Test-Support Code Policy
+
+Production code paths must not carry code whose only purpose is to serve the
+test suite.
+
+- **No test-only data on production payloads.** Never add a field to an event
+  payload, to an object's metadata, or to a function's interface purely so a
+  test can observe or steer behavior. Threading such a flag through an
+  event-driven pipeline spreads a test concern across every stage it crosses,
+  and across a Storage-triggered hop it needs a side channel that becomes a
+  production failure mode of its own.
+- **Behavior that differs by environment is configuration.** When a test run
+  and a real run must behave differently, express the difference as an
+  environment variable set per environment in the function's Terraform module
+  (see Environment Variables Pattern), defaulted in code to the production
+  value. A deployment-scoped setting is a unit the infrastructure already has;
+  a run-scoped flag is not.
+- **Tests assert on what production already emits.** Prefer the structured log
+  entries, stored documents, and messages the pipeline produces anyway. A field
+  added only to make an assertion possible has to earn its place on operational
+  merit instead.
+- **No comment that names the test.** A comment explaining that a line exists
+  because a test asserts it is the marker of exactly the coupling this policy
+  forbids (see Comment Policy).
+
 ## Development Workflows
 
 These workflows are implemented as skills under `.claude/skills/`. Invoke the
@@ -764,6 +789,9 @@ When working with this codebase:
 8. **Validate inputs**: Always validate CloudEvent data before processing
 9. **Handle errors gracefully**: Use try-catch and shared error utilities
 10. **Check coverage**: Ensure tests meet coverage thresholds before committing
+11. **Keep test concerns out of production paths**: Express a test/production
+    difference as per-environment configuration, never as a flag threaded
+    through the pipeline (see Test-Support Code Policy)
 
 ## Maintaining This Document
 
