@@ -81,6 +81,12 @@ const REFERENCE_FILE_NAMES = [
   '2026-06-15_請求書_サンプル工業.pdf',
 ];
 
+// terraform/main.tf configures every non-production deployment with a distinct
+// notification subject prefix; override this when targeting one configured
+// differently.
+const EXPECTED_SUBJECT_PREFIX =
+  process.env.EMAIL_SUBJECT_PREFIX || '[AutoNyan E2E]';
+
 const isFullMatrix = process.env.E2E_FORMAT_MATRIX === 'full';
 const activeHappyPathFixtures = HAPPY_PATH_FIXTURES.filter(
   (fixture) => isFullMatrix || fixture.coreMatrix
@@ -316,12 +322,8 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       folderId: caseFolderId,
     });
 
-    // isE2E rides the pipeline so notification-dispatcher can prefix the mail
-    // this run sends, keeping it out of the production notification stream.
     await topic.publishMessage({
-      data: Buffer.from(
-        JSON.stringify({ folderId: caseFolderId, isE2E: true })
-      ),
+      data: Buffer.from(JSON.stringify({ folderId: caseFolderId })),
     });
 
     logger.log('stage-1', 'Drive Scanner triggered successfully');
@@ -553,7 +555,9 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         );
 
         expect(notificationLog).toBeTruthy();
-        expect(String(notificationLog!.subject)).toContain('[AutoNyan E2E]');
+        expect(String(notificationLog!.subject)).toContain(
+          EXPECTED_SUBJECT_PREFIX
+        );
 
         logger.log('stage-6', 'Notification Dispatcher completed', {
           logEntry: notificationLog,
@@ -648,7 +652,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
 
           expect(failureNotificationLog).toBeTruthy();
           expect(String(failureNotificationLog!.subject)).toContain(
-            '[AutoNyan E2E]'
+            EXPECTED_SUBJECT_PREFIX
           );
 
           logger.log('stage-3-negative', 'Failure notification dispatched', {

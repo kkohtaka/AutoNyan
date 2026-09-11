@@ -24,6 +24,17 @@ provider "google" {
   billing_project       = var.project_id
 }
 
+locals {
+  # Non-production environments send real mail through the same pipeline as
+  # production, so their notifications carry a prefix recipients can filter on.
+  # This is per deployment, not per run: it marks every staging notification,
+  # not only those an E2E run produced.
+  email_subject_prefix = (
+    var.email_subject_prefix != "" ? var.email_subject_prefix :
+    var.environment == "production" ? "" : "[AutoNyan E2E]"
+  )
+}
+
 # Enable required Google Cloud APIs
 resource "google_project_service" "drive_api" {
   service = "drive.googleapis.com"
@@ -169,6 +180,7 @@ module "notification_dispatcher" {
   region                  = var.region
   function_bucket_name    = google_storage_bucket.function_bucket.name
   notification_from_email = var.notification_from_email
+  email_subject_prefix    = local.email_subject_prefix
 
   depends_on = [
     google_project_service.secretmanager_api,

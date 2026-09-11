@@ -148,42 +148,6 @@ describe('textFirebaseWriter', () => {
     expect(mockTopic).toHaveBeenCalledWith('file-classification-trigger');
   });
 
-  it('carries the E2E flag from the document object into the classification message', async () => {
-    const cloudEvent = createCloudEvent({});
-
-    mockStorage
-      .bucket()
-      .file()
-      .getMetadata.mockResolvedValue([
-        {
-          ...originalDocMetadata,
-          metadata: { ...originalDocMetadata.metadata, isE2E: 'true' },
-        },
-      ]);
-
-    mockStorage
-      .bucket()
-      .file()
-      .download.mockResolvedValue([
-        Buffer.from(
-          JSON.stringify({
-            responses: [
-              {
-                fullTextAnnotation: {
-                  text: 'Page 1 text',
-                  pages: [{ confidence: 0.95 }],
-                },
-              },
-            ],
-          })
-        ),
-      ]);
-
-    await textFirebaseWriter(cloudEvent.data!);
-
-    expect(mockPublishMessage.mock.calls[0][0].json.isE2E).toBe(true);
-  });
-
   it('should handle empty text pages gracefully', async () => {
     const cloudEvent = createCloudEvent({});
 
