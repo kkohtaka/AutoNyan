@@ -94,6 +94,7 @@ jobs:
       matrix:
         function:
           [
+            calendar-registrar,
             doc-processor,
             drive-scanner,
             file-classifier,
@@ -208,6 +209,7 @@ jobs:
       matrix:
         function:
           [
+            calendar-registrar,
             doc-processor,
             drive-scanner,
             file-classifier,

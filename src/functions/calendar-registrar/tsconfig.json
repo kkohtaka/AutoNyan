@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "lib": ["es2022"],
+    "module": "commonjs",
+    "outDir": ".",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
+    "types": ["node", "jest"]
+  },
+  "include": [
+    "index.ts",
+    "index.test.ts",
+    "calendar.ts",
+    "calendar.test.ts",
+    "extraction.ts",
+    "extraction.test.ts"
+  ],
+  "exclude": [],
+  "references": [
+    {
+      "path": "../../shared"
+    }
+  ]
+}
