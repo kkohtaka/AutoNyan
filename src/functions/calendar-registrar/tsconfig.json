@@ -13,14 +13,7 @@
     "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
     "types": ["node", "jest"]
   },
-  "include": [
-    "index.ts",
-    "index.test.ts",
-    "calendar.ts",
-    "calendar.test.ts",
-    "extraction.ts",
-    "extraction.test.ts"
-  ],
+  "include": ["index.ts", "index.test.ts", "calendar.ts", "extraction.ts"],
   "exclude": [],
   "references": [
     {
