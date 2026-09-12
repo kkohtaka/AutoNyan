@@ -50,6 +50,7 @@ describe('textFirebaseWriter', () => {
     delete process.env.PROJECT_ID;
     delete process.env.ENVIRONMENT;
     delete process.env.FILE_CLASSIFIER_TOPIC;
+    delete process.env.CALENDAR_REGISTRAR_TOPIC;
     delete process.env.NOTIFICATION_TOPIC;
   });
 
@@ -459,5 +460,90 @@ describe('textFirebaseWriter', () => {
     // Verify PubSub was not called
     expect(mockPublishMessage).not.toHaveBeenCalled();
     expect(mockTopic).not.toHaveBeenCalled();
+  });
+
+  describe('calendar registration fan-out', () => {
+    const visionResult = {
+      responses: [
+        {
+          fullTextAnnotation: {
+            text: '5月の予定',
+            pages: [{ confidence: 0.95 }],
+          },
+        },
+      ],
+    };
+
+    const arrange = (metadata: Record<string, string>) => {
+      mockStorage
+        .bucket()
+        .file()
+        .getMetadata.mockResolvedValue([{ metadata, size: '1024' }]);
+      mockStorage
+        .bucket()
+        .file()
+        .download.mockResolvedValue([
+          Buffer.from(JSON.stringify(visionResult)),
+        ]);
+    };
+
+    it('should publish every document, so the registrar owns the folder mapping', async () => {
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      arrange({
+        originalFileId: 'file123',
+        originalFileName: 'test.pdf',
+        originalMimeType: 'application/pdf',
+        sourceFolderId: 'watched-folder-id',
+        originalModifiedTime: '2026-04-28T00:00:00.000Z',
+      });
+
+      const result = await textFirebaseWriter(createCloudEvent({}).data!);
+
+      expect(result.calendarRegistrationTriggered).toBe(true);
+      expect(mockTopic).toHaveBeenCalledWith('calendar-registration-trigger');
+
+      const published = mockPublishMessage.mock.calls.find(
+        (call) => call[0].attributes?.operation === 'calendar-registration'
+      );
+      expect(published[0].json).toMatchObject({
+        fileId: 'file123',
+        fileName: 'test.pdf',
+        sourceFolderId: 'watched-folder-id',
+        modifiedTime: '2026-04-28T00:00:00.000Z',
+      });
+    });
+
+    it('should not publish when CALENDAR_REGISTRAR_TOPIC is not set', async () => {
+      arrange({
+        originalFileId: 'file123',
+        originalFileName: 'test.pdf',
+        originalMimeType: 'application/pdf',
+        sourceFolderId: 'watched-folder-id',
+      });
+
+      const result = await textFirebaseWriter(createCloudEvent({}).data!);
+
+      expect(result.calendarRegistrationTriggered).toBe(false);
+      expect(mockTopic).not.toHaveBeenCalledWith(
+        'calendar-registration-trigger'
+      );
+    });
+
+    it('should still store the text when the calendar publish fails', async () => {
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      delete process.env.FILE_CLASSIFIER_TOPIC;
+      arrange({
+        originalFileId: 'file123',
+        originalFileName: 'test.pdf',
+        originalMimeType: 'application/pdf',
+        sourceFolderId: 'watched-folder-id',
+      });
+      mockPublishMessage.mockRejectedValueOnce(new Error('publish failed'));
+
+      const result = await textFirebaseWriter(createCloudEvent({}).data!);
+
+      expect(result.firestoreDocId).toBe('doc123');
+      expect(result.calendarRegistrationTriggered).toBe(false);
+    });
   });
 });
