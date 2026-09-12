@@ -105,6 +105,12 @@ resource "google_project_service" "gmail_api" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "calendar_api" {
+  service = "calendar-json.googleapis.com"
+
+  disable_on_destroy = false
+}
+
 
 # Google Cloud Storage bucket for function source code archives
 # Stores zip files containing built function code for deployment
@@ -166,6 +172,30 @@ resource "google_cloud_scheduler_job" "drive_scan_schedule" {
     topic_name = module.drive_scanner.topic_id
     data = base64encode(jsonencode({
       folderId = var.drive_folder_id
+    }))
+  }
+}
+
+# One scan per watched calendar folder, reusing the drive-scanner topic so the
+# scanner needs no knowledge of calendars. Job names are keyed by a hash prefix
+# because Cloud Scheduler rejects the uppercase letters and underscores that
+# Drive folder IDs contain.
+resource "google_cloud_scheduler_job" "calendar_folder_scan_schedule" {
+  for_each = {
+    for folder in var.calendar_watch_folders :
+    substr(sha256(folder.folder_id), 0, 8) => folder
+  }
+
+  name        = "${var.environment}-calendar-scan-${each.key}"
+  description = "Automated scan of the ${each.value.label} calendar folder (${var.environment})"
+  schedule    = var.drive_scanner_schedule
+  time_zone   = "UTC"
+  region      = var.region
+
+  pubsub_target {
+    topic_name = module.drive_scanner.topic_id
+    data = base64encode(jsonencode({
+      folderId = each.value.folder_id
     }))
   }
 }
@@ -247,6 +277,27 @@ module "file_classifier" {
   depends_on = [google_firestore_database.default]
 }
 
+# Calendar Registrar Module (must be defined before text_firebase_writer to reference topic)
+# Extracts events from documents in watched Drive folders and registers them on
+# the calendar configured for that folder
+module "calendar_registrar" {
+  source = "./modules/calendar-registrar"
+
+  project_id                     = var.project_id
+  environment                    = var.environment
+  region                         = var.region
+  function_bucket_name           = google_storage_bucket.function_bucket.name
+  watch_folders                  = var.calendar_watch_folders
+  time_zone                      = var.calendar_time_zone
+  default_event_duration_minutes = var.calendar_default_event_duration_minutes
+  notification_topic_name        = module.notification_dispatcher.topic_name
+
+  depends_on = [
+    google_firestore_database.default,
+    google_project_service.calendar_api,
+  ]
+}
+
 # Text Firebase Writer Module
 # Stores Vision API text extraction results to Firestore and triggers classification
 module "text_firebase_writer" {
@@ -259,6 +310,7 @@ module "text_firebase_writer" {
   vision_results_bucket_name    = google_storage_bucket.vision_results.name
   document_storage_bucket_name  = google_storage_bucket.document_storage.name
   file_classifier_trigger_topic = module.file_classifier.topic_name
+  calendar_registrar_topic      = module.calendar_registrar.topic_name
   notification_topic_name       = module.notification_dispatcher.topic_name
 }
 

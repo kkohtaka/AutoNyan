@@ -26,3 +26,18 @@ budget_amount = 10000
 # After deployment, grant Domain-Wide Delegation to the notification dispatcher service account
 # using the client ID from: terraform output notification_dispatcher_service_account_client_id
 notification_from_email = "admin@your-workspace-domain.com"
+
+# Calendar registration configuration (optional)
+# Each entry maps a watched Drive folder to the calendar its documents' events
+# are registered on. Share each calendar with the calendar-registrar service
+# account (terraform output calendar_registrar_service_account_email) before
+# the first scan. Leave the list empty to disable calendar registration.
+# calendar_watch_folders = [
+#   {
+#     folder_id   = "your-newsletter-folder-id"
+#     calendar_id = "family@group.calendar.google.com"
+#     label       = "学校"
+#   },
+# ]
+# calendar_time_zone = "Asia/Tokyo"
+# calendar_default_event_duration_minutes = 60

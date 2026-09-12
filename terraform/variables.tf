@@ -66,3 +66,25 @@ variable "email_subject_prefix" {
   type        = string
   default     = ""
 }
+
+variable "calendar_watch_folders" {
+  description = "Drive folders whose documents produce calendar events, and the calendar each one registers on. Empty disables calendar registration"
+  type = list(object({
+    folder_id   = string
+    calendar_id = string
+    label       = string
+  }))
+  default = []
+}
+
+variable "calendar_time_zone" {
+  description = "IANA time zone the watched documents' dates and times are written in"
+  type        = string
+  default     = "Asia/Tokyo"
+}
+
+variable "calendar_default_event_duration_minutes" {
+  description = "Length given to a timed calendar event whose source document stated no end time"
+  type        = number
+  default     = 60
+}

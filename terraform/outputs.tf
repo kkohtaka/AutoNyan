@@ -43,6 +43,11 @@ output "file_classifier_service_account_email" {
   value       = module.file_classifier.service_account_email
 }
 
+output "calendar_registrar_service_account_email" {
+  description = "Email of the calendar registrar service account; share each target calendar with it"
+  value       = module.calendar_registrar.service_account_email
+}
+
 output "notification_dispatcher_service_account_email" {
   description = "Email of the notification dispatcher service account"
   value       = module.notification_dispatcher.service_account_email
