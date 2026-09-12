@@ -23,6 +23,30 @@ export interface SuccessEmailData {
   destinationFolderId: string;
 }
 
+export interface CalendarEventSummary {
+  title: string;
+  // Resolved calendar date, as YYYY-MM-DD.
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  confidence: number;
+}
+
+export interface CalendarEmailData {
+  firestoreDocId: string;
+  fileId: string;
+  fileName: string;
+  calendarLabel: string;
+  registeredEvents: CalendarEventSummary[];
+  // Events extracted below the confidence threshold. Reported rather than
+  // silently discarded, so a missed event is visible to the recipient.
+  droppedEvents: CalendarEventSummary[];
+  // The source text was longer than the extraction limit, so events may be
+  // missing entirely.
+  truncated: boolean;
+}
+
 export interface FailureEmailData {
   fileId?: string;
   folderId?: string;
@@ -218,6 +242,81 @@ export function renderFailureEmail(data: FailureEmailData): RenderedEmail {
       detailRows.join('') +
       '</table>' +
       (buttons.length > 0 ? renderButtonRow(buttons) : '')
+  );
+
+  return { subject, text: textLines.join('\n'), html };
+}
+
+function formatEventTime(event: CalendarEventSummary): string {
+  if (!event.startTime) {
+    return `${event.date}（終日）`;
+  }
+  const range = event.endTime
+    ? `${event.startTime}〜${event.endTime}`
+    : event.startTime;
+  return `${event.date} ${range}`;
+}
+
+function formatEventLine(event: CalendarEventSummary): string {
+  const location = event.location ? `（${event.location}）` : '';
+  return `${formatEventTime(event)} ${event.title}${location}`;
+}
+
+function renderEventList(events: CalendarEventSummary[]): string {
+  const items = events
+    .map(
+      (event) =>
+        `<li style="margin:0 0 6px;">${escapeHtml(formatEventLine(event))}</li>`
+    )
+    .join('');
+  return `<ul style="margin:0;padding-left:20px;">${items}</ul>`;
+}
+
+export function renderCalendarEmail(data: CalendarEmailData): RenderedEmail {
+  const fileUrl = driveFileUrl(data.fileId);
+  const registeredCount = data.registeredEvents.length;
+
+  const subject = `${subjectPrefix()}[${data.calendarLabel}] ${registeredCount}件の予定を登録しました: ${data.fileName}`;
+
+  const textLines = [
+    `ファイル「${data.fileName}」から ${registeredCount} 件の予定を「${data.calendarLabel}」カレンダーに登録しました。`,
+    '',
+    '登録した予定:',
+    ...data.registeredEvents.map((event) => `- ${formatEventLine(event)}`),
+  ];
+
+  if (data.droppedEvents.length > 0) {
+    textLines.push(
+      '',
+      '確信度が低いため登録しなかった予定（内容をご確認ください）:',
+      ...data.droppedEvents.map(
+        (event) =>
+          `- ${formatEventLine(event)} [確信度 ${Math.round(event.confidence * 100)}%]`
+      )
+    );
+  }
+
+  if (data.truncated) {
+    textLines.push(
+      '',
+      '注意: 文書が長いため一部のみを解析しました。登録されていない予定がある可能性があります。'
+    );
+  }
+
+  textLines.push('', `ファイルを開く: ${fileUrl}`);
+
+  const html = renderLayout(
+    `<p style="margin:0 0 20px;">ファイル「<strong>${escapeHtml(data.fileName)}</strong>」から <strong>${registeredCount}</strong> 件の予定を「${escapeHtml(data.calendarLabel)}」カレンダーに登録しました。</p>` +
+      '<p style="margin:0 0 8px;font-weight:bold;">登録した予定</p>' +
+      renderEventList(data.registeredEvents) +
+      (data.droppedEvents.length > 0
+        ? '<p style="margin:20px 0 8px;font-weight:bold;color:#c5221f;">確信度が低いため登録しなかった予定</p>' +
+          renderEventList(data.droppedEvents)
+        : '') +
+      (data.truncated
+        ? '<p style="margin:20px 0 0;color:#c5221f;">文書が長いため一部のみを解析しました。登録されていない予定がある可能性があります。</p>'
+        : '') +
+      renderButtonRow([renderButton('ファイルを開く', fileUrl, true)])
   );
 
   return { subject, text: textLines.join('\n'), html };

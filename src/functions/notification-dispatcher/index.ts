@@ -6,6 +6,8 @@ import {
   logger,
   renderSuccessEmail,
   renderFailureEmail,
+  renderCalendarEmail,
+  CalendarEmailData,
   RenderedEmail,
 } from 'autonyan-shared';
 import { google } from 'googleapis';
@@ -20,6 +22,13 @@ interface SuccessNotificationData extends Record<string, unknown> {
   reasoning: string;
   summary: string;
   destinationFolderId: string;
+}
+
+interface CalendarNotificationData extends CalendarEmailData {
+  // Watched Drive folder the document came from; its collaborators are the
+  // recipients. The calendar's own ACL cannot be read, since acl.list requires
+  // calendar-owner rights that the sharing model does not grant.
+  sourceFolderId: string;
 }
 
 interface FailureNotificationData extends Record<string, unknown> {
@@ -134,29 +143,10 @@ async function handleSuccessNotification(
   const fromEmail = process.env.NOTIFICATION_FROM_EMAIL || '';
   const saKey = JSON.parse(saKeyJson) as ServiceAccountKey;
 
-  const auth = new google.auth.GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
-  const drive = google.drive({ version: 'v3', auth });
-
-  const permissionsResponse = await drive.permissions.list({
-    fileId: data.destinationFolderId,
-    fields: 'permissions(emailAddress,role,type)',
-    supportsAllDrives: true,
-  });
-
-  const permissions = permissionsResponse.data.permissions || [];
-  const emailAddresses = permissions
-    .filter(
-      (p) =>
-        p.type === 'user' &&
-        p.role !== undefined &&
-        p.role !== null &&
-        NOTIFY_VIEWER_ROLES.includes(p.role) &&
-        p.emailAddress &&
-        !isServiceAccountEmail(p.emailAddress)
-    )
-    .map((p) => p.emailAddress as string);
+  const emailAddresses = await listFolderRecipients(
+    data.destinationFolderId,
+    NOTIFY_VIEWER_ROLES
+  );
 
   if (emailAddresses.length === 0) {
     logger.warn('No email addresses found for destination folder', {
@@ -174,6 +164,77 @@ async function handleSuccessNotification(
   logger.info('Sent success notification', {
     recipientCount: emailAddresses.length,
     fileName: data.fileName,
+    subject: email.subject,
+  });
+}
+
+// Resolve notification recipients from a Drive folder's collaborators.
+async function listFolderRecipients(
+  folderId: string,
+  roles: string[]
+): Promise<string[]> {
+  const auth = new google.auth.GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  });
+  const drive = google.drive({ version: 'v3', auth });
+
+  const permissionsResponse = await drive.permissions.list({
+    fileId: folderId,
+    fields: 'permissions(emailAddress,role,type)',
+    supportsAllDrives: true,
+  });
+
+  const permissions = permissionsResponse.data.permissions || [];
+  return permissions
+    .filter(
+      (p) =>
+        p.type === 'user' &&
+        p.role !== undefined &&
+        p.role !== null &&
+        roles.includes(p.role) &&
+        p.emailAddress &&
+        !isServiceAccountEmail(p.emailAddress)
+    )
+    .map((p) => p.emailAddress as string);
+}
+
+async function handleCalendarNotification(
+  data: CalendarNotificationData
+): Promise<void> {
+  const saKeyJson = process.env.NOTIFICATION_SA_KEY;
+  if (!saKeyJson) {
+    logger.warn(
+      'NOTIFICATION_SA_KEY is not set, skipping calendar notification email'
+    );
+    return;
+  }
+
+  const fromEmail = process.env.NOTIFICATION_FROM_EMAIL || '';
+  const saKey = JSON.parse(saKeyJson) as ServiceAccountKey;
+
+  const emailAddresses = await listFolderRecipients(
+    data.sourceFolderId,
+    NOTIFY_VIEWER_ROLES
+  );
+
+  if (emailAddresses.length === 0) {
+    logger.warn('No email addresses found for watched folder', {
+      sourceFolderId: data.sourceFolderId,
+    });
+    return;
+  }
+
+  // One mail per document, however many events it produced.
+  const email = renderCalendarEmail(data);
+
+  for (const toEmail of emailAddresses) {
+    await sendEmail(toEmail, email, fromEmail, saKey);
+  }
+
+  logger.info('Sent calendar notification', {
+    recipientCount: emailAddresses.length,
+    fileName: data.fileName,
+    registeredCount: data.registeredEvents.length,
     subject: email.subject,
   });
 }
@@ -220,24 +281,10 @@ async function handleFailureNotification(
     return;
   }
 
-  const permissionsResponse = await drive.permissions.list({
-    fileId: lookupFolderId,
-    fields: 'permissions(emailAddress,role,type)',
-    supportsAllDrives: true,
-  });
-
-  const permissions = permissionsResponse.data.permissions || [];
-  const ownerEmails = permissions
-    .filter(
-      (p) =>
-        p.type === 'user' &&
-        p.role !== undefined &&
-        p.role !== null &&
-        FOLDER_OWNER_ROLES.includes(p.role) &&
-        p.emailAddress &&
-        !isServiceAccountEmail(p.emailAddress)
-    )
-    .map((p) => p.emailAddress as string);
+  const ownerEmails = await listFolderRecipients(
+    lookupFolderId,
+    FOLDER_OWNER_ROLES
+  );
 
   if (ownerEmails.length === 0) {
     logger.warn('No owner or organizer found for folder', {
@@ -281,6 +328,10 @@ export const notificationDispatcher = async (
     if (operation === 'success-notification') {
       await handleSuccessNotification(
         messageData as unknown as SuccessNotificationData
+      );
+    } else if (operation === 'calendar-notification') {
+      await handleCalendarNotification(
+        messageData as unknown as CalendarNotificationData
       );
     } else if (operation === 'failure-notification') {
       await handleFailureNotification(

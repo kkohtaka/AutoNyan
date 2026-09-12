@@ -603,6 +603,101 @@ describe('notificationDispatcher', () => {
     });
   });
 
+  describe('calendar notification', () => {
+    const calendarData = {
+      firestoreDocId: 'doc-abc123',
+      fileId: 'file-123',
+      fileName: '5月号学級通信.pdf',
+      sourceFolderId: 'watched-folder-id',
+      calendarLabel: '学校',
+      registeredEvents: [
+        { title: '遠足', date: '2026-05-16', confidence: 0.9 },
+        {
+          title: '保護者会',
+          date: '2026-05-20',
+          startTime: '14:00',
+          endTime: '15:30',
+          location: '体育館',
+          confidence: 0.95,
+        },
+      ],
+      droppedEvents: [
+        { title: '未確定の行事', date: '2026-05-25', confidence: 0.4 },
+      ],
+      truncated: false,
+    };
+
+    it('should send exactly one mail per document to the watched folder members', async () => {
+      mockParsePubSubEvent.mockReturnValue({ data: calendarData });
+
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            {
+              emailAddress: 'parent@example.com',
+              role: 'writer',
+              type: 'user',
+            },
+            {
+              emailAddress: 'sa@test-project.iam.gserviceaccount.com',
+              role: 'writer',
+              type: 'user',
+            },
+          ],
+        },
+      });
+
+      const event = buildEvent(calendarData, {
+        operation: 'calendar-notification',
+        fileId: 'file-123',
+      });
+      await notificationDispatcher(event);
+
+      expect(mockPermissionsList).toHaveBeenCalledWith({
+        fileId: 'watched-folder-id',
+        fields: 'permissions(emailAddress,role,type)',
+        supportsAllDrives: true,
+      });
+
+      // Two events, one mail.
+      expect(mockGmailSend).toHaveBeenCalledTimes(1);
+
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      expect(decoded).toContain('To: parent@example.com');
+
+      const text = extractMimePart(decoded, 'text/plain');
+      expect(text).toContain('遠足');
+      expect(text).toContain('保護者会');
+      expect(text).toContain('未確定の行事');
+    });
+
+    it('should send nothing when the watched folder has no human members', async () => {
+      mockParsePubSubEvent.mockReturnValue({ data: calendarData });
+
+      mockPermissionsList.mockResolvedValue({ data: { permissions: [] } });
+
+      await notificationDispatcher(
+        buildEvent(calendarData, { operation: 'calendar-notification' })
+      );
+
+      expect(mockGmailSend).not.toHaveBeenCalled();
+    });
+
+    it('should skip sending when no service account key is configured', async () => {
+      delete process.env.NOTIFICATION_SA_KEY;
+      mockParsePubSubEvent.mockReturnValue({ data: calendarData });
+
+      await notificationDispatcher(
+        buildEvent(calendarData, { operation: 'calendar-notification' })
+      );
+
+      expect(mockPermissionsList).not.toHaveBeenCalled();
+      expect(mockGmailSend).not.toHaveBeenCalled();
+    });
+  });
+
   describe('unknown operation', () => {
     it('should treat an event without attributes as an unknown operation', async () => {
       const data = { someField: 'value' };
