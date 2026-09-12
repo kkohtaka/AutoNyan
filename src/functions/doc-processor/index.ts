@@ -16,6 +16,10 @@ import { google } from 'googleapis';
 
 interface DocProcessMessage extends Record<string, unknown> {
   fileId: string;
+  // Drive folder the scan found the file in. Carried into the object's custom
+  // metadata because the Storage-triggered stages downstream never see this
+  // message body.
+  folderId?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -45,7 +49,7 @@ export const docProcessor = async (
     // Validate required fields
     validateRequiredFields(messageData, ['fileId']);
 
-    const { fileId } = messageData;
+    const { fileId, folderId } = messageData;
     parsedFileId = fileId;
 
     logger.info('Parsed message data', { messageData });
@@ -141,6 +145,7 @@ export const docProcessor = async (
             originalModifiedTime: file.modifiedTime || new Date().toISOString(),
             scanTimestamp: new Date().toISOString(),
             contentHash: contentHash,
+            ...(folderId ? { sourceFolderId: folderId } : {}),
           },
         },
       });

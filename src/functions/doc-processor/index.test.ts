@@ -90,15 +90,15 @@ describe('docProcessor', () => {
       .mockResolvedValueOnce({ data: mockStream });
   };
 
-  const buildCloudEvent = (): CloudEvent<MessagePublishedData> => ({
+  const buildCloudEvent = (
+    message: Record<string, unknown> = { fileId: 'file123' }
+  ): CloudEvent<MessagePublishedData> => ({
     id: 'test-event-id',
     source: 'test-source',
     specversion: '1.0',
     type: 'google.cloud.pubsub.topic.v1.messagePublished',
     time: '2023-01-01T00:00:00.000Z',
-    data: Buffer.from(JSON.stringify({ fileId: 'file123' })).toString(
-      'base64'
-    ) as any,
+    data: Buffer.from(JSON.stringify(message)).toString('base64') as any,
   });
 
   // Drain the Drive download's nextTick chain so the upload is reached.
@@ -422,4 +422,28 @@ describe('docProcessor', () => {
     );
     expect(mockStorage.bucket().file().getMetadata).not.toHaveBeenCalled();
   }, 20000);
+
+  test('should record the scanned folder in the object metadata', async () => {
+    mockDriveDownload();
+
+    await docProcessor(
+      buildCloudEvent({ fileId: 'file123', folderId: 'watched-folder-id' })
+    );
+    await flushAsync();
+
+    const saveOptions = mockStorage.bucket().file().save.mock.calls[0][1];
+    expect(saveOptions.metadata.metadata.sourceFolderId).toBe(
+      'watched-folder-id'
+    );
+  });
+
+  test('should omit the folder metadata when the scan did not supply one', async () => {
+    mockDriveDownload();
+
+    await docProcessor(buildCloudEvent());
+    await flushAsync();
+
+    const saveOptions = mockStorage.bucket().file().save.mock.calls[0][1];
+    expect(saveOptions.metadata.metadata).not.toHaveProperty('sourceFolderId');
+  });
 });

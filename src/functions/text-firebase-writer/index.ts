@@ -39,6 +39,7 @@ interface Result {
   pages: number;
   originalFileName: string;
   classificationTriggered: boolean;
+  calendarRegistrationTriggered: boolean;
   skipped?: boolean;
 }
 
@@ -124,6 +125,12 @@ export const textFirebaseWriter = async (
     );
     const originalMimeType = String(
       originalMetadata.metadata?.originalMimeType || ''
+    );
+    const sourceFolderId = String(
+      originalMetadata.metadata?.sourceFolderId || ''
+    );
+    const originalModifiedTime = String(
+      originalMetadata.metadata?.originalModifiedTime || ''
     );
 
     if (!originalFileId || !originalFileName) {
@@ -267,6 +274,49 @@ export const textFirebaseWriter = async (
       );
     }
 
+    // Calendar registration is a branch parallel to classification: it must not
+    // depend on whether the file was classified and moved.
+    const calendarTopicName = process.env.CALENDAR_REGISTRAR_TOPIC;
+    let calendarRegistrationTriggered = false;
+
+    if (calendarTopicName) {
+      const pubsub = new PubSub();
+
+      try {
+        // Published for every document, not only those from watched folders:
+        // calendar-registrar owns the folder-to-calendar mapping and discards
+        // the rest before any billable call.
+        const calendarData = {
+          firestoreDocId: docRef.id,
+          fileId: originalFileId,
+          fileName: originalFileName,
+          extractedText: extractedText,
+          sourceFolderId: sourceFolderId,
+          modifiedTime: originalModifiedTime,
+        };
+
+        await pubsub.topic(calendarTopicName).publishMessage({
+          json: calendarData,
+          attributes: {
+            operation: 'calendar-registration',
+            fileId: originalFileId,
+          },
+        });
+
+        calendarRegistrationTriggered = true;
+
+        logger.info('Published calendar registration trigger', {
+          originalFileName,
+          topicName: calendarTopicName,
+        });
+      } catch (pubsubError) {
+        // PubSub failure here is non-fatal: the text is already in Firestore.
+        logger.warn('Failed to publish calendar registration trigger', {
+          error: pubsubError,
+        });
+      }
+    }
+
     const result = {
       message: `Successfully stored extracted text from ${originalFileName}`,
       firestoreDocId: docRef.id,
@@ -275,6 +325,7 @@ export const textFirebaseWriter = async (
       pages: pages.length,
       originalFileName: originalFileName,
       classificationTriggered: classificationTriggered,
+      calendarRegistrationTriggered: calendarRegistrationTriggered,
     };
 
     logger.info('Firebase storage completed', { result });
@@ -322,6 +373,7 @@ export const textFirebaseWriter = async (
         pages: 0,
         originalFileName: '',
         classificationTriggered: false,
+        calendarRegistrationTriggered: false,
         skipped: true,
       };
     }
