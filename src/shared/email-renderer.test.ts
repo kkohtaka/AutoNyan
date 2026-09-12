@@ -1,6 +1,8 @@
 import {
   renderSuccessEmail,
   renderFailureEmail,
+  renderCalendarEmail,
+  CalendarEmailData,
   SuccessEmailData,
 } from './email-renderer';
 
@@ -211,5 +213,85 @@ describe('renderFailureEmail', () => {
     const email = renderFailureEmail(data);
     expect(email.html).toContain('AutoNyan');
     expect(email.html).toContain('自動送信');
+  });
+});
+
+describe('renderCalendarEmail', () => {
+  const data: CalendarEmailData = {
+    firestoreDocId: 'doc-abc123',
+    fileId: 'file-123',
+    fileName: '5月号学級通信.pdf',
+    calendarLabel: '学校',
+    registeredEvents: [
+      { title: '遠足', date: '2026-05-16', confidence: 0.9 },
+      {
+        title: '保護者会',
+        date: '2026-05-20',
+        startTime: '14:00',
+        endTime: '15:30',
+        location: '体育館',
+        confidence: 0.95,
+      },
+    ],
+    droppedEvents: [],
+    truncated: false,
+  };
+
+  it('should report the registered event count in the subject', () => {
+    const email = renderCalendarEmail(data);
+    expect(email.subject).toContain('[学校]');
+    expect(email.subject).toContain('2件');
+    expect(email.subject).toContain('5月号学級通信.pdf');
+  });
+
+  it('should list every registered event in one mail', () => {
+    const email = renderCalendarEmail(data);
+    expect(email.text).toContain('2026-05-16（終日） 遠足');
+    expect(email.text).toContain('2026-05-20 14:00〜15:30 保護者会（体育館）');
+    expect(email.html).toContain('遠足');
+    expect(email.html).toContain('保護者会');
+  });
+
+  it('should list events dropped for low confidence separately', () => {
+    const email = renderCalendarEmail({
+      ...data,
+      droppedEvents: [
+        { title: '未確定の行事', date: '2026-05-25', confidence: 0.4 },
+      ],
+    });
+    expect(email.text).toContain('未確定の行事');
+    expect(email.text).toContain('40%');
+    expect(email.html).toContain('未確定の行事');
+  });
+
+  it('should omit the dropped section when nothing was dropped', () => {
+    const email = renderCalendarEmail(data);
+    expect(email.text).not.toContain('登録しなかった予定');
+  });
+
+  it('should warn when the source text was truncated', () => {
+    const email = renderCalendarEmail({ ...data, truncated: true });
+    expect(email.text).toContain('一部のみを解析');
+    expect(email.html).toContain('一部のみを解析');
+  });
+
+  it('should escape HTML in event titles', () => {
+    const email = renderCalendarEmail({
+      ...data,
+      registeredEvents: [
+        {
+          title: '<script>alert(1)</script>',
+          date: '2026-05-16',
+          confidence: 0.9,
+        },
+      ],
+    });
+    expect(email.html).not.toContain('<script>');
+    expect(email.html).toContain('&lt;script&gt;');
+  });
+
+  it('should apply the configured subject prefix', () => {
+    process.env.EMAIL_SUBJECT_PREFIX = '[AutoNyan E2E]';
+    expect(renderCalendarEmail(data).subject).toContain('[AutoNyan E2E]');
   });
 });
