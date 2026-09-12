@@ -6,7 +6,7 @@ A Google Cloud Functions project demonstrating serverless document processing wi
 
 ## Architecture Overview
 
-AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 5-stage pipeline:
+AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 6-stage pipeline:
 
 ```mermaid
 graph LR
@@ -15,15 +15,17 @@ graph LR
     C --> D[3. Text Extraction]
     D --> E[4. Data Persistence]
     E --> G[5. Classification]
+    E --> H[6. Calendar Registration]
     E --> F[Firestore]
     B -.-> N[Notifications]
     C -.-> N
     D -.-> N
     E -.-> N
     G -.-> N
+    H -.-> N
 ```
 
-**Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database → Classification, with each stage publishing success/failure events to a notification dispatcher.
+**Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database → Classification and Calendar Registration, with each stage publishing success/failure events to a notification dispatcher.
 
 ### Pipeline Stages
 
@@ -32,6 +34,11 @@ graph LR
 3. **Text Extraction**: Processes documents using Vision API for OCR and text extraction
 4. **Data Persistence**: Stores extracted text and metadata in Firestore database
 5. **Classification**: Classifies documents with AI and moves them to categorized Drive folders
+6. **Calendar Registration**: Extracts events from documents in watched Drive folders and registers them on the calendar configured for that folder
+
+Classification and calendar registration are parallel branches: both consume the
+extracted text, so a document reaches the calendar whether or not it was filed
+away successfully.
 
 **Notifications (cross-cutting):** A notification dispatcher consumes success and
 failure events published by the pipeline stages and emails summaries to the
@@ -49,7 +56,8 @@ relevant Drive folder owner via the Gmail API.
 - **PubSub**: Asynchronous messaging between pipeline stages
 - **Cloud Storage**: Document staging and results storage
 - **Vision API**: OCR and text extraction from documents
-- **Vertex AI**: Document classification into categories
+- **Vertex AI**: Document classification into categories and event extraction
+- **Calendar API**: Event registration on per-folder calendars
 - **Gmail API**: Email notifications via Domain-Wide Delegation
 - **Firestore**: NoSQL database for extracted text and metadata
 - **Terraform**: Infrastructure as Code for all cloud resources
@@ -62,6 +70,7 @@ relevant Drive folder owner via the Gmail API.
 - **Google Drive Integration**: Advanced Drive API operations with pagination support
 - **Document Processing**: Automated scanning and text extraction from multiple file formats
 - **AI Classification**: Categorizes documents and files them into Drive folders
+- **Calendar Registration**: Registers a document's events on a per-folder calendar, without duplicates across re-scans
 - **Email Notifications**: Success/failure summaries delivered via the Gmail API
 - **Modular Design**: Each function is independently deployable and testable
 - **Security-First CI/CD**: GitHub Actions with Workload Identity Federation
@@ -199,7 +208,32 @@ Google Drive requires **manual folder sharing** with the service account. Use th
 **Why Manual Sharing?**
 Drive API doesn't support project-level IAM roles. Service accounts can only access explicitly shared folders, ensuring least-privilege access and preventing accidental access to unintended files.
 
-#### 5. Configure Gmail Domain-Wide Delegation (for notifications)
+#### 5. Share the target calendars (for calendar registration)
+
+Calendar access follows the same explicit-sharing model as Drive: the function
+can only reach calendars that have been shared with its service account. This is
+a one-time step per calendar, and there is no script for it — the Calendar API
+cannot add a sharing rule without calendar-owner rights.
+
+1. Get the registrar's service account address after deployment:
+
+   ```bash
+   terraform -chdir=terraform output calendar_registrar_service_account_email
+   ```
+
+2. In Google Calendar, open the target calendar's **Settings and sharing** →
+   **Share with specific people** and add that address with **Make changes to
+   events**.
+
+3. Declare the folder-to-calendar mapping in `calendar_watch_folders` (see
+   `terraform/terraform.tfvars.example`), or as the `CALENDAR_WATCH_FOLDERS`
+   Environment Secret in CI. Each watched folder also needs to be shared with
+   the pipeline service accounts as in step 4 above.
+
+**Note:** Events created this way cannot send invitations to attendees — that
+would require Domain-Wide Delegation rather than calendar sharing.
+
+#### 6. Configure Gmail Domain-Wide Delegation (for notifications)
 
 The notification dispatcher sends email as `notification_from_email` via the
 Gmail API, which requires **Domain-Wide Delegation (DWD)** authorized once in
@@ -438,6 +472,7 @@ For detailed GitHub Actions setup instructions, see [GITHUB_ACTIONS_SETUP.md](./
 - `WIF_PROVIDER`: Workload Identity Federation provider
 - `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions
 - `DRIVE_FOLDER_ID`, `CATEGORY_ROOT_FOLDER_ID`, `UNCATEGORIZED_FOLDER_ID`: Drive folder IDs
+- `CALENDAR_WATCH_FOLDERS` (optional): JSON array mapping watched Drive folders to calendars
 - `BILLING_ACCOUNT_ID`: Cloud Billing account ID for the cost budget
 - `NOTIFICATION_FROM_EMAIL`: Gmail sender address for notifications
 
