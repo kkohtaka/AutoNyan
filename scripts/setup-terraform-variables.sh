@@ -63,6 +63,15 @@ fi
 # Optional: default the monthly budget amount when not provided
 BUDGET_AMOUNT=${BUDGET_AMOUNT:-10000}
 
+# Optional: the watched calendar folders, supplied as a JSON array. Terraform
+# accepts JSON object syntax in a tfvars file, so the secret is written through
+# unchanged. Omitting the line leaves the variable at its empty default, which
+# disables calendar registration.
+CALENDAR_WATCH_FOLDERS_LINE=""
+if [ -n "$CALENDAR_WATCH_FOLDERS" ]; then
+	CALENDAR_WATCH_FOLDERS_LINE="calendar_watch_folders = $CALENDAR_WATCH_FOLDERS"
+fi
+
 # Generate terraform.tfvars from GitHub Actions variables/secrets
 echo "Generating terraform.tfvars for ${ENVIRONMENT} environment..."
 cat >"$TFVARS_FILE" <<EOF
@@ -79,6 +88,7 @@ uncategorized_folder_id = "$UNCATEGORIZED_FOLDER_ID"
 billing_account_id = "$BILLING_ACCOUNT_ID"
 budget_amount = $BUDGET_AMOUNT
 notification_from_email = "$NOTIFICATION_FROM_EMAIL"
+$CALENDAR_WATCH_FOLDERS_LINE
 EOF
 
 echo ""
@@ -95,3 +105,6 @@ echo "  uncategorized_folder_id = [MASKED]"
 echo "  billing_account_id = [MASKED]"
 echo "  budget_amount = $BUDGET_AMOUNT"
 echo "  notification_from_email = $NOTIFICATION_FROM_EMAIL"
+if [ -n "$CALENDAR_WATCH_FOLDERS" ]; then
+	echo "  calendar_watch_folders = [MASKED]"
+fi

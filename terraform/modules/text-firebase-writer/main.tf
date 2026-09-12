@@ -63,11 +63,12 @@ resource "google_cloudfunctions2_function" "text_firebase_writer" {
     available_memory   = "512Mi"
     timeout_seconds    = 300
     environment_variables = {
-      PROJECT_ID            = var.project_id
-      ENVIRONMENT           = var.environment
-      FILE_CLASSIFIER_TOPIC = var.file_classifier_trigger_topic
-      FIRESTORE_DATABASE_ID = var.environment
-      NOTIFICATION_TOPIC    = var.notification_topic_name
+      PROJECT_ID               = var.project_id
+      ENVIRONMENT              = var.environment
+      FILE_CLASSIFIER_TOPIC    = var.file_classifier_trigger_topic
+      CALENDAR_REGISTRAR_TOPIC = var.calendar_registrar_topic
+      FIRESTORE_DATABASE_ID    = var.environment
+      NOTIFICATION_TOPIC       = var.notification_topic_name
     }
     service_account_email = google_service_account.text_firebase_writer.email
   }
