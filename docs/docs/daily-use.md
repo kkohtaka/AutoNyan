@@ -65,11 +65,87 @@ A few things worth knowing:
 - **You stay in control of categories.** To create a new category, add a folder;
   to retire one, remove it. AutoNyan never invents categories on its own.
 
+## Calendar registration
+
+Some watched folders have a **calendar** attached to them. For a document in one
+of those, AutoNyan also reads the dates out of the text and registers them as
+events — useful when one document carries a month of them, like a school
+newsletter.
+
+This happens **in parallel with classification**, so events are registered
+whether or not the document was filed successfully, including when it lands in
+*Uncategorized*.
+
+### Which folders are watched
+
+Not all of them. Whoever runs your AutoNyan instance decides which folders are
+watched for events and which calendar each one writes to, and gives each pairing
+a short **label** — `Class newsletter`, say — that appears in the subject line of
+the email. A document from a folder with no calendar attached is classified and
+filed exactly as before, and nothing about it changes.
+
+If you are not sure whether your folder is watched, ask them; there is nothing
+in Drive that shows it.
+
+### What lands on the calendar
+
+Only entries whose date AutoNyan can actually pin down become events. For each
+one:
+
+- **A date with a time** becomes a timed event. If the document gives no end
+  time, the event is **one hour** long by default.
+- **A date with no time** becomes an **all-day** event.
+- **A year that the document leaves out** — as most newsletters do, writing just
+  `15日（水）` — is resolved against the date the document itself was last
+  modified in Drive, rolling into the next year when the month has already
+  passed. A January entry in a March newsletter is therefore *next* January.
+- **The location and any note** in the document are carried onto the event.
+- **Reminders follow your own calendar settings.** AutoNyan does not choose a
+  reminder for you.
+
+AutoNyan **cannot invite anyone** to the events it creates. They appear on the
+calendar for everyone who already has access to that calendar, but nobody is
+sent an invitation.
+
+### One document, one email
+
+However many events a document produced — one or thirty — you get **a single
+email**, not one per event. It tells you:
+
+- the **calendar** the events went to and the **file** they came from,
+- the list of **events that were registered**, with their dates and times,
+- the list of **events that were not registered** because AutoNyan was not
+  confident enough about them, each with its confidence figure — these are
+  reported rather than dropped silently, so you can add them by hand if they are
+  real, and
+- a warning **if the document was too long to read all of it**, which means some
+  events may be missing entirely.
+
+**Who receives it.** Unlike the classification email, which goes to the people
+the *destination category folder* is shared with, the calendar email goes to the
+people the **watched folder** is shared with — everyone who can put documents in
+is told what came out.
+
+### Adding the same document again
+
+**Re-adding or re-scanning a document creates no duplicates and sends no second
+email.** Each event is identified by the document it came from together with its
+date and title, so registering it a second time does nothing. Since no new event
+was registered, no email is sent either — silence after a re-add is the expected
+result, not a failure.
+
+One consequence is worth knowing: if a **corrected** version of a document moves
+an event to a different date, that counts as a *new* event. The event on the old
+date stays on the calendar, and you should delete it yourself. AutoNyan never
+moves or removes an event it has already created.
+
 ## Notification emails
 
 After AutoNyan finishes with a document, it sends a **notification email** so
 you know what happened without having to go and look. You get one email per
-document.
+document. This section describes the email about
+**classification and filing**; the separate email about calendar events is
+described in [Calendar registration](#calendar-registration) above.
 
 :::note
 

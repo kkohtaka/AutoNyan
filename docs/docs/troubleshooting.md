@@ -68,7 +68,9 @@ one:
 - **Check who the email goes to.** Success notifications go to the people the
   **destination category folder** is shared with — so if the document was filed
   into a folder you cannot see, you will not be notified. Failure notifications go
-  to the **owner** of the relevant folder, not to you.
+  to the **owner** of the relevant folder, not to you. The email about **calendar
+  events** is different again: it goes to the people the **watched folder** is
+  shared with.
 - **Check spam and the sending address.** The notification comes from the address
   configured by whoever runs your instance. If you have never seen a notification,
   confirm with them which address it is sent from and which address it is sent
@@ -99,6 +101,70 @@ AutoNyan is **not instant by design.** It checks the watched folder on a schedul
 file and seeing it filed. Adding a large batch of documents at once is fine; each
 is processed on its own, and they may finish at slightly different times. A wait
 of up to roughly an hour is expected, not a sign of a problem.
+
+### No events were registered from a document that clearly has some
+
+First, check that the document is in a folder that has a **calendar attached**.
+Only some watched folders do, and a document in any other folder is classified
+and filed normally but never looked at for events. Whoever runs your AutoNyan
+instance knows which folders are watched — nothing in Drive shows it.
+
+If the folder is watched, the likely causes are:
+
+- **The dates are not pinned down.** Only entries AutoNyan can resolve to an
+  actual date become events. "Early next month" or a date given only as a
+  weekday has nothing to register.
+- **AutoNyan was not confident enough.** Events it is unsure about are *not*
+  registered, but they are listed in the email under the events it did not
+  register, with a confidence figure. If the email lists them there, add those
+  by hand.
+- **You added the same document before.** A document you have already processed
+  registers nothing the second time and sends no email — that is deliberate, see
+  [Daily Use](./daily-use.md#calendar-registration). The events from the first
+  time are already on the calendar.
+- **The document held an unreasonable number of events.** Above roughly 50,
+  AutoNyan registers **none of them** rather than flooding the calendar, and
+  sends a failure notification to the folder owner instead. A document that
+  large usually means the text was misread.
+
+### Nothing was registered, and a failure email arrived
+
+If the failure notification mentions the calendar not being accessible, the
+**calendar has not been shared** with AutoNyan's account, or it has been shared
+without permission to change events.
+
+This is a **permanent failure**: AutoNyan does not retry it, because retrying
+cannot fix a permission. Nothing will be registered from that folder until it is
+sorted out, and this is not something you can fix from Drive — ask whoever runs
+your AutoNyan instance to share the calendar with the service account, giving it
+permission to **make changes to events**. Once that is done, re-adding a document
+will register its events.
+
+### Only some of a long document's events appeared
+
+AutoNyan reads a large but finite amount of text from each document. A document
+longer than that is read **only up to the limit**, so events written past that
+point are never seen.
+
+You do not have to guess when this happened: **the email says so**, with a note
+that the document was too long to read in full and that events may be missing.
+If you see that note, check the tail end of the document and add anything missing
+by hand. Splitting a very long document into two and adding them separately also
+works.
+
+### An event was registered with the wrong year
+
+This comes from documents that write dates **without a year** — `15日（水）` and
+the like, which is normal in a newsletter. AutoNyan fills in the year from the
+date the **document itself was last modified** in Drive, rolling forward when the
+month has already passed (a January entry in a March newsletter becomes *next*
+January).
+
+So a wrong year almost always means the document's modified date is not when it
+was written — for example an old newsletter uploaded today, or a file edited long
+after it was issued. Correct the events on the calendar by hand; AutoNyan does
+not move an event it has already created. For documents where the year matters,
+having the year written in the document itself avoids the guess entirely.
 
 ### Something is genuinely broken
 
@@ -133,6 +199,23 @@ Understanding this explains most "why can't it see my document" questions:
 If AutoNyan does not seem to see a document, the most common reason is that the
 document is not in a shared folder. Move it into the watched folder that was
 shared with you.
+
+## What AutoNyan can and cannot do with your calendar
+
+Calendars work the same way Drive folders do — **explicit sharing, nothing
+more:**
+
+- **It only writes to calendars shared with it.** AutoNyan can add events to the
+  calendars that were explicitly shared with its account, and to no others. Your
+  personal calendar is invisible to it unless someone shared it deliberately.
+- **It adds events; it does not change or remove them.** Once an event has been
+  created, AutoNyan never moves, edits, or deletes it — not even when a corrected
+  version of the document gives a different date. Tidying up after a correction
+  is yours to do, and nothing AutoNyan does can wipe your calendar.
+- **It cannot invite anyone.** Events appear for the people who already have
+  access to that calendar; no invitations are sent, and guests cannot be added.
+- **It cannot read what is already on the calendar.** AutoNyan does not see your
+  existing events, and it cannot change who a calendar is shared with.
 
 ## Frequently asked questions
 
@@ -173,6 +256,19 @@ Currently Japanese, regardless of the language you read these docs in.
 AutoNyan did not find a category confident enough to use. The document was still
 read and filed safely. Create the category folder you expected (for future
 documents) and move this one yourself.
+
+**Do all my documents get put on a calendar?**
+No — only documents in folders that have a calendar attached, which is decided by
+whoever runs your instance. Everything else is classified and filed as usual. See
+[Daily Use](./daily-use.md#calendar-registration).
+
+**I added the same document twice — will I get the events twice?**
+No. A repeat registers nothing and sends no second email. The events from the
+first time are already there.
+
+**Can AutoNyan invite people to the events it creates?**
+No. Events appear for whoever already has access to that calendar, and no
+invitations are sent.
 
 **I still cannot explain what happened — who do I ask?**
 If the problem looks like a genuine failure rather than timing or an unsupported
