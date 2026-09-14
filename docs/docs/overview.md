@@ -30,6 +30,30 @@ When you add a document to the watched folder, it travels through five steps:
 > **You drop a file → Discovered → Read → Classified → Filed → You get an
 > email**
 
+### Documents that also go on a calendar
+
+Some watched folders have a **calendar** attached to them. A document in one of
+those folders takes a second path out of step 2: AutoNyan picks the dates out of
+the text it has just read and registers each one as an event on that folder's
+calendar, then emails you the list.
+
+This branch runs **alongside classification, not after it.** The two share the
+reading in step 2 and are otherwise independent, so a document reaches the
+calendar **whether or not filing succeeded** — including a document that ended up
+in *Uncategorized*.
+
+> **…and, for a folder with a calendar: Read → Events registered → You get an
+> email**
+
+Not every folder has one. Whoever runs your AutoNyan instance decides which
+folders are watched for events and which calendar each writes to, so if you are
+not sure whether yours is, ask them. A document from a folder with no calendar
+attached is simply classified and filed as before.
+
+The case this is built for is a document that carries many dates at once — a
+school newsletter with a month of events — so that nobody has to retype them.
+See **[Daily Use](./daily-use.md)** for what arrives in your inbox.
+
 ## You define the categories
 
 AutoNyan does not invent categories. The categories are simply the **folders you
