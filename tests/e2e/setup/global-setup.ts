@@ -1,6 +1,5 @@
 import { Storage } from '@google-cloud/storage';
 import { google } from 'googleapis';
-import { GoogleAuth } from 'google-auth-library';
 import { trashDriveItem } from '../helpers/drive-setup';
 import { getTerraformOutputs } from '../helpers/terraform-outputs';
 
@@ -23,7 +22,7 @@ export default async function globalSetup(): Promise<void> {
     // property set at creation instead.
     console.log('Cleaning up old Drive test artifacts...');
     try {
-      const auth = new GoogleAuth({
+      const auth = new google.auth.GoogleAuth({
         scopes: ['https://www.googleapis.com/auth/drive'],
       });
       const drive = google.drive({ version: 'v3', auth });
