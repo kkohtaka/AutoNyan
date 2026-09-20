@@ -1,6 +1,8 @@
 # Service account for reclassification-sweeper function
+# The account ID is abbreviated because GCP caps it at 30 characters, which
+# the full function name exceeds once the environment prefix is added.
 resource "google_service_account" "reclassification_sweeper" {
-  account_id   = "${var.environment}-reclassification-sweeper"
+  account_id   = "${var.environment}-reclassify-sweeper"
   display_name = "Reclassification Sweeper Service Account (${var.environment})"
   description  = "Service account for reclassification-sweeper Cloud Function"
 }
