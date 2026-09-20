@@ -39,7 +39,8 @@ const extraction = require('./extraction');
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 const calendar = require('./calendar');
 
-const WATCHED_FOLDER = 'watched-folder-id';
+const MAPPED_CATEGORY = '学校';
+const CATEGORY_FOLDER = 'category-folder-id';
 const CALENDAR_ID = 'family@group.calendar.google.com';
 
 const createPubSubEvent = (
@@ -62,7 +63,9 @@ const baseMessage = {
   fileId: 'file-1',
   fileName: '5月号学級通信.pdf',
   extractedText: '5月の予定',
-  sourceFolderId: WATCHED_FOLDER,
+  category: MAPPED_CATEGORY,
+  categoryFolderId: CATEGORY_FOLDER,
+  classificationConfidence: 0.95,
   modifiedTime: '2026-04-28T00:00:00.000Z',
 };
 
@@ -97,19 +100,16 @@ describe('calendarRegistrar', () => {
 
     process.env.PROJECT_ID = 'test-project';
     process.env.NOTIFICATION_TOPIC = 'notification-topic';
-    process.env.CALENDAR_WATCH_FOLDERS = JSON.stringify([
-      {
-        folder_id: WATCHED_FOLDER,
-        calendar_id: CALENDAR_ID,
-        label: '学校',
-      },
+    process.env.CALENDAR_CATEGORY_CALENDARS = JSON.stringify([
+      { category: MAPPED_CATEGORY, calendar_id: CALENDAR_ID },
     ]);
   });
 
   afterEach(() => {
     delete process.env.PROJECT_ID;
     delete process.env.NOTIFICATION_TOPIC;
-    delete process.env.CALENDAR_WATCH_FOLDERS;
+    delete process.env.CALENDAR_CATEGORY_CALENDARS;
+    delete process.env.CALENDAR_CLASSIFICATION_CONFIDENCE_THRESHOLD;
   });
 
   it('should register every event of a month-long newsletter and send one mail', async () => {
@@ -131,16 +131,46 @@ describe('calendarRegistrar', () => {
     const published = mockPublishMessage.mock.calls[0][0];
     expect(published.attributes.operation).toBe('calendar-notification');
     expect(published.json.registeredEvents).toHaveLength(23);
+    expect(published.json.categoryFolderId).toBe(CATEGORY_FOLDER);
+    expect(published.json.category).toBe(MAPPED_CATEGORY);
   });
 
-  it('should discard a document from an unwatched folder before extracting', async () => {
+  it('should discard an unmapped category before extracting', async () => {
     const result = await calendarRegistrar(
-      createPubSubEvent({ ...baseMessage, sourceFolderId: 'other-folder' })
+      createPubSubEvent({ ...baseMessage, category: '自治会' })
     );
 
     expect(result.skipped).toBe(true);
     expect(extraction.extractEventsWithGemini).not.toHaveBeenCalled();
     expect(mockPublishMessage).not.toHaveBeenCalled();
+  });
+
+  it('should discard an Uncategorized document before extracting', async () => {
+    const result = await calendarRegistrar(
+      createPubSubEvent({ ...baseMessage, category: null })
+    );
+
+    expect(result.skipped).toBe(true);
+    expect(extraction.extractEventsWithGemini).not.toHaveBeenCalled();
+  });
+
+  it('should discard a low-confidence classification before extracting', async () => {
+    const result = await calendarRegistrar(
+      createPubSubEvent({ ...baseMessage, classificationConfidence: 0.4 })
+    );
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toMatch(/classification confidence/);
+    expect(extraction.extractEventsWithGemini).not.toHaveBeenCalled();
+  });
+
+  it('should honour a configured classification confidence threshold', async () => {
+    process.env.CALENDAR_CLASSIFICATION_CONFIDENCE_THRESHOLD = '0.99';
+
+    const result = await calendarRegistrar(createPubSubEvent(baseMessage));
+
+    expect(result.skipped).toBe(true);
+    expect(extraction.extractEventsWithGemini).not.toHaveBeenCalled();
   });
 
   it('should pass the document modified time as the extraction reference date', async () => {
@@ -227,6 +257,7 @@ describe('calendarRegistrar', () => {
     expect(mockDoc.mock.calls[0][0]).toMatch(/^[0-9a-v]{26}$/);
     expect(mockSet.mock.calls[0][0]).toMatchObject({
       calendarId: CALENDAR_ID,
+      category: MAPPED_CATEGORY,
       fileId: 'file-1',
       title: '遠足',
       status: 'created',
@@ -252,16 +283,16 @@ describe('calendarRegistrar', () => {
     ).rejects.toThrow(/Calendar registration failed/);
   });
 
-  it('should skip when no watched folders are configured', async () => {
-    delete process.env.CALENDAR_WATCH_FOLDERS;
+  it('should skip when no category mapping is configured', async () => {
+    delete process.env.CALENDAR_CATEGORY_CALENDARS;
 
     const result = await calendarRegistrar(createPubSubEvent(baseMessage));
 
     expect(result.skipped).toBe(true);
   });
 
-  it('should fail permanently when the watch folder configuration is not valid JSON', async () => {
-    process.env.CALENDAR_WATCH_FOLDERS = 'not-json';
+  it('should fail permanently when the category mapping is not valid JSON', async () => {
+    process.env.CALENDAR_CATEGORY_CALENDARS = 'not-json';
 
     const result = await calendarRegistrar(createPubSubEvent(baseMessage));
 

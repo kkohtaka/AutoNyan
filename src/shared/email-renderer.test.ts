@@ -242,7 +242,7 @@ describe('renderCalendarEmail', () => {
     firestoreDocId: 'doc-abc123',
     fileId: 'file-123',
     fileName: '5月号学級通信.pdf',
-    calendarLabel: '学校',
+    category: '学校',
     registeredEvents: [
       { title: '遠足', date: '2026-05-16', confidence: 0.9 },
       {

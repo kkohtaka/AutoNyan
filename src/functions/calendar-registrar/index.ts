@@ -27,14 +27,17 @@ interface CalendarRegistrationEventData extends Record<string, unknown> {
   fileId: string;
   fileName: string;
   extractedText: string;
-  sourceFolderId?: string;
+  // Null when the classifier matched no category; such a document is filed as
+  // Uncategorized and never maps to a calendar.
+  category?: string | null;
+  categoryFolderId?: string;
+  classificationConfidence?: number;
   modifiedTime?: string;
 }
 
-export interface WatchFolder {
-  folder_id: string;
+export interface CategoryCalendar {
+  category: string;
   calendar_id: string;
-  label: string;
 }
 
 interface Result {
@@ -55,15 +58,20 @@ interface Result {
 // newsletter.
 const CONFIDENCE_THRESHOLD = 0.7;
 
+// Registration hangs off the classifier's judgement, and events are never
+// updated or deleted, so a misclassification has to be undone by hand. A
+// doubtful classification registers nothing rather than risk that.
+const DEFAULT_CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.7;
+
 const DEFAULT_TIME_ZONE = 'Asia/Tokyo';
 const DEFAULT_EVENT_DURATION_MINUTES = 60;
 
 /**
- * Read the folder-to-calendar mapping this deployment watches
- * @returns The configured watch folders, empty when none are configured
+ * Read the category-to-calendar mapping this deployment registers on
+ * @returns The configured mappings, empty when none are configured
  */
-export function parseWatchFolders(): WatchFolder[] {
-  const raw = process.env.CALENDAR_WATCH_FOLDERS;
+export function parseCategoryCalendars(): CategoryCalendar[] {
+  const raw = process.env.CALENDAR_CATEGORY_CALENDARS;
   if (!raw) {
     return [];
   }
@@ -73,27 +81,29 @@ export function parseWatchFolders(): WatchFolder[] {
     parsed = JSON.parse(raw);
   } catch (error) {
     throw new PermanentError(
-      `CALENDAR_WATCH_FOLDERS is not valid JSON: ${String(error)}`
+      `CALENDAR_CATEGORY_CALENDARS is not valid JSON: ${String(error)}`
     );
   }
 
   if (!Array.isArray(parsed)) {
-    throw new PermanentError('CALENDAR_WATCH_FOLDERS must be a JSON array');
+    throw new PermanentError(
+      'CALENDAR_CATEGORY_CALENDARS must be a JSON array'
+    );
   }
 
-  return parsed.filter((entry): entry is WatchFolder => {
-    const candidate = entry as WatchFolder;
+  return parsed.filter((entry): entry is CategoryCalendar => {
+    const candidate = entry as CategoryCalendar;
     return (
-      typeof candidate?.folder_id === 'string' &&
+      typeof candidate?.category === 'string' &&
       typeof candidate?.calendar_id === 'string'
     );
   });
 }
 
 /**
- * Cloud Function triggered by PubSub after extracted text is stored.
- * Extracts events from documents in watched Drive folders and registers them
- * on the calendar configured for that folder.
+ * Cloud Function triggered by PubSub after a document is classified.
+ * Extracts events from documents filed into a mapped category and registers
+ * them on the calendar configured for that category.
  */
 export const calendarRegistrar = async (
   cloudEvent: CloudEvent<MessagePublishedData>
@@ -111,31 +121,42 @@ export const calendarRegistrar = async (
       'extractedText',
     ]);
 
-    // Discarding unwatched documents here, before any billable call, is what
-    // lets text-firebase-writer publish every document without knowing which
-    // folders map to a calendar.
-    const watchFolders = parseWatchFolders();
-    const watchFolder = watchFolders.find(
-      (folder) => folder.folder_id === eventData.sourceFolderId
-    );
+    // Both checks run before any billable call, which is what lets
+    // file-classifier publish every classified document without knowing which
+    // categories map to a calendar.
+    const categoryCalendars = parseCategoryCalendars();
+    const mapping = eventData.category
+      ? categoryCalendars.find((entry) => entry.category === eventData.category)
+      : undefined;
 
-    if (!watchFolder) {
-      logger.info('Document is not from a watched folder, skipping', {
+    if (!mapping) {
+      logger.info('Document category is not mapped to a calendar, skipping', {
         fileName: eventData.fileName,
-        sourceFolderId: eventData.sourceFolderId,
+        category: eventData.category ?? null,
       });
-      return {
-        message: `Skipped (folder not watched): ${eventData.fileName}`,
-        fileId: eventData.fileId,
+      return skippedResult(
+        `Skipped (category not mapped): ${eventData.fileName}`,
+        eventData
+      );
+    }
+
+    const classificationThreshold = parseFloat(
+      process.env.CALENDAR_CLASSIFICATION_CONFIDENCE_THRESHOLD ||
+        String(DEFAULT_CLASSIFICATION_CONFIDENCE_THRESHOLD)
+    );
+    const classificationConfidence = eventData.classificationConfidence ?? 0;
+
+    if (classificationConfidence < classificationThreshold) {
+      logger.info('Classification confidence below threshold, skipping', {
         fileName: eventData.fileName,
-        calendarId: null,
-        registered: 0,
-        duplicates: 0,
-        dropped: 0,
-        truncated: false,
-        notified: false,
-        skipped: true,
-      };
+        category: eventData.category,
+        classificationConfidence,
+        classificationThreshold,
+      });
+      return skippedResult(
+        `Skipped (classification confidence ${classificationConfidence} below ${classificationThreshold}): ${eventData.fileName}`,
+        eventData
+      );
     }
 
     const timeZone = process.env.CALENDAR_TIME_ZONE || DEFAULT_TIME_ZONE;
@@ -153,7 +174,7 @@ export const calendarRegistrar = async (
 
     logger.info('Extracting calendar events', {
       fileName: eventData.fileName,
-      calendarLabel: watchFolder.label,
+      category: mapping.category,
     });
 
     const extraction = await extractEventsWithGemini(
@@ -200,7 +221,7 @@ export const calendarRegistrar = async (
 
       const status = await registerEvent(
         calendar,
-        watchFolder.calendar_id,
+        mapping.calendar_id,
         event,
         timeZone
       );
@@ -215,12 +236,11 @@ export const calendarRegistrar = async (
       // audit document instead of adding another.
       await auditCollection.doc(event.id).set({
         eventId: event.id,
-        calendarId: watchFolder.calendar_id,
-        calendarLabel: watchFolder.label,
+        calendarId: mapping.calendar_id,
+        category: mapping.category,
         firestoreDocId: eventData.firestoreDocId,
         fileId: eventData.fileId,
         fileName: eventData.fileName,
-        sourceFolderId: watchFolder.folder_id,
         title: event.title,
         start: event.start,
         end: event.end,
@@ -235,17 +255,17 @@ export const calendarRegistrar = async (
     // nothing new, so a re-scan does not re-send what was already reported.
     const notified = await publishNotification(
       eventData,
-      watchFolder,
+      mapping,
       registered,
       dropped,
       extraction.truncated
     );
 
     const result = {
-      message: `Registered ${registered.length} event(s) from ${eventData.fileName} on ${watchFolder.label}`,
+      message: `Registered ${registered.length} event(s) from ${eventData.fileName} on ${mapping.category}`,
       fileId: eventData.fileId,
       fileName: eventData.fileName,
-      calendarId: watchFolder.calendar_id,
+      calendarId: mapping.calendar_id,
       registered: registered.length,
       duplicates,
       dropped: dropped.length,
@@ -290,9 +310,27 @@ export const calendarRegistrar = async (
   }
 };
 
+function skippedResult(
+  message: string,
+  eventData: CalendarRegistrationEventData
+): Result {
+  return {
+    message,
+    fileId: eventData.fileId,
+    fileName: eventData.fileName,
+    calendarId: null,
+    registered: 0,
+    duplicates: 0,
+    dropped: 0,
+    truncated: false,
+    notified: false,
+    skipped: true,
+  };
+}
+
 async function publishNotification(
   eventData: CalendarRegistrationEventData,
-  watchFolder: WatchFolder,
+  mapping: CategoryCalendar,
   registered: ExtractedEvent[],
   dropped: ExtractedEvent[],
   truncated: boolean
@@ -310,9 +348,10 @@ async function publishNotification(
         firestoreDocId: eventData.firestoreDocId,
         fileId: eventData.fileId,
         fileName: eventData.fileName,
-        sourceFolderId: watchFolder.folder_id,
-        calendarId: watchFolder.calendar_id,
-        calendarLabel: watchFolder.label,
+        // The category folder's collaborators are the notification recipients.
+        categoryFolderId: eventData.categoryFolderId,
+        calendarId: mapping.calendar_id,
+        category: mapping.category,
         registeredEvents: registered.map(toNotificationEvent),
         droppedEvents: dropped.map(toNotificationEvent),
         truncated,

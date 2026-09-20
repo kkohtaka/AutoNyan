@@ -12,7 +12,7 @@ import {
   validateRequiredFields,
 } from 'autonyan-shared';
 import { google } from 'googleapis';
-import { classifyWithGemini } from './classification';
+import { classifyWithGemini, ClassificationResult } from './classification';
 import {
   listCategoryFolders,
   listFileNamesInFolder,
@@ -27,6 +27,8 @@ interface ClassificationEventData extends Record<string, unknown> {
   fileName: string;
   extractedText: string;
   confidence: number;
+  // Reference date for resolving year-less dates during calendar extraction.
+  modifiedTime?: string;
   // Set by the re-classification sweep, so the notification can tell the
   // recipient this document was filed once before under Uncategorized.
   reclassification?: boolean;
@@ -188,6 +190,15 @@ export const fileClassifier = async (
       renameReasoning,
     });
 
+    // Published before the Drive move so calendar registration does not depend
+    // on the move succeeding. The registrar owns the category-to-calendar
+    // mapping and discards unmapped categories before any billable call.
+    await publishCalendarRegistration(
+      eventData,
+      classification,
+      targetFolderId
+    );
+
     // A re-classification that again matches no category has nothing to do:
     // the file already sits in Uncategorized and the user was told so when it
     // was first filed. Moving it onto itself and mailing a second identical
@@ -328,3 +339,39 @@ export const fileClassifier = async (
     });
   }
 };
+
+async function publishCalendarRegistration(
+  eventData: ClassificationEventData,
+  classification: ClassificationResult,
+  categoryFolderId: string
+): Promise<void> {
+  const calendarTopicName = process.env.CALENDAR_REGISTRAR_TOPIC;
+  if (!calendarTopicName) {
+    return;
+  }
+
+  try {
+    const pubsub = new PubSub();
+    await pubsub.topic(calendarTopicName).publishMessage({
+      json: {
+        firestoreDocId: eventData.firestoreDocId,
+        fileId: eventData.fileId,
+        fileName: eventData.fileName,
+        extractedText: eventData.extractedText,
+        category: classification.categoryName,
+        categoryFolderId,
+        classificationConfidence: classification.confidence,
+        modifiedTime: eventData.modifiedTime,
+      },
+      attributes: {
+        operation: 'calendar-registration',
+        fileId: eventData.fileId,
+      },
+    });
+  } catch (publishError) {
+    // Non-fatal: the classification is already saved to Firestore.
+    logger.warn('Failed to publish calendar registration trigger', {
+      error: publishError,
+    });
+  }
+}

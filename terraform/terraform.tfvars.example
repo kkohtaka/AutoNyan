@@ -31,16 +31,17 @@ budget_amount = 10000
 notification_from_email = "admin@your-workspace-domain.com"
 
 # Calendar registration configuration (optional)
-# Each entry maps a watched Drive folder to the calendar its documents' events
-# are registered on. Share each calendar with the calendar-registrar service
+# Each entry maps a classification category - the name of a subfolder under
+# category_root_folder_id - to the calendar its documents' events are
+# registered on. Share each calendar with the calendar-registrar service
 # account (terraform output calendar_registrar_service_account_email) before
 # the first scan. Leave the list empty to disable calendar registration.
-# calendar_watch_folders = [
+# calendar_category_calendars = [
 #   {
-#     folder_id   = "your-newsletter-folder-id"
+#     category    = "学校"
 #     calendar_id = "family@group.calendar.google.com"
-#     label       = "学校"
 #   },
 # ]
 # calendar_time_zone = "Asia/Tokyo"
 # calendar_default_event_duration_minutes = 60
+# calendar_classification_confidence_threshold = 0.7

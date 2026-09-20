@@ -18,14 +18,18 @@ variable "function_bucket_name" {
   type        = string
 }
 
-variable "watch_folders" {
-  description = "Drive folders whose documents produce calendar events, and the calendar each one registers on"
+variable "category_calendars" {
+  description = "Classification categories whose documents produce calendar events, and the calendar each one registers on"
   type = list(object({
-    folder_id   = string
+    category    = string
     calendar_id = string
-    label       = string
   }))
   default = []
+}
+
+variable "classification_confidence_threshold" {
+  description = "Minimum classification confidence for a document to register calendar events"
+  type        = number
 }
 
 variable "time_zone" {

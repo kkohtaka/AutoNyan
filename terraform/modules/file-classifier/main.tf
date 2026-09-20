@@ -62,13 +62,14 @@ resource "google_cloudfunctions2_function" "file_classifier" {
     available_memory   = "512Mi"
     timeout_seconds    = 300
     environment_variables = {
-      PROJECT_ID              = var.project_id
-      CATEGORY_ROOT_FOLDER_ID = var.category_root_folder_id
-      UNCATEGORIZED_FOLDER_ID = var.uncategorized_folder_id
-      ENVIRONMENT             = var.environment
-      VERTEX_AI_LOCATION      = var.region
-      FIRESTORE_DATABASE_ID   = var.environment
-      NOTIFICATION_TOPIC      = var.notification_topic_name
+      PROJECT_ID               = var.project_id
+      CATEGORY_ROOT_FOLDER_ID  = var.category_root_folder_id
+      UNCATEGORIZED_FOLDER_ID  = var.uncategorized_folder_id
+      ENVIRONMENT              = var.environment
+      VERTEX_AI_LOCATION       = var.region
+      FIRESTORE_DATABASE_ID    = var.environment
+      NOTIFICATION_TOPIC       = var.notification_topic_name
+      CALENDAR_REGISTRAR_TOPIC = var.calendar_registrar_topic
     }
     service_account_email = google_service_account.file_classifier.email
   }

@@ -37,7 +37,3 @@ variable "notification_topic_name" {
   description = "Name of the PubSub topic for notification messages"
   type        = string
 }
-variable "calendar_registrar_topic" {
-  description = "Name of the PubSub topic that triggers calendar registration"
-  type        = string
-}

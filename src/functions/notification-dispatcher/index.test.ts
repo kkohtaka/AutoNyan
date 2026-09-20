@@ -608,8 +608,8 @@ describe('notificationDispatcher', () => {
       firestoreDocId: 'doc-abc123',
       fileId: 'file-123',
       fileName: '5月号学級通信.pdf',
-      sourceFolderId: 'watched-folder-id',
-      calendarLabel: '学校',
+      categoryFolderId: 'category-folder-id',
+      category: '学校',
       registeredEvents: [
         { title: '遠足', date: '2026-05-16', confidence: 0.9 },
         {
@@ -627,7 +627,7 @@ describe('notificationDispatcher', () => {
       truncated: false,
     };
 
-    it('should send exactly one mail per document to the watched folder members', async () => {
+    it('should send exactly one mail per document to the category folder members', async () => {
       mockParsePubSubEvent.mockReturnValue({ data: calendarData });
 
       mockPermissionsList.mockResolvedValue({
@@ -654,7 +654,7 @@ describe('notificationDispatcher', () => {
       await notificationDispatcher(event);
 
       expect(mockPermissionsList).toHaveBeenCalledWith({
-        fileId: 'watched-folder-id',
+        fileId: 'category-folder-id',
         fields: 'permissions(emailAddress,role,type)',
         supportsAllDrives: true,
       });

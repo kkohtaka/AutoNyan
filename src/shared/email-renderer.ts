@@ -42,7 +42,7 @@ export interface CalendarEmailData {
   firestoreDocId: string;
   fileId: string;
   fileName: string;
-  calendarLabel: string;
+  category: string;
   registeredEvents: CalendarEventSummary[];
   // Events extracted below the confidence threshold. Reported rather than
   // silently discarded, so a missed event is visible to the recipient.
@@ -291,10 +291,10 @@ export function renderCalendarEmail(data: CalendarEmailData): RenderedEmail {
   const fileUrl = driveFileUrl(data.fileId);
   const registeredCount = data.registeredEvents.length;
 
-  const subject = `${subjectPrefix()}[${data.calendarLabel}] ${registeredCount}件の予定を登録しました: ${data.fileName}`;
+  const subject = `${subjectPrefix()}[${data.category}] ${registeredCount}件の予定を登録しました: ${data.fileName}`;
 
   const textLines = [
-    `ファイル「${data.fileName}」から ${registeredCount} 件の予定を「${data.calendarLabel}」カレンダーに登録しました。`,
+    `ファイル「${data.fileName}」から ${registeredCount} 件の予定を「${data.category}」カレンダーに登録しました。`,
     '',
     '登録した予定:',
     ...data.registeredEvents.map((event) => `- ${formatEventLine(event)}`),
@@ -321,7 +321,7 @@ export function renderCalendarEmail(data: CalendarEmailData): RenderedEmail {
   textLines.push('', `ファイルを開く: ${fileUrl}`);
 
   const html = renderLayout(
-    `<p style="margin:0 0 20px;">ファイル「<strong>${escapeHtml(data.fileName)}</strong>」から <strong>${registeredCount}</strong> 件の予定を「${escapeHtml(data.calendarLabel)}」カレンダーに登録しました。</p>` +
+    `<p style="margin:0 0 20px;">ファイル「<strong>${escapeHtml(data.fileName)}</strong>」から <strong>${registeredCount}</strong> 件の予定を「${escapeHtml(data.category)}」カレンダーに登録しました。</p>` +
       '<p style="margin:0 0 8px;font-weight:bold;">登録した予定</p>' +
       renderEventList(data.registeredEvents) +
       (data.droppedEvents.length > 0
