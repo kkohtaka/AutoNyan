@@ -33,7 +33,3 @@ variable "file_classifier_trigger_topic" {
   type        = string
 }
 
-variable "notification_topic_name" {
-  description = "Name of the PubSub topic for notification messages"
-  type        = string
-}

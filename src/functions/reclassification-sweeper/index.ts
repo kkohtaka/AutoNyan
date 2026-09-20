@@ -5,7 +5,6 @@ import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePubl
 import {
   categoryFolderSetHash,
   createErrorResponse,
-  isPermanentError,
   logger,
 } from 'autonyan-shared';
 import { google } from 'googleapis';
@@ -186,40 +185,9 @@ export const reclassificationSweeper = async (
 
     logger.error('Re-classification sweep error', { error: errorResponse });
 
-    // Permanent failures: ACK (do not retry) to avoid repeated billable calls.
-    if (isPermanentError(error)) {
-      logger.warn('Skipping message (permanent failure, not retrying)', {
-        error: errorResponse.error,
-      });
-
-      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-      if (notificationTopicName) {
-        try {
-          const pubsub = new PubSub();
-          await pubsub.topic(notificationTopicName).publishMessage({
-            json: {
-              folderId: process.env.UNCATEGORIZED_FOLDER_ID || '',
-              stageName: 'reclassification-sweeper',
-              errorMessage: errorResponse.error,
-            },
-            attributes: { operation: 'failure-notification' },
-          });
-        } catch (notifyError) {
-          logger.warn('Failed to publish failure notification', {
-            error: notifyError,
-          });
-        }
-      }
-
-      return {
-        message: `Skipped (permanent failure): ${errorResponse.error}`,
-        candidates: 0,
-        republished: 0,
-        skipped: 0,
-      };
-    }
-
-    // Transient failures: throw so RETRY_POLICY_RETRY retries the message.
+    // Unlike the event-driven stages, this one has no permanent-failure ACK
+    // path: it parses no message body, so none of the error types
+    // isPermanentError recognises can arise here. Every failure is retried.
     throw new Error(`Re-classification sweep failed: ${errorResponse.error}`, {
       cause: error,
     });
