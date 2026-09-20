@@ -6,7 +6,7 @@ A Google Cloud Functions project demonstrating serverless document processing wi
 
 ## Architecture Overview
 
-AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 6-stage pipeline:
+AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 7-stage pipeline:
 
 ```mermaid
 graph LR
@@ -17,6 +17,8 @@ graph LR
     E --> G[5. Classification]
     E --> H[6. Calendar Registration]
     E --> F[Firestore]
+    A --> R[7. Re-classification Sweep]
+    R --> G
     B -.-> N[Notifications]
     C -.-> N
     D -.-> N
@@ -35,10 +37,17 @@ graph LR
 4. **Data Persistence**: Stores extracted text and metadata in Firestore database
 5. **Classification**: Classifies documents with AI and moves them to categorized Drive folders
 6. **Calendar Registration**: Extracts events from documents in watched Drive folders and registers them on the calendar configured for that folder
+7. **Re-classification Sweep**: Scheduled re-submission of documents left in the Uncategorized folder, once the set of category folders has changed
 
 Classification and calendar registration are parallel branches: both consume the
 extracted text, so a document reaches the calendar whether or not it was filed
 away successfully.
+
+The re-classification sweep re-enters the pipeline at the classification stage
+using the text already in Firestore, so adding a category folder re-files the
+documents that were waiting for it without paying for OCR a second time. A
+document is reconsidered only when the category folders have changed since it
+was last classified.
 
 **Notifications (cross-cutting):** A notification dispatcher consumes success and
 failure events published by the pipeline stages and emails summaries to the
@@ -46,7 +55,7 @@ relevant Drive folder owner via the Gmail API.
 
 ### Event Triggers
 
-- **Scheduled Triggers**: Cloud Scheduler initiates periodic Drive scans
+- **Scheduled Triggers**: Cloud Scheduler initiates periodic Drive scans and the re-classification sweep
 - **PubSub Triggers**: Message-based communication between discovery and preparation stages
 - **Storage Triggers**: New file uploads automatically trigger processing stages
 
@@ -345,6 +354,8 @@ The project uses GitHub Actions for automated testing and validation. See [GitHu
 │   │   ├── text-vision-processor/
 │   │   ├── text-firebase-writer/
 │   │   ├── file-classifier/
+│   │   ├── calendar-registrar/
+│   │   ├── reclassification-sweeper/
 │   │   └── notification-dispatcher/
 │   └── shared/             # Shared utilities across functions
 ├── terraform/              # Infrastructure as Code
