@@ -3,6 +3,10 @@ import { Firestore } from '@google-cloud/firestore';
 export interface ClassificationUpdate {
   category: string | null;
   categoryFolderId: string | null;
+  // Fingerprint of the category folders that existed for this run. The
+  // re-classification sweep compares it against the current set to decide
+  // whether an uncategorized document is worth another attempt.
+  categoryFolderSetHash: string;
   classificationConfidence: number;
   classificationReasoning: string;
   classifiedAt: string;
@@ -29,6 +33,7 @@ export async function updateDocumentWithClassification(
   await docRef.update({
     category: classification.category,
     categoryFolderId: classification.categoryFolderId,
+    categoryFolderSetHash: classification.categoryFolderSetHash,
     classificationConfidence: classification.classificationConfidence,
     classificationReasoning: classification.classificationReasoning,
     classifiedAt: classification.classifiedAt,

@@ -99,6 +99,7 @@ jobs:
             drive-scanner,
             file-classifier,
             notification-dispatcher,
+            reclassification-sweeper,
             text-firebase-writer,
             text-vision-processor,
           ]
@@ -214,6 +215,7 @@ jobs:
             drive-scanner,
             file-classifier,
             notification-dispatcher,
+            reclassification-sweeper,
             text-firebase-writer,
             text-vision-processor,
           ]

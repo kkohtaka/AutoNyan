@@ -22,6 +22,7 @@ interface SuccessNotificationData extends Record<string, unknown> {
   reasoning: string;
   summary: string;
   destinationFolderId: string;
+  reclassified?: boolean;
 }
 
 interface CalendarNotificationData extends CalendarEmailData {

@@ -21,6 +21,11 @@ export interface SuccessEmailData {
   reasoning: string;
   summary: string;
   destinationFolderId: string;
+  // Set when the document had already been filed under Uncategorized and was
+  // re-classified after a matching category folder appeared. Such a document
+  // is renamed for the first time at this point, so the mail has to account
+  // for a name the recipient has never seen.
+  reclassified?: boolean;
 }
 
 export interface CalendarEventSummary {
@@ -152,13 +157,19 @@ export function renderSuccessEmail(data: SuccessEmailData): RenderedEmail {
   const fileUrl = driveFileUrl(data.fileId);
   const folderUrl = driveFolderUrl(data.destinationFolderId);
 
-  const subject = `${subjectPrefix()}[${category}] 処理完了: ${data.fileName}`;
+  const subject = data.reclassified
+    ? `${subjectPrefix()}[${category}] 再分類完了: ${data.fileName}`
+    : `${subjectPrefix()}[${category}] 処理完了: ${data.fileName}`;
 
   const renamedLine = data.originalFileName
     ? `元のファイル名: ${data.originalFileName}\n`
     : '';
 
-  const text = `ファイル「${data.fileName}」の処理が完了しました。
+  const leadText = data.reclassified
+    ? `「未分類」にあったファイル「${data.fileName}」を、新しいカテゴリフォルダに合わせて再分類しました。`
+    : `ファイル「${data.fileName}」の処理が完了しました。`;
+
+  const text = `${leadText}
 
 ${renamedLine}カテゴリ: ${category}
 分類信頼度: ${percent}%${isLowConfidence ? '（要確認）' : ''}
@@ -172,8 +183,12 @@ ${data.summary}
 
 Firestore ドキュメント ID: ${data.firestoreDocId}`;
 
+  const leadHtml = data.reclassified
+    ? `「未分類」にあったファイル「<strong>${escapeHtml(data.fileName)}</strong>」を、新しいカテゴリフォルダに合わせて再分類しました。`
+    : `ファイル「<strong>${escapeHtml(data.fileName)}</strong>」の処理が完了しました。`;
+
   const html = renderLayout(
-    `<p style="margin:0 0 20px;">ファイル「<strong>${escapeHtml(data.fileName)}</strong>」の処理が完了しました。</p>` +
+    `<p style="margin:0 0 20px;">${leadHtml}</p>` +
       '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">' +
       (data.originalFileName
         ? renderDetailRow('元のファイル名', escapeHtml(data.originalFileName))
