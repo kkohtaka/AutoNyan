@@ -204,4 +204,13 @@ describe('resolveRenamedFileName', () => {
       ])
     ).toBe('請求書-3.pdf');
   });
+
+  it('should keep the name of a file already in the folder, given a list that excludes it', () => {
+    expect(
+      resolveRenamedFileName(generated('請求書'), '請求書.pdf', [
+        '請求書-2.pdf',
+        '契約書.pdf',
+      ])
+    ).toBeNull();
+  });
 });
