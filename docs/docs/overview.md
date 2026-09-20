@@ -32,22 +32,23 @@ When you add a document to the watched folder, it travels through five steps:
 
 ### Documents that also go on a calendar
 
-Some watched folders have a **calendar** attached to them. A document in one of
-those folders takes a second path out of step 2: AutoNyan picks the dates out of
-the text it has just read and registers each one as an event on that folder's
-calendar, then emails you the list.
+Some **categories** have a **calendar** attached to them. Once step 3 has decided
+a document belongs to one of those, AutoNyan picks the dates out of the text it
+read in step 2 and registers each one as an event on that category's calendar,
+then emails you the list.
 
-This branch runs **alongside classification, not after it.** The two share the
-reading in step 2 and are otherwise independent, so a document reaches the
-calendar **whether or not filing succeeded** — including a document that ended up
-in *Uncategorized*.
+This runs **after classification**, because the category is what selects the
+calendar. It does not wait for step 4, so a document reaches the calendar **even
+if filing it away failed**. What it does depend on is the classification being
+right: a document AutoNyan was **unsure** about registers nothing at all, and one
+that ended up in *Uncategorized* registers nothing either.
 
-> **…and, for a folder with a calendar: Read → Events registered → You get an
-> email**
+> **…and, for a document in a category with a calendar: Classified → Events
+> registered → You get an email**
 
-Not every folder has one. Whoever runs your AutoNyan instance decides which
-folders are watched for events and which calendar each writes to, so if you are
-not sure whether yours is, ask them. A document from a folder with no calendar
+Not every category has one. Whoever runs your AutoNyan instance decides which
+categories register events and which calendar each writes to, so if you are not
+sure whether yours does, ask them. A document in a category with no calendar
 attached is simply classified and filed as before.
 
 The case this is built for is a document that carries many dates at once — a

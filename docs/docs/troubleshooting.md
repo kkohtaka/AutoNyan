@@ -74,8 +74,7 @@ one:
   **destination category folder** is shared with — so if the document was filed
   into a folder you cannot see, you will not be notified. Failure notifications go
   to the **owner** of the relevant folder, not to you. The email about **calendar
-  events** is different again: it goes to the people the **watched folder** is
-  shared with.
+  events** goes to the same people, since it is the category folder there too.
 - **Check spam and the sending address.** The notification comes from the address
   configured by whoever runs your instance. If you have never seen a notification,
   confirm with them which address it is sent from and which address it is sent
@@ -109,12 +108,23 @@ of up to roughly an hour is expected, not a sign of a problem.
 
 ### No events were registered from a document that clearly has some
 
-First, check that the document is in a folder that has a **calendar attached**.
-Only some watched folders do, and a document in any other folder is classified
-and filed normally but never looked at for events. Whoever runs your AutoNyan
-instance knows which folders are watched — nothing in Drive shows it.
+First, check the **category** AutoNyan filed it into — the classification email
+tells you. Only some categories have a **calendar attached**, and a document in
+any other category is classified and filed normally but never looked at for
+events. Whoever runs your AutoNyan instance knows which categories register
+events — nothing in Drive shows it.
 
-If the folder is watched, the likely causes are:
+Two classification outcomes register nothing whatever the document contains:
+
+- **It was filed as *Uncategorized*.** There is no category, so there is no
+  calendar. Adding a category folder that matches and waiting for the
+  re-classification sweep will file it — and register its events then.
+- **AutoNyan was not confident about the category.** A doubtful guess registers
+  nothing rather than put events on the wrong calendar, which you would have to
+  delete by hand.
+
+If the category does have a calendar and AutoNyan was sure of it, the likely
+causes are:
 
 - **The dates are not pinned down.** Only entries AutoNyan can resolve to an
   actual date become events. "Early next month" or a date given only as a
@@ -263,8 +273,10 @@ read and filed safely. Create the category folder you expected, and AutoNyan
 re-files the document there on its own, usually within the hour.
 
 **Do all my documents get put on a calendar?**
-No — only documents in folders that have a calendar attached, which is decided by
-whoever runs your instance. Everything else is classified and filed as usual. See
+No — only documents AutoNyan files into a **category** that has a calendar
+attached, which is decided by whoever runs your instance. A document filed as
+*Uncategorized*, or one whose category AutoNyan was unsure of, registers nothing.
+Everything else is classified and filed as usual. See
 [Daily Use](./daily-use.md#calendar-registration).
 
 **I added the same document twice — will I get the events twice?**
