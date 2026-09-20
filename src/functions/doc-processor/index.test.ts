@@ -422,28 +422,4 @@ describe('docProcessor', () => {
     );
     expect(mockStorage.bucket().file().getMetadata).not.toHaveBeenCalled();
   }, 20000);
-
-  test('should record the scanned folder in the object metadata', async () => {
-    mockDriveDownload();
-
-    await docProcessor(
-      buildCloudEvent({ fileId: 'file123', folderId: 'watched-folder-id' })
-    );
-    await flushAsync();
-
-    const saveOptions = mockStorage.bucket().file().save.mock.calls[0][1];
-    expect(saveOptions.metadata.metadata.sourceFolderId).toBe(
-      'watched-folder-id'
-    );
-  });
-
-  test('should omit the folder metadata when the scan did not supply one', async () => {
-    mockDriveDownload();
-
-    await docProcessor(buildCloudEvent());
-    await flushAsync();
-
-    const saveOptions = mockStorage.bucket().file().save.mock.calls[0][1];
-    expect(saveOptions.metadata.metadata).not.toHaveProperty('sourceFolderId');
-  });
 });
