@@ -54,14 +54,20 @@ A few things worth knowing:
 
 - **"Uncategorized" means "no good match," not "failed."** The document was read
   and filed; AutoNyan just did not find a category confident enough to use. If
-  you expected it to land somewhere specific, check that a matching category
-  folder exists, then move the file there yourself.
+  you expected it to land somewhere specific, create that category folder — see
+  below.
+- **Adding a category folder works backwards, too.** Whenever the set of
+  category folders changes, AutoNyan re-examines the documents sitting in
+  *Uncategorized* and files the ones that now match, about once an hour. You do
+  not have to move anything by hand, and documents that still match nothing stay
+  where they are without sending another email.
 - **Files are moved, not copied.** After filing, the document is no longer in the
   watched folder — look for it in its category folder (or Uncategorized).
 - **Renaming is careful, not forced.** The new name always keeps the original
   file extension, and when AutoNyan is not confident enough about a better name,
   the file simply keeps its original one. Documents filed under Uncategorized
-  are never renamed.
+  are never renamed — if one is later re-filed into a category folder, it is
+  renamed at that point, and the email tells you the name it had before.
 - **You stay in control of categories.** To create a new category, add a folder;
   to retire one, remove it. AutoNyan never invents categories on its own.
 

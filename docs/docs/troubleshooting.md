@@ -46,14 +46,19 @@ so it filed the document safely instead of guessing. Your document is never lost
 
 What to do:
 
-- **Check that a matching category folder exists.** Categories are just the
-  folders you create in the category area of Drive. If there is no `Invoices`
-  folder, an invoice has nowhere confident to go. Create the folder you expected,
-  and the *next* document like it will be filed there. See
+- **Create the category folder you expected.** Categories are just the folders
+  you create in the category area of Drive. If there is no `Invoices` folder, an
+  invoice has nowhere confident to go. See
   [Getting Started](./getting-started.md) for how categories work.
-- **Move this one yourself.** For the document already in *Uncategorized*, just
-  drag it into the right category folder. AutoNyan does not re-file documents that
-  have already been sorted.
+- **Then wait — the document sorts itself.** Whenever you add or remove a
+  category folder, AutoNyan looks again at everything sitting in *Uncategorized*
+  and re-files the documents that now match. This runs about once an hour, so
+  give it that long before assuming nothing happened. You get an email when a
+  document moves this way.
+- **Or move it yourself, if you prefer.** Dragging the document into the right
+  category folder works just as well; AutoNyan leaves anything you have already
+  filed alone. What it will not do is rename it for you — that only happens when
+  AutoNyan files it.
 - **Read the notification email.** It includes the reasoning and a confidence
   figure, which usually explain why nothing matched well.
 
@@ -254,8 +259,8 @@ Currently Japanese, regardless of the language you read these docs in.
 
 **Why did my document go to "Uncategorized"?**
 AutoNyan did not find a category confident enough to use. The document was still
-read and filed safely. Create the category folder you expected (for future
-documents) and move this one yourself.
+read and filed safely. Create the category folder you expected, and AutoNyan
+re-files the document there on its own, usually within the hour.
 
 **Do all my documents get put on a calendar?**
 No — only documents in folders that have a calendar attached, which is decided by
