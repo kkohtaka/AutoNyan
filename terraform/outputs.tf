@@ -48,6 +48,11 @@ output "calendar_registrar_service_account_email" {
   value       = module.calendar_registrar.service_account_email
 }
 
+output "reclassification_sweeper_service_account_email" {
+  description = "Email of the reclassification-sweeper service account"
+  value       = module.reclassification_sweeper.service_account_email
+}
+
 output "notification_dispatcher_service_account_email" {
   description = "Email of the notification dispatcher service account"
   value       = module.notification_dispatcher.service_account_email

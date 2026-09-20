@@ -29,6 +29,12 @@ variable "drive_scanner_schedule" {
   default     = "0 * * * *"
 }
 
+variable "reclassification_sweep_schedule" {
+  description = "Cron schedule for the re-classification sweep of the Uncategorized folder"
+  type        = string
+  default     = "30 * * * *"
+}
+
 variable "category_root_folder_id" {
   description = "Google Drive folder ID containing category subfolders for file classification"
   type        = string
