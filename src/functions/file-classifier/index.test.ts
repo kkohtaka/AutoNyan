@@ -172,9 +172,12 @@ describe('fileClassifier', () => {
         { id: 'folder-contracts', name: '契約書' },
       ]
     );
+    // The processed file is excluded so it cannot collide with its own name
+    // when it is already in the target folder.
     expect(mockListFileNamesInFolder).toHaveBeenCalledWith(
       expect.objectContaining({ mockGoogleAuthInstance: true }),
-      'folder-invoices'
+      'folder-invoices',
+      'file-123'
     );
     expect(mockGenerateFileName).toHaveBeenCalledWith(
       'test-project',

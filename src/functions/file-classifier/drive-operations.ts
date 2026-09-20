@@ -39,28 +39,40 @@ const MAX_REFERENCE_FILE_NAMES = 20;
 
 /**
  * List file names in a folder, most recently created first
+ *
+ * A file already sitting in its target folder would otherwise appear in its
+ * own collision list and be renamed away from a name nothing else holds, so
+ * the caller excludes the document it is classifying by id.
+ *
  * @param auth GoogleAuth instance for authentication
  * @param folderId Folder ID to list files from
+ * @param excludeFileId File ID to omit from the result, if present
  * @returns File names capped at MAX_REFERENCE_FILE_NAMES
  */
 export async function listFileNamesInFolder(
   auth: InstanceType<typeof google.auth.GoogleAuth>,
-  folderId: string
+  folderId: string,
+  excludeFileId?: string
 ): Promise<string[]> {
   const drive = google.drive({ version: 'v3', auth });
 
   const response = await drive.files.list({
     q: `'${folderId}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(name)',
+    fields: 'files(id, name)',
     orderBy: 'createdTime desc',
-    pageSize: MAX_REFERENCE_FILE_NAMES,
+    // One extra row, so dropping the excluded file still leaves a full set of
+    // reference names.
+    pageSize: MAX_REFERENCE_FILE_NAMES + 1,
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
   });
 
   const files: drive_v3.Schema$File[] = response.data.files || [];
 
-  return files.map((file: drive_v3.Schema$File) => file.name!);
+  return files
+    .filter((file: drive_v3.Schema$File) => file.id !== excludeFileId)
+    .slice(0, MAX_REFERENCE_FILE_NAMES)
+    .map((file: drive_v3.Schema$File) => file.name!);
 }
 
 /**

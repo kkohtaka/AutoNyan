@@ -133,7 +133,8 @@ export const fileClassifier = async (
       try {
         const existingFileNames = await listFileNamesInFolder(
           auth,
-          classification.categoryFolderId
+          classification.categoryFolderId,
+          eventData.fileId
         );
 
         logger.info('Generating file name with Gemini AI', {
