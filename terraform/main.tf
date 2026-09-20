@@ -200,6 +200,24 @@ resource "google_cloud_scheduler_job" "calendar_folder_scan_schedule" {
   }
 }
 
+# Cloud Scheduler job for the re-classification sweep
+# Cheap by design: a sweep that finds no change to the category folders
+# republishes nothing, so the cadence is set by how long a user should wait
+# after creating a folder, not by cost. Offset from the drive scan so the two
+# schedules do not contend for the same Drive API quota.
+resource "google_cloud_scheduler_job" "reclassification_sweep_schedule" {
+  name        = "${var.environment}-reclassification-sweep-schedule"
+  description = "Re-classify documents left in the Uncategorized folder (${var.environment})"
+  schedule    = var.reclassification_sweep_schedule
+  time_zone   = "UTC"
+  region      = var.region
+
+  pubsub_target {
+    topic_name = module.reclassification_sweeper.topic_id
+    data       = base64encode(jsonencode({}))
+  }
+}
+
 # Notification Dispatcher Module (must be defined before other modules to reference topic name)
 # Dispatches email notifications on document processing success and failure
 module "notification_dispatcher" {
@@ -296,6 +314,24 @@ module "calendar_registrar" {
     google_firestore_database.default,
     google_project_service.calendar_api,
   ]
+}
+
+# Reclassification Sweeper Module
+# Re-submits documents left in the Uncategorized folder for classification once
+# the set of category folders has changed
+module "reclassification_sweeper" {
+  source = "./modules/reclassification-sweeper"
+
+  project_id                    = var.project_id
+  environment                   = var.environment
+  region                        = var.region
+  function_bucket_name          = google_storage_bucket.function_bucket.name
+  category_root_folder_id       = var.category_root_folder_id
+  uncategorized_folder_id       = var.uncategorized_folder_id
+  file_classifier_trigger_topic = module.file_classifier.topic_name
+  notification_topic_name       = module.notification_dispatcher.topic_name
+
+  depends_on = [google_firestore_database.default]
 }
 
 # Text Firebase Writer Module

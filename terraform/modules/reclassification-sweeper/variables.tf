@@ -1,0 +1,39 @@
+variable "project_id" {
+  description = "The GCP project ID"
+  type        = string
+}
+
+variable "environment" {
+  description = "Deployment environment (staging or production)"
+  type        = string
+}
+
+variable "region" {
+  description = "The GCP region for resources"
+  type        = string
+}
+
+variable "function_bucket_name" {
+  description = "The name of the bucket containing function source code"
+  type        = string
+}
+
+variable "category_root_folder_id" {
+  description = "Google Drive folder ID containing category subfolders"
+  type        = string
+}
+
+variable "uncategorized_folder_id" {
+  description = "Google Drive folder ID for uncategorized files"
+  type        = string
+}
+
+variable "file_classifier_trigger_topic" {
+  description = "Name of the PubSub topic that triggers the file classifier"
+  type        = string
+}
+
+variable "notification_topic_name" {
+  description = "Name of the PubSub topic for notification messages"
+  type        = string
+}
