@@ -73,25 +73,36 @@ A few things worth knowing:
 
 ## Calendar registration
 
-Some watched folders have a **calendar** attached to them. For a document in one
-of those, AutoNyan also reads the dates out of the text and registers them as
-events — useful when one document carries a month of them, like a school
-newsletter.
+Some **categories** have a **calendar** attached to them. For a document that
+AutoNyan files into one of those, it also reads the dates out of the text and
+registers them as events — useful when one document carries a month of them, like
+a school newsletter.
 
-This happens **in parallel with classification**, so events are registered
-whether or not the document was filed successfully, including when it lands in
-*Uncategorized*.
+This happens **after classification**: the category AutoNyan decided on is what
+picks the calendar. You do not need a separate folder for it — drop the document
+in the same watched folder as everything else.
 
-### Which folders are watched
+### Which categories register events
 
-Not all of them. Whoever runs your AutoNyan instance decides which folders are
-watched for events and which calendar each one writes to, and gives each pairing
-a short **label** — `Class newsletter`, say — that appears in the subject line of
-the email. A document from a folder with no calendar attached is classified and
-filed exactly as before, and nothing about it changes.
+Not all of them. Whoever runs your AutoNyan instance decides which categories
+register events and which calendar each one writes to. The **category name** —
+the name of the category folder — is what appears in the subject line of the
+email. A document in a category with no calendar attached is classified and filed
+exactly as before, and nothing about it changes.
 
-If you are not sure whether your folder is watched, ask them; there is nothing
-in Drive that shows it.
+If you are not sure whether your category registers events, ask them; there is
+nothing in Drive that shows it.
+
+**Two cases register nothing**, even when the document is full of dates:
+
+- **AutoNyan filed it as *Uncategorized*.** With no category there is no
+  calendar to write to.
+- **AutoNyan was not confident about the category.** Because an event it creates
+  is never moved or removed afterwards, a doubtful guess would leave you deleting
+  events by hand from the wrong calendar. It registers nothing instead.
+
+In both cases you still get the ordinary classification email, and it tells you
+the category AutoNyan chose.
 
 ### What lands on the calendar
 
@@ -127,10 +138,8 @@ email**, not one per event. It tells you:
 - a warning **if the document was too long to read all of it**, which means some
   events may be missing entirely.
 
-**Who receives it.** Unlike the classification email, which goes to the people
-the *destination category folder* is shared with, the calendar email goes to the
-people the **watched folder** is shared with — everyone who can put documents in
-is told what came out.
+**Who receives it.** Like the classification email, it goes to the people the
+**destination category folder** is shared with.
 
 ### Adding the same document again
 
@@ -138,7 +147,10 @@ is told what came out.
 email.** Each event is identified by the document it came from together with its
 date and title, so registering it a second time does nothing. Since no new event
 was registered, no email is sent either — silence after a re-add is the expected
-result, not a failure.
+result, not a failure. This holds however the document reaches the calendar the
+second time, including when a re-classification sweep files a document out of
+*Uncategorized* into a category that has one: its events are registered then,
+for the first time.
 
 One consequence is worth knowing: if a **corrected** version of a document moves
 an event to a different date, that counts as a *new* event. The event on the old

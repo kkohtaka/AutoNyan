@@ -27,7 +27,7 @@ graph LR
     H -.-> N
 ```
 
-**Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database → Classification and Calendar Registration, with each stage publishing success/failure events to a notification dispatcher.
+**Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database → Classification → Calendar Registration, with each stage publishing success/failure events to a notification dispatcher.
 
 ### Pipeline Stages
 
@@ -36,12 +36,15 @@ graph LR
 3. **Text Extraction**: Processes documents using Vision API for OCR and text extraction
 4. **Data Persistence**: Stores extracted text and metadata in Firestore database
 5. **Classification**: Classifies documents with AI and moves them to categorized Drive folders
-6. **Calendar Registration**: Extracts events from documents in watched Drive folders and registers them on the calendar configured for that folder
+6. **Calendar Registration**: Extracts events from documents the classifier filed into a mapped category and registers them on the calendar configured for that category
 7. **Re-classification Sweep**: Scheduled re-submission of documents left in the Uncategorized folder, once the set of category folders has changed
 
-Classification and calendar registration are parallel branches: both consume the
-extracted text, so a document reaches the calendar whether or not it was filed
-away successfully.
+Calendar registration runs downstream of classification: the category the
+classifier decided on is what selects the calendar, so no separate intake folder
+per calendar is needed. The classifier publishes the trigger before moving the
+file in Drive, so a document still reaches the calendar when the move fails. A
+classification below the confidence threshold registers nothing, because events
+are never updated or deleted and a misclassification has to be undone by hand.
 
 The re-classification sweep re-enters the pipeline at the classification stage
 using the text already in Firestore, so adding a category folder re-files the
@@ -66,7 +69,7 @@ relevant Drive folder owner via the Gmail API.
 - **Cloud Storage**: Document staging and results storage
 - **Vision API**: OCR and text extraction from documents
 - **Vertex AI**: Document classification into categories and event extraction
-- **Calendar API**: Event registration on per-folder calendars
+- **Calendar API**: Event registration on per-category calendars
 - **Gmail API**: Email notifications via Domain-Wide Delegation
 - **Firestore**: NoSQL database for extracted text and metadata
 - **Terraform**: Infrastructure as Code for all cloud resources
@@ -79,7 +82,7 @@ relevant Drive folder owner via the Gmail API.
 - **Google Drive Integration**: Advanced Drive API operations with pagination support
 - **Document Processing**: Automated scanning and text extraction from multiple file formats
 - **AI Classification**: Categorizes documents and files them into Drive folders
-- **Calendar Registration**: Registers a document's events on a per-folder calendar, without duplicates across re-scans
+- **Calendar Registration**: Registers a document's events on the calendar mapped to its category, without duplicates across re-scans
 - **Email Notifications**: Success/failure summaries delivered via the Gmail API
 - **Modular Design**: Each function is independently deployable and testable
 - **Security-First CI/CD**: GitHub Actions with Workload Identity Federation
@@ -234,10 +237,15 @@ cannot add a sharing rule without calendar-owner rights.
    **Share with specific people** and add that address with **Make changes to
    events**.
 
-3. Declare the folder-to-calendar mapping in `calendar_watch_folders` (see
-   `terraform/terraform.tfvars.example`), or as the `CALENDAR_WATCH_FOLDERS`
-   Environment Secret in CI. Each watched folder also needs to be shared with
-   the pipeline service accounts as in step 4 above.
+3. Declare the category-to-calendar mapping in `calendar_category_calendars`
+   (see `terraform/terraform.tfvars.example`), or as the
+   `CALENDAR_CATEGORY_CALENDARS` Environment Secret in CI. Each `category` is
+   the name of a subfolder under `category_root_folder_id`, already shared with
+   the pipeline service accounts by step 4 above — calendar registration needs
+   no folder of its own.
+
+   `calendar_classification_confidence_threshold` (default `0.7`) sets how sure
+   the classifier must be before a document's events are registered.
 
 **Note:** Events created this way cannot send invitations to attendees — that
 would require Domain-Wide Delegation rather than calendar sharing.
@@ -483,7 +491,7 @@ For detailed GitHub Actions setup instructions, see [GITHUB_ACTIONS_SETUP.md](./
 - `WIF_PROVIDER`: Workload Identity Federation provider
 - `WIF_SERVICE_ACCOUNT`: Service account email for GitHub Actions
 - `DRIVE_FOLDER_ID`, `CATEGORY_ROOT_FOLDER_ID`, `UNCATEGORIZED_FOLDER_ID`: Drive folder IDs
-- `CALENDAR_WATCH_FOLDERS` (optional): JSON array mapping watched Drive folders to calendars
+- `CALENDAR_CATEGORY_CALENDARS` (optional): JSON array mapping classification categories to calendars
 - `BILLING_ACCOUNT_ID`: Cloud Billing account ID for the cost budget
 - `NOTIFICATION_FROM_EMAIL`: Gmail sender address for notifications
 
