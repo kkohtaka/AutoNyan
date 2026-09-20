@@ -26,10 +26,10 @@ interface SuccessNotificationData extends Record<string, unknown> {
 }
 
 interface CalendarNotificationData extends CalendarEmailData {
-  // Watched Drive folder the document came from; its collaborators are the
+  // Category folder the document was filed into; its collaborators are the
   // recipients. The calendar's own ACL cannot be read, since acl.list requires
   // calendar-owner rights that the sharing model does not grant.
-  sourceFolderId: string;
+  categoryFolderId: string;
 }
 
 interface FailureNotificationData extends Record<string, unknown> {
@@ -214,13 +214,13 @@ async function handleCalendarNotification(
   const saKey = JSON.parse(saKeyJson) as ServiceAccountKey;
 
   const emailAddresses = await listFolderRecipients(
-    data.sourceFolderId,
+    data.categoryFolderId,
     NOTIFY_VIEWER_ROLES
   );
 
   if (emailAddresses.length === 0) {
-    logger.warn('No email addresses found for watched folder', {
-      sourceFolderId: data.sourceFolderId,
+    logger.warn('No email addresses found for category folder', {
+      categoryFolderId: data.categoryFolderId,
     });
     return;
   }

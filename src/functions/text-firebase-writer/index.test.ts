@@ -462,7 +462,7 @@ describe('textFirebaseWriter', () => {
     expect(mockTopic).not.toHaveBeenCalled();
   });
 
-  describe('calendar registration fan-out', () => {
+  describe('classification payload', () => {
     const visionResult = {
       responses: [
         {
@@ -487,63 +487,44 @@ describe('textFirebaseWriter', () => {
         ]);
     };
 
-    it('should publish every document, so the registrar owns the folder mapping', async () => {
-      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+    it('should carry modifiedTime through to the classifier', async () => {
+      process.env.FILE_CLASSIFIER_TOPIC = 'file-classification-trigger';
       arrange({
         originalFileId: 'file123',
         originalFileName: 'test.pdf',
         originalMimeType: 'application/pdf',
-        sourceFolderId: 'watched-folder-id',
         originalModifiedTime: '2026-04-28T00:00:00.000Z',
       });
 
       const result = await textFirebaseWriter(createCloudEvent({}).data!);
 
-      expect(result.calendarRegistrationTriggered).toBe(true);
-      expect(mockTopic).toHaveBeenCalledWith('calendar-registration-trigger');
+      expect(result.classificationTriggered).toBe(true);
 
       const published = mockPublishMessage.mock.calls.find(
-        (call) => call[0].attributes?.operation === 'calendar-registration'
+        (call) => call[0].attributes?.operation === 'file-classification'
       );
       expect(published[0].json).toMatchObject({
         fileId: 'file123',
         fileName: 'test.pdf',
-        sourceFolderId: 'watched-folder-id',
         modifiedTime: '2026-04-28T00:00:00.000Z',
       });
     });
 
-    it('should not publish when CALENDAR_REGISTRAR_TOPIC is not set', async () => {
+    it('should not publish calendar registration itself', async () => {
+      process.env.FILE_CLASSIFIER_TOPIC = 'file-classification-trigger';
       arrange({
         originalFileId: 'file123',
         originalFileName: 'test.pdf',
         originalMimeType: 'application/pdf',
-        sourceFolderId: 'watched-folder-id',
       });
 
-      const result = await textFirebaseWriter(createCloudEvent({}).data!);
+      await textFirebaseWriter(createCloudEvent({}).data!);
 
-      expect(result.calendarRegistrationTriggered).toBe(false);
-      expect(mockTopic).not.toHaveBeenCalledWith(
-        'calendar-registration-trigger'
-      );
-    });
-
-    it('should still store the text when the calendar publish fails', async () => {
-      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
-      delete process.env.FILE_CLASSIFIER_TOPIC;
-      arrange({
-        originalFileId: 'file123',
-        originalFileName: 'test.pdf',
-        originalMimeType: 'application/pdf',
-        sourceFolderId: 'watched-folder-id',
-      });
-      mockPublishMessage.mockRejectedValueOnce(new Error('publish failed'));
-
-      const result = await textFirebaseWriter(createCloudEvent({}).data!);
-
-      expect(result.firestoreDocId).toBe('doc123');
-      expect(result.calendarRegistrationTriggered).toBe(false);
+      expect(
+        mockPublishMessage.mock.calls.some(
+          (call) => call[0].attributes?.operation === 'calendar-registration'
+        )
+      ).toBe(false);
     });
   });
 });

@@ -176,30 +176,6 @@ resource "google_cloud_scheduler_job" "drive_scan_schedule" {
   }
 }
 
-# One scan per watched calendar folder, reusing the drive-scanner topic so the
-# scanner needs no knowledge of calendars. Job names are keyed by a hash prefix
-# because Cloud Scheduler rejects the uppercase letters and underscores that
-# Drive folder IDs contain.
-resource "google_cloud_scheduler_job" "calendar_folder_scan_schedule" {
-  for_each = {
-    for folder in var.calendar_watch_folders :
-    substr(sha256(folder.folder_id), 0, 8) => folder
-  }
-
-  name        = "${var.environment}-calendar-scan-${each.key}"
-  description = "Automated scan of the ${each.value.label} calendar folder (${var.environment})"
-  schedule    = var.drive_scanner_schedule
-  time_zone   = "UTC"
-  region      = var.region
-
-  pubsub_target {
-    topic_name = module.drive_scanner.topic_id
-    data = base64encode(jsonencode({
-      folderId = each.value.folder_id
-    }))
-  }
-}
-
 # Cloud Scheduler job for the re-classification sweep
 # Cheap by design: a sweep that finds no change to the category folders
 # republishes nothing, so the cadence is set by how long a user should wait
@@ -291,24 +267,30 @@ module "file_classifier" {
   uncategorized_folder_id = var.uncategorized_folder_id
   notification_topic_name = module.notification_dispatcher.topic_name
 
+  # Calendar registration hangs off classification: the classifier publishes
+  # the category it decided on, and the registrar owns the category-to-calendar
+  # mapping.
+  calendar_registrar_topic = module.calendar_registrar.topic_name
+
   # Firestore database must exist before creating documents
   depends_on = [google_firestore_database.default]
 }
 
-# Calendar Registrar Module (must be defined before text_firebase_writer to reference topic)
-# Extracts events from documents in watched Drive folders and registers them on
-# the calendar configured for that folder
+# Calendar Registrar Module
+# Extracts events from documents the classifier filed into a mapped category and
+# registers them on the calendar configured for that category
 module "calendar_registrar" {
   source = "./modules/calendar-registrar"
 
-  project_id                     = var.project_id
-  environment                    = var.environment
-  region                         = var.region
-  function_bucket_name           = google_storage_bucket.function_bucket.name
-  watch_folders                  = var.calendar_watch_folders
-  time_zone                      = var.calendar_time_zone
-  default_event_duration_minutes = var.calendar_default_event_duration_minutes
-  notification_topic_name        = module.notification_dispatcher.topic_name
+  project_id                          = var.project_id
+  environment                         = var.environment
+  region                              = var.region
+  function_bucket_name                = google_storage_bucket.function_bucket.name
+  category_calendars                  = var.calendar_category_calendars
+  time_zone                           = var.calendar_time_zone
+  default_event_duration_minutes      = var.calendar_default_event_duration_minutes
+  classification_confidence_threshold = var.calendar_classification_confidence_threshold
+  notification_topic_name             = module.notification_dispatcher.topic_name
 
   depends_on = [
     google_firestore_database.default,
@@ -345,7 +327,6 @@ module "text_firebase_writer" {
   vision_results_bucket_name    = google_storage_bucket.vision_results.name
   document_storage_bucket_name  = google_storage_bucket.document_storage.name
   file_classifier_trigger_topic = module.file_classifier.topic_name
-  calendar_registrar_topic      = module.calendar_registrar.topic_name
   notification_topic_name       = module.notification_dispatcher.topic_name
 }
 

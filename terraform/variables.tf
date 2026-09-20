@@ -73,14 +73,19 @@ variable "email_subject_prefix" {
   default     = ""
 }
 
-variable "calendar_watch_folders" {
-  description = "Drive folders whose documents produce calendar events, and the calendar each one registers on. Empty disables calendar registration"
+variable "calendar_category_calendars" {
+  description = "Classification categories whose documents produce calendar events, and the calendar each one registers on. Empty disables calendar registration"
   type = list(object({
-    folder_id   = string
+    category    = string
     calendar_id = string
-    label       = string
   }))
   default = []
+}
+
+variable "calendar_classification_confidence_threshold" {
+  description = "Minimum classification confidence for a document to register calendar events. Events are never updated or deleted, so a misclassification has to be undone by hand"
+  type        = number
+  default     = 0.7
 }
 
 variable "calendar_time_zone" {

@@ -74,14 +74,15 @@ resource "google_cloudfunctions2_function" "calendar_registrar" {
     environment_variables = {
       PROJECT_ID  = var.project_id
       ENVIRONMENT = var.environment
-      # The single place the folder-to-calendar mapping is declared; upstream
+      # The single place the category-to-calendar mapping is declared; upstream
       # stages stay unaware of calendars.
-      CALENDAR_WATCH_FOLDERS                  = jsonencode(var.watch_folders)
-      CALENDAR_TIME_ZONE                      = var.time_zone
-      CALENDAR_DEFAULT_EVENT_DURATION_MINUTES = var.default_event_duration_minutes
-      VERTEX_AI_LOCATION                      = var.region
-      FIRESTORE_DATABASE_ID                   = var.environment
-      NOTIFICATION_TOPIC                      = var.notification_topic_name
+      CALENDAR_CATEGORY_CALENDARS                  = jsonencode(var.category_calendars)
+      CALENDAR_TIME_ZONE                           = var.time_zone
+      CALENDAR_DEFAULT_EVENT_DURATION_MINUTES      = var.default_event_duration_minutes
+      CALENDAR_CLASSIFICATION_CONFIDENCE_THRESHOLD = var.classification_confidence_threshold
+      VERTEX_AI_LOCATION                           = var.region
+      FIRESTORE_DATABASE_ID                        = var.environment
+      NOTIFICATION_TOPIC                           = var.notification_topic_name
     }
     service_account_email = google_service_account.calendar_registrar.email
   }

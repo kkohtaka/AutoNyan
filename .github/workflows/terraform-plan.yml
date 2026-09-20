@@ -261,7 +261,7 @@ jobs:
           BILLING_ACCOUNT_ID: ${{ secrets.BILLING_ACCOUNT_ID }}
           BUDGET_AMOUNT: ${{ vars.BUDGET_AMOUNT }}
           NOTIFICATION_FROM_EMAIL: ${{ secrets.NOTIFICATION_FROM_EMAIL }}
-          CALENDAR_WATCH_FOLDERS: ${{ secrets.CALENDAR_WATCH_FOLDERS }}
+          CALENDAR_CATEGORY_CALENDARS: ${{ secrets.CALENDAR_CATEGORY_CALENDARS }}
 
       - name: Run Terraform plan
         if: steps.detect.outputs.needs_terraform == 'true'

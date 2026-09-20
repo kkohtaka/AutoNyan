@@ -91,6 +91,7 @@ describe('fileClassifier', () => {
     delete process.env.CATEGORY_ROOT_FOLDER_ID;
     delete process.env.UNCATEGORIZED_FOLDER_ID;
     delete process.env.NOTIFICATION_TOPIC;
+    delete process.env.CALENDAR_REGISTRAR_TOPIC;
   });
 
   const createPubSubEvent = (data: {
@@ -99,6 +100,7 @@ describe('fileClassifier', () => {
     fileName: string;
     extractedText: string;
     confidence: number;
+    modifiedTime?: string;
     reclassification?: boolean;
   }): CloudEvent<MessagePublishedData> => ({
     specversion: '1.0',
@@ -718,5 +720,106 @@ describe('fileClassifier', () => {
 
     expect(result.skipped).toBe(true);
     expect(result.message).toContain('Missing required field');
+  });
+
+  describe('calendar registration trigger', () => {
+    const arrangeClassified = () => {
+      mockListCategoryFolders.mockResolvedValue([
+        { id: 'folder-school', name: '学校' },
+      ]);
+      mockClassifyWithGemini.mockResolvedValue({
+        categoryName: '学校',
+        categoryFolderId: 'folder-school',
+        confidence: 0.95,
+        reasoning: 'newsletter',
+        summary: '学級通信です。',
+      });
+      mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+      mockMoveFileInDrive.mockResolvedValue(undefined);
+    };
+
+    const newsletterEvent = () =>
+      createPubSubEvent({
+        firestoreDocId: 'doc123',
+        fileId: 'file-123',
+        fileName: '5月号学級通信.pdf',
+        extractedText: '5月の予定',
+        confidence: 1,
+        modifiedTime: '2026-04-28T00:00:00.000Z',
+      });
+
+    const calendarMessage = () =>
+      mockPublishMessage.mock.calls.find(
+        (call) => call[0].attributes?.operation === 'calendar-registration'
+      )?.[0];
+
+    it('should publish the classified category and its confidence', async () => {
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      arrangeClassified();
+
+      await fileClassifier(newsletterEvent());
+
+      expect(calendarMessage().json).toMatchObject({
+        firestoreDocId: 'doc123',
+        fileId: 'file-123',
+        fileName: '5月号学級通信.pdf',
+        extractedText: '5月の予定',
+        category: '学校',
+        categoryFolderId: 'folder-school',
+        classificationConfidence: 0.95,
+        modifiedTime: '2026-04-28T00:00:00.000Z',
+      });
+    });
+
+    it('should publish even when the Drive move fails', async () => {
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      arrangeClassified();
+      mockMoveFileInDrive.mockRejectedValue(new Error('move failed'));
+
+      const result = await fileClassifier(newsletterEvent());
+
+      expect(result.message).toContain('file move failed');
+      expect(calendarMessage()).toBeDefined();
+    });
+
+    it('should publish an unmatched category as null so the registrar skips it', async () => {
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      mockListCategoryFolders.mockResolvedValue([]);
+      mockClassifyWithGemini.mockResolvedValue({
+        categoryName: null,
+        categoryFolderId: null,
+        confidence: 0,
+        reasoning: 'no match',
+        summary: '不明です。',
+      });
+      mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+      mockMoveFileInDrive.mockResolvedValue(undefined);
+
+      await fileClassifier(newsletterEvent());
+
+      expect(calendarMessage().json).toMatchObject({
+        category: null,
+        categoryFolderId: 'uncategorized-folder-id',
+      });
+    });
+
+    it('should not publish when CALENDAR_REGISTRAR_TOPIC is not set', async () => {
+      arrangeClassified();
+
+      await fileClassifier(newsletterEvent());
+
+      expect(calendarMessage()).toBeUndefined();
+    });
+
+    it('should still classify when the calendar publish fails', async () => {
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      arrangeClassified();
+      mockPublishMessage.mockRejectedValueOnce(new Error('publish failed'));
+
+      const result = await fileClassifier(newsletterEvent());
+
+      expect(result.category).toBe('学校');
+      expect(mockUpdateDocumentWithClassification).toHaveBeenCalled();
+    });
   });
 });
