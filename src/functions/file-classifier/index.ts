@@ -3,6 +3,7 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
+  categoryFolderSetHash,
   createErrorResponse,
   getProjectId,
   isPermanentError,
@@ -26,6 +27,9 @@ interface ClassificationEventData extends Record<string, unknown> {
   fileName: string;
   extractedText: string;
   confidence: number;
+  // Set by the re-classification sweep, so the notification can tell the
+  // recipient this document was filed once before under Uncategorized.
+  reclassification?: boolean;
 }
 
 interface Result {
@@ -98,6 +102,10 @@ export const fileClassifier = async (
       });
     }
 
+    const folderSetHash = categoryFolderSetHash(
+      categoryFolders.map((folder) => folder.id)
+    );
+
     logger.info('Classifying document with Gemini AI');
     const classification = await classifyWithGemini(
       projectId,
@@ -169,6 +177,7 @@ export const fileClassifier = async (
     await updateDocumentWithClassification(firestore, documentPath, {
       category: classification.categoryName,
       categoryFolderId: targetFolderId,
+      categoryFolderSetHash: folderSetHash,
       classificationConfidence: classification.confidence,
       classificationReasoning: classification.reasoning,
       classifiedAt: new Date().toISOString(),
@@ -179,35 +188,52 @@ export const fileClassifier = async (
       renameReasoning,
     });
 
+    // A re-classification that again matches no category has nothing to do:
+    // the file already sits in Uncategorized and the user was told so when it
+    // was first filed. Moving it onto itself and mailing a second identical
+    // report would both be noise.
+    const stillUncategorized =
+      eventData.reclassification === true && !classification.categoryFolderId;
+
     // Move (and rename) file in Google Drive AFTER Firestore update
     // If move fails, classification is still considered successful (Firestore is already updated)
     let fileMoved = false;
-    try {
-      logger.info('Moving file to folder', {
-        targetFolderName,
-        targetFolderId,
-        renamedFileName,
-      });
-      await moveFileInDrive(
-        auth,
-        eventData.fileId,
-        targetFolderId,
-        renamedFileName ?? undefined
+    if (stillUncategorized) {
+      logger.info(
+        'Re-classification found no category, leaving file in place',
+        {
+          fileId: eventData.fileId,
+        }
       );
-      fileMoved = true;
-      logger.info('File moved successfully');
-    } catch (moveError) {
-      // Non-fatal: classification is already saved to Firestore.
-      logger.warn('Failed to move file in Drive (classification still saved)', {
-        error: moveError,
-      });
+    } else {
+      try {
+        logger.info('Moving file to folder', {
+          targetFolderName,
+          targetFolderId,
+          renamedFileName,
+        });
+        await moveFileInDrive(
+          auth,
+          eventData.fileId,
+          targetFolderId,
+          renamedFileName ?? undefined
+        );
+        fileMoved = true;
+        logger.info('File moved successfully');
+      } catch (moveError) {
+        // Non-fatal: classification is already saved to Firestore.
+        logger.warn(
+          'Failed to move file in Drive (classification still saved)',
+          { error: moveError }
+        );
+      }
     }
 
     // Publish success notification (non-fatal) AFTER the Drive move, so the
     // email never reports a name the file does not actually have: the rename
     // only takes effect as part of the move.
     const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-    if (notificationTopicName) {
+    if (notificationTopicName && !stillUncategorized) {
       try {
         const renameApplied = fileMoved && renamedFileName !== null;
         const pubsub = new PubSub();
@@ -223,6 +249,7 @@ export const fileClassifier = async (
           reasoning: classification.reasoning,
           summary: classification.summary,
           destinationFolderId: targetFolderId,
+          ...(eventData.reclassification ? { reclassified: true } : {}),
         };
         await pubsub.topic(notificationTopicName).publishMessage({
           json: notificationData,
@@ -239,9 +266,11 @@ export const fileClassifier = async (
     }
 
     const result = {
-      message: fileMoved
-        ? `Successfully classified and moved file: ${eventData.fileName}`
-        : `Successfully classified file (file move failed): ${eventData.fileName}`,
+      message: stillUncategorized
+        ? `Re-classification found no category, file left in place: ${eventData.fileName}`
+        : fileMoved
+          ? `Successfully classified and moved file: ${eventData.fileName}`
+          : `Successfully classified file (file move failed): ${eventData.fileName}`,
       category: classification.categoryName,
       confidence: classification.confidence,
       fileId: eventData.fileId,

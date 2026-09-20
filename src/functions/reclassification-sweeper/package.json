@@ -1,0 +1,29 @@
+{
+  "name": "reclassification-sweeper",
+  "version": "1.0.0",
+  "description": "Cloud Function that sends documents left in the Uncategorized folder back through classification after category folders change",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -f *.js *.js.map *.d.ts && rm -rf dist/",
+    "test": "jest --config=../../../jest.config.js --testPathPatterns=reclassification-sweeper --logHeapUsage",
+    "test:coverage": "cd ../../.. && jest --config=jest.config.js --coverage --testPathPatterns=reclassification-sweeper --collectCoverageFrom='src/functions/reclassification-sweeper/index.ts' --logHeapUsage",
+    "lint": "eslint --config=../../../eslint.config.js --fix",
+    "format": "prettier --write '**/*.ts'"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^5.0.2",
+    "@google-cloud/pubsub": "^6.0.0",
+    "@google-cloud/firestore": "^9.0.0",
+    "@google/events": "^5.4.0",
+    "googleapis": "^180.0.0",
+    "autonyan-shared": "file:../../shared"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  }
+}

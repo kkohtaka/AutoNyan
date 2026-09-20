@@ -87,6 +87,27 @@ describe('renderSuccessEmail', () => {
     expect(email.text).toContain('40%（要確認）');
   });
 
+  it('announces a re-classification in the subject and both body parts', () => {
+    const email = renderSuccessEmail({
+      ...data,
+      reclassified: true,
+      originalFileName: 'unknown.pdf',
+    });
+    expect(email.subject).toBe('[AutoNyan][請求書] 再分類完了: invoice.pdf');
+    expect(email.text).toContain('再分類しました');
+    expect(email.html).toContain('再分類しました');
+  });
+
+  it('names the previous file name when a re-classification renamed the file', () => {
+    const email = renderSuccessEmail({
+      ...data,
+      reclassified: true,
+      originalFileName: 'unknown.pdf',
+    });
+    expect(email.text).toContain('元のファイル名: unknown.pdf');
+    expect(email.html).toContain('unknown.pdf');
+  });
+
   it('escapes HTML in dynamic values', () => {
     const email = renderSuccessEmail({ ...data, fileName: '<b>x</b>.pdf' });
     expect(email.html).not.toContain('<b>x</b>');

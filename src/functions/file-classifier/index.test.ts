@@ -2,6 +2,7 @@ import { fileClassifier } from './index';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { PubSub } from '@google-cloud/pubsub';
+import { categoryFolderSetHash } from 'autonyan-shared';
 
 // Mock dependencies
 jest.mock('@google-cloud/firestore', () => ({
@@ -98,6 +99,7 @@ describe('fileClassifier', () => {
     fileName: string;
     extractedText: string;
     confidence: number;
+    reclassification?: boolean;
   }): CloudEvent<MessagePublishedData> => ({
     specversion: '1.0',
     id: 'test-event-id',
@@ -199,6 +201,7 @@ describe('fileClassifier', () => {
       {
         category: '請求書',
         categoryFolderId: 'folder-invoices',
+        categoryFolderSetHash: expect.any(String),
         classificationConfidence: 0.95,
         classificationReasoning: 'Document contains invoice-related keywords',
         classifiedAt: expect.any(String),
@@ -554,6 +557,123 @@ describe('fileClassifier', () => {
         renameReasoning: null,
       })
     );
+  });
+
+  it('should record the category folder set the classification ran against', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc456',
+      fileId: 'file-456',
+      fileName: 'unknown.pdf',
+      extractedText: 'Some random text',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: null,
+      categoryFolderId: null,
+      confidence: 0.3,
+      reasoning: 'Cannot determine category',
+      summary: '不明なカテゴリの文書です。',
+    });
+
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
+      expect.any(Object),
+      'extracted_texts/doc456',
+      expect.objectContaining({
+        categoryFolderSetHash: categoryFolderSetHash(['folder-invoices']),
+      })
+    );
+  });
+
+  it('should mark the notification as a re-classification when a category now matches', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-topic';
+
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc456',
+      fileId: 'file-456',
+      fileName: 'unknown.pdf',
+      extractedText: '請求書 金額: 10000円',
+      confidence: 1,
+      reclassification: true,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: '請求書と判断',
+      summary: '請求書です。',
+    });
+
+    mockResolveRenamedFileName.mockReturnValue('2024-01-31_請求書.pdf');
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    const result = await fileClassifier(event);
+
+    expect(result.category).toBe('請求書');
+    expect(mockMoveFileInDrive).toHaveBeenCalledWith(
+      expect.any(Object),
+      'file-456',
+      'folder-invoices',
+      '2024-01-31_請求書.pdf'
+    );
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          reclassified: true,
+          fileName: '2024-01-31_請求書.pdf',
+          originalFileName: 'unknown.pdf',
+        }),
+      })
+    );
+  });
+
+  it('should leave the file in place and send no mail when a re-classification still finds no category', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-topic';
+
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc456',
+      fileId: 'file-456',
+      fileName: 'unknown.pdf',
+      extractedText: 'Some random text',
+      confidence: 1,
+      reclassification: true,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: null,
+      categoryFolderId: null,
+      confidence: 0.3,
+      reasoning: 'Cannot determine category',
+      summary: '不明なカテゴリの文書です。',
+    });
+
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    const result = await fileClassifier(event);
+
+    expect(result.category).toBeNull();
+    expect(mockMoveFileInDrive).not.toHaveBeenCalled();
+    expect(mockPublishMessage).not.toHaveBeenCalled();
+    expect(mockUpdateDocumentWithClassification).toHaveBeenCalled();
   });
 
   it('should throw error if required environment variables are missing', async () => {

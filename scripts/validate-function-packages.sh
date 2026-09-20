@@ -147,6 +147,9 @@ for FUNCTION in "${FUNCTIONS[@]}"; do
 	"file-classifier")
 		ENTRY_POINT="fileClassifier"
 		;;
+	"reclassification-sweeper")
+		ENTRY_POINT="reclassificationSweeper"
+		;;
 	*)
 		echo -e "${YELLOW}  ⚠️  Warning: Unknown function $FUNCTION, skipping entry point validation${NC}"
 		ENTRY_POINT=""
