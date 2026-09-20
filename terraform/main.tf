@@ -329,7 +329,6 @@ module "reclassification_sweeper" {
   category_root_folder_id       = var.category_root_folder_id
   uncategorized_folder_id       = var.uncategorized_folder_id
   file_classifier_trigger_topic = module.file_classifier.topic_name
-  notification_topic_name       = module.notification_dispatcher.topic_name
 
   depends_on = [google_firestore_database.default]
 }

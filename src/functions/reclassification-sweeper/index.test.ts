@@ -108,7 +108,6 @@ describe('reclassificationSweeper', () => {
     delete process.env.CATEGORY_ROOT_FOLDER_ID;
     delete process.env.UNCATEGORIZED_FOLDER_ID;
     delete process.env.FILE_CLASSIFIER_TOPIC;
-    delete process.env.NOTIFICATION_TOPIC;
   });
 
   it('should republish a document whose stored folder set is out of date', async () => {
