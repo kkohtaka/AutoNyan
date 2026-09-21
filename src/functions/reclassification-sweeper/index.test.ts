@@ -220,6 +220,49 @@ describe('reclassificationSweeper', () => {
     expect(result.skipped).toBe(1);
   });
 
+  it('should skip a document whose Drive file no longer exists', async () => {
+    mockGetFileParents.mockResolvedValue(null);
+    givenDocuments([
+      {
+        fileId: 'file-123',
+        fileName: 'invoice.pdf',
+        extractedText: '請求書',
+        confidence: 0.9,
+        categoryFolderSetHash: previousHash,
+      },
+    ]);
+
+    const result = await reclassificationSweeper(cloudEvent);
+
+    expect(mockPublishMessage).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledWith({
+      categoryFolderSetHash: currentHash,
+    });
+    expect(result.republished).toBe(0);
+    expect(result.skipped).toBe(1);
+  });
+
+  it('should skip the sweep entirely when no category folder is visible', async () => {
+    mockListCategoryFolders.mockResolvedValue([]);
+    givenDocuments([
+      {
+        fileId: 'file-123',
+        fileName: 'invoice.pdf',
+        extractedText: '請求書',
+        confidence: 0.9,
+        categoryFolderSetHash: previousHash,
+      },
+    ]);
+
+    const result = await reclassificationSweeper(cloudEvent);
+
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(mockPublishMessage).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(result.candidates).toBe(0);
+    expect(result.republished).toBe(0);
+  });
+
   it('should republish nothing when there are no uncategorized documents', async () => {
     givenDocuments([]);
 

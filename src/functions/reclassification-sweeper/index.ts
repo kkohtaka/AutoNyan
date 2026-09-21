@@ -77,6 +77,24 @@ export const reclassificationSweeper = async (
       currentFolderSetHash,
     });
 
+    // No folders means classification has nothing to match against, so a
+    // republished document would only be filed under Uncategorized again. It
+    // is also what an unshared category root looks like — Drive answers a
+    // folder it cannot see with an empty listing rather than an error — so the
+    // sweep stops instead of recording the empty set as a folder generation.
+    if (categoryFolders.length === 0) {
+      logger.warn('No category folders are visible, skipping the sweep', {
+        categoryRootFolderId,
+      });
+
+      return {
+        message: 'No category folders are visible, sweep skipped',
+        candidates: 0,
+        republished: 0,
+        skipped: 0,
+      };
+    }
+
     const databaseId = process.env.FIRESTORE_DATABASE_ID || '(default)';
     const firestore = new Firestore({ databaseId });
 
@@ -128,6 +146,19 @@ export const reclassificationSweeper = async (
       }
 
       const parents = await getFileParents(auth, fileId);
+
+      if (parents === null) {
+        logger.info('Skipping document whose Drive file is gone', {
+          firestoreDocId: doc.id,
+          fileId,
+        });
+        await doc.ref.update({
+          categoryFolderSetHash: currentFolderSetHash,
+        });
+        skipped++;
+        continue;
+      }
+
       if (!parents.includes(uncategorizedFolderId)) {
         logger.info('Skipping document already filed elsewhere', {
           firestoreDocId: doc.id,
