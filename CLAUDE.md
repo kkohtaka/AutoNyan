@@ -662,14 +662,20 @@ delegated to `lint-fix` / `test-fix`.
    gcloud auth login --enable-gdrive-access
    ```
    Note: `gcloud auth application-default login` does NOT work for Drive API — Google blocks unverified apps requesting Drive scope via ADC.
-3. Share Drive folders with service accounts (one-time setup):
+3. Share Drive folders with service accounts (one-time setup). The script reads
+   the service accounts from `terraform output`, which answers from whichever
+   state the last `terraform init` selected, so initialize the same environment
+   first — the script refuses to run on a mismatch rather than pairing one
+   environment's folders with another's accounts:
    ```bash
    # staging uses values from terraform/environments/staging.tfvars
+   npm run terraform:init
    npm run setup:share-drive-folders
 
    # production reads terraform/environments/production.tfvars; pass
    # DRIVE_FOLDER_ID / CATEGORY_ROOT_FOLDER_ID / UNCATEGORIZED_FOLDER_ID
    # env vars only if the folder IDs are not in that file
+   ENVIRONMENT=production npm run terraform:init
    ENVIRONMENT=production npm run setup:share-drive-folders
    ```
    - **Note**: This is a one-time setup. Once shared, permissions persist across deployments
