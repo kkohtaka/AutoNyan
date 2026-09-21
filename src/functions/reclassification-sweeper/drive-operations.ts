@@ -40,21 +40,40 @@ export async function listCategoryFolders(
  * is sent back through classification: a file the user has already filed by
  * hand must not be moved again.
  *
+ * A file the user has deleted or trashed is reported as gone rather than as
+ * an error: its Firestore document outlives it, and a sweep that threw here
+ * would be retried forever and never reach the documents behind it.
+ *
  * @param auth GoogleAuth instance for authentication
  * @param fileId File ID to inspect
- * @returns Parent folder IDs, empty when the file has none
+ * @returns Parent folder IDs, empty when the file has none, null when the file
+ *   is no longer reachable
  */
 export async function getFileParents(
   auth: InstanceType<typeof google.auth.GoogleAuth>,
   fileId: string
-): Promise<string[]> {
+): Promise<string[] | null> {
   const drive = google.drive({ version: 'v3', auth });
 
-  const response = await drive.files.get({
-    fileId,
-    fields: 'parents',
-    supportsAllDrives: true,
-  });
+  try {
+    const response = await drive.files.get({
+      fileId,
+      fields: 'parents',
+      supportsAllDrives: true,
+    });
 
-  return response.data.parents || [];
+    return response.data.parents || [];
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function isNotFoundError(error: unknown): boolean {
+  const code = (error as { code?: number | string } | null)?.code;
+
+  return code === 404 || code === '404';
 }
