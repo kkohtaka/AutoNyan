@@ -91,12 +91,51 @@ function getTerraformVariables(): TerraformVariables {
 }
 
 /**
+ * Fail unless the working directory is initialized against the environment
+ * being shared.
+ *
+ * `terraform output` reads whichever state the last `terraform init` selected
+ * and ignores ENVIRONMENT entirely, so an environment mismatch pairs one
+ * environment's folder IDs with another's service accounts and grants Drive
+ * access across the boundary.
+ */
+function assertBackendMatchesEnvironment(
+  terraformDir: string,
+  environment: string
+): void {
+  const backendStatePath = path.join(
+    terraformDir,
+    '.terraform',
+    'terraform.tfstate'
+  );
+
+  if (!fs.existsSync(backendStatePath)) {
+    throw new Error(
+      `Terraform is not initialized.\n` +
+        `Run: ENVIRONMENT=${environment} npm run terraform:init`
+    );
+  }
+
+  const prefix = JSON.parse(fs.readFileSync(backendStatePath, 'utf-8'))?.backend
+    ?.config?.prefix;
+
+  if (prefix !== `terraform/state/${environment}`) {
+    throw new Error(
+      `Terraform is initialized for "${prefix}", not for ${environment}.\n` +
+        `Run: ENVIRONMENT=${environment} npm run terraform:init`
+    );
+  }
+}
+
+/**
  * Get Terraform outputs
  */
 function getTerraformOutputs(
   environment: string = 'staging'
 ): TerraformOutputs {
   const terraformDir = path.join(process.cwd(), 'terraform');
+
+  assertBackendMatchesEnvironment(terraformDir, environment);
 
   try {
     const outputJson = execSync(
