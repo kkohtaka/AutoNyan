@@ -18,7 +18,6 @@ variable "function_bucket_name" {
   type        = string
 }
 
-
 variable "doc_process_trigger_topic_name" {
   description = "Name of the PubSub topic for document processing trigger"
   type        = string
@@ -26,5 +25,9 @@ variable "doc_process_trigger_topic_name" {
 
 variable "notification_topic_name" {
   description = "Name of the PubSub topic for notification messages"
+  type        = string
+}
+variable "drive_identity_service_account_name" {
+  description = "Full resource name of the environment Drive identity this function impersonates for Drive API calls"
   type        = string
 }

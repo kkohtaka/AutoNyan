@@ -8,6 +8,16 @@ output "doc_processor_service_account_email" {
   value       = module.doc_processor.service_account_email
 }
 
+output "drive_writer_service_account_email" {
+  description = "Email of the environment Drive writer identity; the sharing script grants it writer on the Drive folders"
+  value       = module.drive_access.writer_service_account_email
+}
+
+output "drive_organizer_service_account_email" {
+  description = "Email of the environment Drive organizer identity; the sharing script grants it fileOrganizer on the Drive folders"
+  value       = module.drive_access.organizer_service_account_email
+}
+
 output "drive_scan_trigger_topic" {
   description = "PubSub topic for drive scanner trigger"
   value       = module.drive_scanner.topic_name
@@ -69,37 +79,23 @@ output "drive_folder_setup_instructions" {
     IMPORTANT: Google Drive access is granted through MANUAL SHARING only.
     Drive API roles cannot be assigned at the project level.
 
-    Required Setup Steps:
+    Sharing is an environment bootstrap step, done once per environment, not a
+    per-deployment step: functions borrow one of the two identities below
+    instead of holding Drive access on their own service accounts.
 
-    STEP 1 - Share Your Drive/Folders:
-    1. Open Google Drive (https://drive.google.com)
-    2. To grant access to entire Drive:
-       - Right-click "My Drive" and select "Share"
-    3. To grant access to specific folders:
-       - Right-click the folder(s) and select "Share"
-    4. Add these emails as editors:
-       - Drive Scanner: ${module.drive_scanner.service_account_email}
-       - Document Processor: ${module.doc_processor.service_account_email}
-       - File Classifier: ${module.file_classifier.service_account_email}
-    5. Set permission level to "Editor"
-    6. Click "Send"
+    STEP 1 - Share the scanned, category root, and uncategorized folders:
+      npm run setup:share-drive-folders
 
-    STEP 2 - Configure Folder ID:
-    Set drive_folder_id in terraform.tfvars:
-    - For entire Drive: drive_folder_id = "root"
-    - For specific folder: drive_folder_id = "FOLDER_ID_FROM_URL"
+    Or share them by hand from Google Drive (right-click the folder > Share):
+      - Contributor (writer):        ${module.drive_access.writer_service_account_email}
+      - Content manager (organizer): ${module.drive_access.organizer_service_account_email}
 
-    Permissions: Once shared, the service account can:
-    ✅ List files and folders (in shared areas only)
-    ✅ Create new folders (in shared areas only)
-    ✅ Move files between folders (within shared areas)
-    ✅ Copy files (within shared areas)
-    ✅ Read file metadata
-    ❌ Access unshared folders
-    ❌ Delete files or folders
-    ❌ Manage sharing permissions
+    STEP 2 - Configure folder IDs in terraform/environments/<environment>.tfvars:
+      drive_folder_id         = "FOLDER_ID_FROM_URL"
+      category_root_folder_id = "FOLDER_ID_FROM_URL"
+      uncategorized_folder_id = "FOLDER_ID_FROM_URL"
 
-    Get folder ID from URLs like:
-    https://drive.google.com/drive/folders/FOLDER_ID_HERE
+    Get a folder ID from its URL:
+      https://drive.google.com/drive/folders/FOLDER_ID_HERE
   EOT
 }
