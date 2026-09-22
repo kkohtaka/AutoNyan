@@ -1,21 +1,19 @@
 #!/usr/bin/env tsx
 
 /**
- * Share Google Drive folders with service accounts
+ * Share Google Drive folders with the environment's Drive identities
  *
- * This script automatically shares configured Drive folders with all
- * environment service accounts that need access. This is a one-time
- * setup step required after initial deployment, since Drive API
- * permissions cannot be managed via Terraform IAM.
+ * Drive permissions cannot be managed through Terraform IAM, so this is an
+ * environment bootstrap step (the same class as setting up the Terraform
+ * backend): it shares the configured folders with the two Drive identities
+ * that Terraform creates per environment, plus the CI account. Functions do
+ * not hold Drive access themselves; they impersonate one of the identities,
+ * so adding a function never requires re-running this script.
  *
- * Run after first deployment to grant service accounts access:
  *   npm run setup:share-drive-folders
  *
- * The script is idempotent - it skips accounts that already have access.
- * You only need to run it again if you:
- *   - Add new service accounts in Terraform
- *   - Need to share additional folders
- *   - Accidentally revoked permissions
+ * The script is idempotent - it skips grants that already exist. Re-run it
+ * only after adding a folder or if a share was revoked by hand.
  *
  * Environment: Controlled by ENVIRONMENT variable (defaults to staging)
  */
@@ -29,32 +27,31 @@ interface TerraformVariables {
   [key: string]: string;
 }
 
-interface TerraformOutputs {
-  [key: string]: string;
-}
-
 interface ShareResult {
   status: 'shared' | 'already_shared' | 'role_updated' | 'failed';
   email: string;
   error?: string;
 }
 
-type DriveRole = 'writer' | 'fileOrganizer';
-
 /**
  * Folders live on a shared drive, where writer/Contributor can edit files
  * but can neither re-parent nor trash them; those need the fileOrganizer
- * (Content Manager) role. Only two accounts organize content — the classifier
- * moves files into category folders, and the GitHub Actions account trashes
- * E2E test artifacts — so they alone get fileOrganizer; every other account
- * keeps least-privilege writer.
+ * (Content Manager) role.
  */
-function roleForServiceAccount(email: string): DriveRole {
-  return email.includes('file-classifier') ||
-    email.startsWith('github-actions-terraform@')
-    ? 'fileOrganizer'
-    : 'writer';
+type DriveRole = 'writer' | 'fileOrganizer';
+
+interface Grantee {
+  email: string;
+  role: DriveRole;
 }
+
+interface DriveIdentities {
+  writer: string;
+  organizer: string;
+}
+
+const DRIVE_WRITER_OUTPUT = 'drive_writer_service_account_email';
+const DRIVE_ORGANIZER_OUTPUT = 'drive_organizer_service_account_email';
 
 /**
  * Get Terraform variables from terraform.tfvars
@@ -128,51 +125,55 @@ function assertBackendMatchesEnvironment(
 }
 
 /**
- * Get Terraform outputs
+ * Read the two Drive identity emails from the Terraform outputs.
+ *
+ * The identities are named explicitly rather than discovered by output-key
+ * pattern: a discovery heuristic cannot tell a missing grant from a module
+ * that simply forgot to export its account.
  */
-function getTerraformOutputs(
-  environment: string = 'staging'
-): TerraformOutputs {
+function getDriveIdentities(environment: string = 'staging'): DriveIdentities {
   const terraformDir = path.join(process.cwd(), 'terraform');
 
   assertBackendMatchesEnvironment(terraformDir, environment);
 
+  let outputs: Record<string, { value?: unknown }>;
   try {
-    const outputJson = execSync(
-      `terraform -chdir=${terraformDir} output -json`,
-      {
+    outputs = JSON.parse(
+      execSync(`terraform -chdir=${terraformDir} output -json`, {
         env: { ...process.env, ENVIRONMENT: environment },
         encoding: 'utf-8',
-      }
+      })
     );
-
-    const outputs = JSON.parse(outputJson);
-    const result: TerraformOutputs = {};
-
-    // Extract service account emails
-    for (const [key, value] of Object.entries(outputs)) {
-      if (key.includes('service_account_email')) {
-        result[key] = (value as any).value;
-      }
-    }
-
-    return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to get Terraform outputs: ${errorMessage}`);
   }
+
+  const readEmail = (key: string): string => {
+    const value = outputs[key]?.value;
+    if (typeof value !== 'string' || !value.includes('@')) {
+      throw new Error(
+        `Terraform output "${key}" is missing.\n` +
+          `Apply the drive-access module first: ENVIRONMENT=${environment} npm run terraform:apply`
+      );
+    }
+    return value;
+  };
+
+  return {
+    writer: readEmail(DRIVE_WRITER_OUTPUT),
+    organizer: readEmail(DRIVE_ORGANIZER_OUTPUT),
+  };
 }
 
 /**
- * Share folder with service account
+ * Share folder with a grantee at its role
  */
-async function shareFolderWithServiceAccount(
+async function shareFolderWithGrantee(
   drive: drive_v3.Drive,
   folderId: string,
-  email: string
+  { email, role }: Grantee
 ): Promise<ShareResult> {
-  const role = roleForServiceAccount(email);
-
   try {
     // Check if permission already exists
     const existingPermissions = await drive.permissions.list({
@@ -229,7 +230,7 @@ async function shareFolderWithServiceAccount(
 async function shareDriveFolder(): Promise<void> {
   const environment = process.env.ENVIRONMENT || 'staging';
 
-  console.log('Sharing Google Drive folder with service accounts...\n');
+  console.log('Sharing Google Drive folders with the Drive identities...\n');
   console.log(`Environment: ${environment}\n`);
 
   try {
@@ -255,33 +256,24 @@ async function shareDriveFolder(): Promise<void> {
       `Uncategorized Folder: ${uncategorizedFolderId || 'Not set'}\n`
     );
 
-    // Get service account emails from Terraform outputs
-    console.log('Getting service account emails from Terraform...\n');
-    const outputs = getTerraformOutputs(environment);
+    console.log('Getting Drive identities from Terraform...\n');
+    const identities = getDriveIdentities(environment);
 
-    const serviceAccounts = Object.values(outputs).filter(
-      (email) => email && email.includes('@')
+    // The CI account trashes E2E artifacts, which needs fileOrganizer; it keeps
+    // its own grant rather than borrowing the organizer identity.
+    const grantees: Grantee[] = [
+      { email: identities.writer, role: 'writer' },
+      { email: identities.organizer, role: 'fileOrganizer' },
+      {
+        email: `github-actions-terraform@${projectId}.iam.gserviceaccount.com`,
+        role: 'fileOrganizer',
+      },
+    ];
+
+    console.log('Granting:\n');
+    grantees.forEach(({ email, role }) =>
+      console.log(`  - ${email} (${role})`)
     );
-
-    if (serviceAccounts.length === 0) {
-      console.warn('⚠️  No service account emails found in Terraform outputs.');
-      console.warn(
-        'Make sure your Terraform modules output service account emails.\n'
-      );
-      console.warn('Expected output names like:');
-      console.warn('  - drive_scanner_service_account_email');
-      console.warn('  - doc_processor_service_account_email');
-      console.warn('  - etc.\n');
-      process.exit(1);
-    }
-
-    // Always include GitHub Actions service account for E2E tests in CI
-    const githubActionsEmail = `github-actions-terraform@${projectId}.iam.gserviceaccount.com`;
-    serviceAccounts.push(githubActionsEmail);
-    console.log('Including GitHub Actions service account for E2E tests\n');
-
-    console.log(`Found ${serviceAccounts.length} service accounts:\n`);
-    serviceAccounts.forEach((email) => console.log(`  - ${email}`));
     console.log();
 
     // Initialize Drive API using gcloud user credentials (supports --enable-gdrive-access)
@@ -305,32 +297,25 @@ async function shareDriveFolder(): Promise<void> {
     // Share main folder
     console.log('Sharing main Drive folder...\n');
     const mainFolderResults: ShareResult[] = [];
-    for (const email of serviceAccounts) {
-      const result = await shareFolderWithServiceAccount(
-        drive,
-        folderId,
-        email
+    for (const grantee of grantees) {
+      mainFolderResults.push(
+        await shareFolderWithGrantee(drive, folderId, grantee)
       );
-      mainFolderResults.push(result);
     }
 
     // Share category root folder if configured
     if (categoryRootFolderId) {
       console.log('\nSharing category root folder...\n');
-      for (const email of serviceAccounts) {
-        await shareFolderWithServiceAccount(drive, categoryRootFolderId, email);
+      for (const grantee of grantees) {
+        await shareFolderWithGrantee(drive, categoryRootFolderId, grantee);
       }
     }
 
     // Share uncategorized folder if configured
     if (uncategorizedFolderId) {
       console.log('\nSharing uncategorized folder...\n');
-      for (const email of serviceAccounts) {
-        await shareFolderWithServiceAccount(
-          drive,
-          uncategorizedFolderId,
-          email
-        );
+      for (const grantee of grantees) {
+        await shareFolderWithGrantee(drive, uncategorizedFolderId, grantee);
       }
     }
 
@@ -355,9 +340,7 @@ async function shareDriveFolder(): Promise<void> {
       failed.forEach((f) => console.log(`  - ${f.email}: ${f.error}`));
     }
 
-    console.log(
-      '\n✅ Drive folder sharing complete. You can now run E2E tests.\n'
-    );
+    console.log('\n✅ Drive folder sharing complete.\n');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorCode = (error as any).code;
