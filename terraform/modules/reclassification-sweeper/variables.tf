@@ -33,3 +33,7 @@ variable "file_classifier_trigger_topic" {
   type        = string
 }
 
+variable "drive_identity_service_account_name" {
+  description = "Full resource name of the environment Drive identity this function impersonates for Drive API calls"
+  type        = string
+}

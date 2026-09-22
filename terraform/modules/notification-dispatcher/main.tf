@@ -101,3 +101,12 @@ resource "google_cloudfunctions2_function" "notification_dispatcher" {
     google_secret_manager_secret_version.notification_sa_key,
   ]
 }
+
+# Drive access is borrowed from the environment Drive identity, never held by
+# this account directly. Bound on the identity itself rather than project-wide
+# so the function can mint tokens for that one account only.
+resource "google_service_account_iam_member" "notification_dispatcher_drive_identity_token_creator" {
+  service_account_id = var.drive_identity_service_account_name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.notification_dispatcher.email}"
+}

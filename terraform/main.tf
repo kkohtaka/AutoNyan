@@ -111,6 +111,14 @@ resource "google_project_service" "calendar_api" {
   disable_on_destroy = false
 }
 
+# Functions mint access tokens for the environment Drive identities through
+# this API (generateAccessToken); without it every impersonated Drive call fails.
+resource "google_project_service" "iamcredentials_api" {
+  service = "iamcredentials.googleapis.com"
+
+  disable_on_destroy = false
+}
+
 
 # Google Cloud Storage bucket for function source code archives
 # Stores zip files containing built function code for deployment
@@ -194,17 +202,27 @@ resource "google_cloud_scheduler_job" "reclassification_sweep_schedule" {
   }
 }
 
+# Drive Access Module
+# The two environment-scoped identities that hold Drive folder access; the
+# function modules below bind token-creator on the one they need
+module "drive_access" {
+  source = "./modules/drive-access"
+
+  environment = var.environment
+}
+
 # Notification Dispatcher Module (must be defined before other modules to reference topic name)
 # Dispatches email notifications on document processing success and failure
 module "notification_dispatcher" {
   source = "./modules/notification-dispatcher"
 
-  project_id              = var.project_id
-  environment             = var.environment
-  region                  = var.region
-  function_bucket_name    = google_storage_bucket.function_bucket.name
-  notification_from_email = var.notification_from_email
-  email_subject_prefix    = local.email_subject_prefix
+  project_id                          = var.project_id
+  environment                         = var.environment
+  region                              = var.region
+  function_bucket_name                = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name = module.drive_access.writer_service_account_name
+  notification_from_email             = var.notification_from_email
+  email_subject_prefix                = local.email_subject_prefix
 
   depends_on = [
     google_project_service.secretmanager_api,
@@ -217,12 +235,13 @@ module "notification_dispatcher" {
 module "drive_scanner" {
   source = "./modules/drive-scanner"
 
-  project_id                     = var.project_id
-  environment                    = var.environment
-  region                         = var.region
-  function_bucket_name           = google_storage_bucket.function_bucket.name
-  doc_process_trigger_topic_name = module.doc_processor.topic_name
-  notification_topic_name        = module.notification_dispatcher.topic_name
+  project_id                          = var.project_id
+  environment                         = var.environment
+  region                              = var.region
+  function_bucket_name                = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name = module.drive_access.writer_service_account_name
+  doc_process_trigger_topic_name      = module.doc_processor.topic_name
+  notification_topic_name             = module.notification_dispatcher.topic_name
 
   # Firestore database must exist before the scanner records scanned files
   depends_on = [google_firestore_database.default]
@@ -233,11 +252,12 @@ module "drive_scanner" {
 module "doc_processor" {
   source = "./modules/doc-processor"
 
-  project_id              = var.project_id
-  environment             = var.environment
-  region                  = var.region
-  function_bucket_name    = google_storage_bucket.function_bucket.name
-  notification_topic_name = module.notification_dispatcher.topic_name
+  project_id                          = var.project_id
+  environment                         = var.environment
+  region                              = var.region
+  function_bucket_name                = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name = module.drive_access.writer_service_account_name
+  notification_topic_name             = module.notification_dispatcher.topic_name
 }
 
 # Text Vision Processor Module
@@ -259,13 +279,14 @@ module "text_vision_processor" {
 module "file_classifier" {
   source = "./modules/file-classifier"
 
-  project_id              = var.project_id
-  environment             = var.environment
-  region                  = var.region
-  function_bucket_name    = google_storage_bucket.function_bucket.name
-  category_root_folder_id = var.category_root_folder_id
-  uncategorized_folder_id = var.uncategorized_folder_id
-  notification_topic_name = module.notification_dispatcher.topic_name
+  project_id                          = var.project_id
+  environment                         = var.environment
+  region                              = var.region
+  function_bucket_name                = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name = module.drive_access.organizer_service_account_name
+  category_root_folder_id             = var.category_root_folder_id
+  uncategorized_folder_id             = var.uncategorized_folder_id
+  notification_topic_name             = module.notification_dispatcher.topic_name
 
   # Calendar registration hangs off classification: the classifier publishes
   # the category it decided on, and the registrar owns the category-to-calendar
@@ -305,13 +326,14 @@ module "calendar_registrar" {
 module "reclassification_sweeper" {
   source = "./modules/reclassification-sweeper"
 
-  project_id                    = var.project_id
-  environment                   = var.environment
-  region                        = var.region
-  function_bucket_name          = google_storage_bucket.function_bucket.name
-  category_root_folder_id       = var.category_root_folder_id
-  uncategorized_folder_id       = var.uncategorized_folder_id
-  file_classifier_trigger_topic = module.file_classifier.topic_name
+  project_id                          = var.project_id
+  environment                         = var.environment
+  region                              = var.region
+  function_bucket_name                = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name = module.drive_access.writer_service_account_name
+  category_root_folder_id             = var.category_root_folder_id
+  uncategorized_folder_id             = var.uncategorized_folder_id
+  file_classifier_trigger_topic       = module.file_classifier.topic_name
 
   depends_on = [google_firestore_database.default]
 }

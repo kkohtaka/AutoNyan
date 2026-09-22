@@ -86,3 +86,12 @@ resource "google_cloudfunctions2_function" "doc_processor" {
     retry_policy = "RETRY_POLICY_RETRY"
   }
 }
+
+# Drive access is borrowed from the environment Drive identity, never held by
+# this account directly. Bound on the identity itself rather than project-wide
+# so the function can mint tokens for that one account only.
+resource "google_service_account_iam_member" "doc_processor_drive_identity_token_creator" {
+  service_account_id = var.drive_identity_service_account_name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.doc_processor_sa.email}"
+}

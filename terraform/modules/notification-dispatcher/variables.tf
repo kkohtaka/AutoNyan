@@ -28,3 +28,8 @@ variable "email_subject_prefix" {
   type        = string
   default     = ""
 }
+
+variable "drive_identity_service_account_name" {
+  description = "Full resource name of the environment Drive identity this function impersonates for Drive API calls"
+  type        = string
+}

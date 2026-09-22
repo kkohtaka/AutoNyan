@@ -88,3 +88,12 @@ resource "google_cloudfunctions2_function" "file_classifier" {
     google_pubsub_topic.file_classification_trigger,
   ]
 }
+
+# Drive access is borrowed from the environment Drive identity, never held by
+# this account directly. Bound on the identity itself rather than project-wide
+# so the function can mint tokens for that one account only.
+resource "google_service_account_iam_member" "file_classifier_drive_identity_token_creator" {
+  service_account_id = var.drive_identity_service_account_name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.file_classifier.email}"
+}
