@@ -200,6 +200,7 @@ log "Granting IAM permissions for Terraform operations..."
 ROLES=(
 	"roles/iam.serviceAccountUser"
 	"roles/iam.serviceAccountKeyAdmin"
+	"roles/iam.serviceAccountAdmin"
 	"roles/storage.admin"
 	"roles/resourcemanager.projectIamAdmin"
 	"roles/cloudfunctions.admin"
