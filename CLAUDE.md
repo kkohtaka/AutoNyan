@@ -834,7 +834,7 @@ explicit confirmation. Afterwards verify the Terraform plan workflow can reach
 the new service and the Actions logs show no permission errors.
 
 **Services currently configured:**
-- IAM (service accounts)
+- IAM (service accounts and their IAM policies)
 - Cloud Storage
 - Cloud Functions
 - Pub/Sub
