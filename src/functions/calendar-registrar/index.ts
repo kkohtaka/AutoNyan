@@ -167,7 +167,13 @@ export const calendarRegistrar = async (
     );
 
     // Without the document's own date the model resolves year-less dates
-    // against its training cutoff.
+    // against its training cutoff. Falling back to today is wrong by however
+    // long the document has sat unprocessed, so the fallback is logged.
+    if (!eventData.modifiedTime) {
+      logger.warn('No modifiedTime on the message, using today as reference', {
+        fileName: eventData.fileName,
+      });
+    }
     const referenceDate = eventData.modifiedTime
       ? new Date(eventData.modifiedTime)
       : new Date();

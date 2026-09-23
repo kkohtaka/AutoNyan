@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { getFileParents } from './drive-operations';
+import { getFileState } from './drive-operations';
 
 const mockFilesGet = jest.fn();
 
@@ -11,17 +11,31 @@ jest.mock('googleapis', () => ({
 
 const auth = {} as InstanceType<typeof google.auth.GoogleAuth>;
 
-describe('getFileParents', () => {
+describe('getFileState', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should return the parent folder IDs', async () => {
-    mockFilesGet.mockResolvedValue({ data: { parents: ['folder-a'] } });
+  it('should return the parent folder IDs and the modified time', async () => {
+    mockFilesGet.mockResolvedValue({
+      data: { parents: ['folder-a'], modifiedTime: '2026-09-01T00:00:00.000Z' },
+    });
 
-    await expect(getFileParents(auth, 'file-123')).resolves.toEqual([
-      'folder-a',
-    ]);
+    await expect(getFileState(auth, 'file-123')).resolves.toEqual({
+      parents: ['folder-a'],
+      modifiedTime: '2026-09-01T00:00:00.000Z',
+    });
+    expect(mockFilesGet).toHaveBeenCalledWith(
+      expect.objectContaining({ fields: 'parents,modifiedTime' })
+    );
+  });
+
+  it('should omit the modified time when Drive reports none', async () => {
+    mockFilesGet.mockResolvedValue({ data: {} });
+
+    await expect(getFileState(auth, 'file-123')).resolves.toEqual({
+      parents: [],
+    });
   });
 
   it('should report a deleted file as gone instead of throwing', async () => {
@@ -29,7 +43,7 @@ describe('getFileParents', () => {
       Object.assign(new Error('File not found: file-123.'), { code: 404 })
     );
 
-    await expect(getFileParents(auth, 'file-123')).resolves.toBeNull();
+    await expect(getFileState(auth, 'file-123')).resolves.toBeNull();
   });
 
   it('should rethrow a transient Drive failure', async () => {
@@ -37,7 +51,7 @@ describe('getFileParents', () => {
       Object.assign(new Error('Backend Error'), { code: 500 })
     );
 
-    await expect(getFileParents(auth, 'file-123')).rejects.toThrow(
+    await expect(getFileState(auth, 'file-123')).rejects.toThrow(
       'Backend Error'
     );
   });
