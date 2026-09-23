@@ -33,12 +33,20 @@ export async function listCategoryFolders(
   }));
 }
 
+export interface FileState {
+  parents: string[];
+  // RFC 3339, absent when Drive reports none.
+  modifiedTime?: string;
+}
+
 /**
- * Read a file's parent folder IDs
+ * Read a file's parent folder IDs and its last-modified time
  *
  * Used to confirm a document still sits in the Uncategorized folder before it
  * is sent back through classification: a file the user has already filed by
- * hand must not be moved again.
+ * hand must not be moved again. The modified time rides along in the same
+ * call as the reference date for a document whose stored one predates the
+ * field.
  *
  * A file the user has deleted or trashed is reported as gone rather than as
  * an error: its Firestore document outlives it, and a sweep that threw here
@@ -46,23 +54,28 @@ export async function listCategoryFolders(
  *
  * @param auth GoogleAuth instance for authentication
  * @param fileId File ID to inspect
- * @returns Parent folder IDs, empty when the file has none, null when the file
- *   is no longer reachable
+ * @returns Parent folder IDs (empty when the file has none) and modified time,
+ *   null when the file is no longer reachable
  */
-export async function getFileParents(
+export async function getFileState(
   auth: InstanceType<typeof google.auth.GoogleAuth>,
   fileId: string
-): Promise<string[] | null> {
+): Promise<FileState | null> {
   const drive = google.drive({ version: 'v3', auth });
 
   try {
     const response = await drive.files.get({
       fileId,
-      fields: 'parents',
+      fields: 'parents,modifiedTime',
       supportsAllDrives: true,
     });
 
-    return response.data.parents || [];
+    return {
+      parents: response.data.parents || [],
+      ...(response.data.modifiedTime
+        ? { modifiedTime: response.data.modifiedTime }
+        : {}),
+    };
   } catch (error) {
     if (isNotFoundError(error)) {
       return null;

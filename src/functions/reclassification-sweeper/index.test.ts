@@ -22,13 +22,14 @@ jest.mock('googleapis', () => ({
 jest.mock('./drive-operations');
 
 const mockListCategoryFolders = jest.fn();
-const mockGetFileParents = jest.fn();
+const mockGetFileState = jest.fn();
 
 interface StoredDocument {
   fileId?: string;
   fileName?: string;
   extractedText?: string;
   confidence?: number;
+  modifiedTime?: string;
   categoryFolderSetHash?: string;
 }
 
@@ -91,13 +92,15 @@ describe('reclassificationSweeper', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const driveOps = require('./drive-operations');
     driveOps.listCategoryFolders = mockListCategoryFolders;
-    driveOps.getFileParents = mockGetFileParents;
+    driveOps.getFileState = mockGetFileState;
 
     mockListCategoryFolders.mockResolvedValue([
       { id: 'folder-a', name: '請求書' },
       { id: 'folder-b', name: '契約書' },
     ]);
-    mockGetFileParents.mockResolvedValue(['uncategorized-folder-id']);
+    mockGetFileState.mockResolvedValue({
+      parents: ['uncategorized-folder-id'],
+    });
 
     process.env.CATEGORY_ROOT_FOLDER_ID = 'root-folder-id';
     process.env.UNCATEGORIZED_FOLDER_ID = 'uncategorized-folder-id';
@@ -174,14 +177,67 @@ describe('reclassificationSweeper', () => {
     const result = await reclassificationSweeper(cloudEvent);
 
     expect(mockPublishMessage).not.toHaveBeenCalled();
-    expect(mockGetFileParents).not.toHaveBeenCalled();
+    expect(mockGetFileState).not.toHaveBeenCalled();
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(result.republished).toBe(0);
     expect(result.skipped).toBe(1);
   });
 
+  it('should carry the stored modifiedTime on the republished message', async () => {
+    mockGetFileState.mockResolvedValue({
+      parents: ['uncategorized-folder-id'],
+      modifiedTime: '2026-09-22T00:00:00.000Z',
+    });
+    givenDocuments([
+      {
+        fileId: 'file-123',
+        fileName: 'newsletter.pdf',
+        extractedText: '9月の予定',
+        confidence: 0.9,
+        modifiedTime: '2026-08-31T00:00:00.000Z',
+        categoryFolderSetHash: previousHash,
+      },
+    ]);
+
+    await reclassificationSweeper(cloudEvent);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          modifiedTime: '2026-08-31T00:00:00.000Z',
+        }),
+      })
+    );
+  });
+
+  it("should fall back to Drive's modifiedTime for a document extracted before it was stored", async () => {
+    mockGetFileState.mockResolvedValue({
+      parents: ['uncategorized-folder-id'],
+      modifiedTime: '2026-09-01T00:00:00.000Z',
+    });
+    givenDocuments([
+      {
+        fileId: 'file-123',
+        fileName: 'newsletter.pdf',
+        extractedText: '9月の予定',
+        confidence: 0.9,
+        categoryFolderSetHash: previousHash,
+      },
+    ]);
+
+    await reclassificationSweeper(cloudEvent);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          modifiedTime: '2026-09-01T00:00:00.000Z',
+        }),
+      })
+    );
+  });
+
   it('should skip a document the user has already filed by hand', async () => {
-    mockGetFileParents.mockResolvedValue(['some-category-folder']);
+    mockGetFileState.mockResolvedValue({ parents: ['some-category-folder'] });
     givenDocuments([
       {
         fileId: 'file-123',
@@ -216,12 +272,12 @@ describe('reclassificationSweeper', () => {
     const result = await reclassificationSweeper(cloudEvent);
 
     expect(mockPublishMessage).not.toHaveBeenCalled();
-    expect(mockGetFileParents).not.toHaveBeenCalled();
+    expect(mockGetFileState).not.toHaveBeenCalled();
     expect(result.skipped).toBe(1);
   });
 
   it('should skip a document whose Drive file no longer exists', async () => {
-    mockGetFileParents.mockResolvedValue(null);
+    mockGetFileState.mockResolvedValue(null);
     givenDocuments([
       {
         fileId: 'file-123',

@@ -8,7 +8,7 @@ import {
   logger,
 } from 'autonyan-shared';
 import { google } from 'googleapis';
-import { getFileParents, listCategoryFolders } from './drive-operations';
+import { getFileState, listCategoryFolders } from './drive-operations';
 
 const EXTRACTED_TEXTS_COLLECTION = 'extracted_texts';
 
@@ -145,9 +145,9 @@ export const reclassificationSweeper = async (
         continue;
       }
 
-      const parents = await getFileParents(auth, fileId);
+      const fileState = await getFileState(auth, fileId);
 
-      if (parents === null) {
+      if (fileState === null) {
         logger.info('Skipping document whose Drive file is gone', {
           firestoreDocId: doc.id,
           fileId,
@@ -159,7 +159,7 @@ export const reclassificationSweeper = async (
         continue;
       }
 
-      if (!parents.includes(uncategorizedFolderId)) {
+      if (!fileState.parents.includes(uncategorizedFolderId)) {
         logger.info('Skipping document already filed elsewhere', {
           firestoreDocId: doc.id,
           fileId,
@@ -171,6 +171,14 @@ export const reclassificationSweeper = async (
         continue;
       }
 
+      // Calendar registration resolves year-less dates against this, and
+      // without it falls back to the sweep date, which can be months after
+      // the document was written. Documents extracted before the field was
+      // stored take Drive's current value: the classifier's rename may have
+      // bumped it by a day, which is still the right month and year.
+      const modifiedTime =
+        String(data.modifiedTime || '') || fileState.modifiedTime;
+
       await topic.publishMessage({
         json: {
           firestoreDocId: doc.id,
@@ -178,6 +186,7 @@ export const reclassificationSweeper = async (
           fileName: String(data.fileName || ''),
           extractedText,
           confidence: Number(data.confidence || 0),
+          ...(modifiedTime ? { modifiedTime } : {}),
           reclassification: true,
         },
         attributes: {

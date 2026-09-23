@@ -29,6 +29,9 @@ interface ExtractedText {
   fileSize: number;
   contentHash: string;
   visionResultPath: string;
+  // Drive's modifiedTime at ingestion, the reference date for calendar
+  // registration when the document is re-processed later.
+  modifiedTime?: string;
 }
 
 interface Result {
@@ -220,6 +223,7 @@ export const textFirebaseWriter = async (
       fileSize: fileSize,
       contentHash: contentHash,
       visionResultPath: `gs://${bucket}/${objectName}`,
+      ...(originalModifiedTime ? { modifiedTime: originalModifiedTime } : {}),
     };
 
     // Store extracted text in Firestore

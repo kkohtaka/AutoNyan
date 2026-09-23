@@ -487,6 +487,23 @@ describe('textFirebaseWriter', () => {
         ]);
     };
 
+    it('should persist modifiedTime on the stored document', async () => {
+      arrange({
+        originalFileId: 'file123',
+        originalFileName: 'test.pdf',
+        originalMimeType: 'application/pdf',
+        originalModifiedTime: '2026-04-28T00:00:00.000Z',
+      });
+
+      await textFirebaseWriter(createCloudEvent({}).data!);
+
+      expect(mockFirestore.collection().add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modifiedTime: '2026-04-28T00:00:00.000Z',
+        })
+      );
+    });
+
     it('should carry modifiedTime through to the classifier', async () => {
       process.env.FILE_CLASSIFIER_TOPIC = 'file-classification-trigger';
       arrange({

@@ -185,6 +185,21 @@ describe('calendarRegistrar', () => {
     expect(referenceDate.toISOString()).toBe('2026-04-28T00:00:00.000Z');
   });
 
+  it('should fall back to today as the reference date when the message has no modified time', async () => {
+    extraction.extractEventsWithGemini.mockResolvedValue({
+      events: [],
+      truncated: false,
+    });
+    // JSON.stringify drops the undefined field from the message body.
+    const withoutModifiedTime = { ...baseMessage, modifiedTime: undefined };
+
+    const before = Date.now();
+    await calendarRegistrar(createPubSubEvent(withoutModifiedTime));
+
+    const referenceDate = extraction.extractEventsWithGemini.mock.calls[0][2];
+    expect(referenceDate.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
   it('should register confident events and report the ones dropped for low confidence', async () => {
     extraction.extractEventsWithGemini.mockResolvedValue({
       events: [event('遠足', '2026-05-16'), event('未確定', '2026-05-18', 0.3)],
