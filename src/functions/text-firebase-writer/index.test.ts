@@ -504,7 +504,7 @@ describe('textFirebaseWriter', () => {
       );
     });
 
-    it('should carry modifiedTime through to the classifier', async () => {
+    it('should carry modifiedTime and the source object through to the classifier', async () => {
       process.env.FILE_CLASSIFIER_TOPIC = 'file-classification-trigger';
       arrange({
         originalFileId: 'file123',
@@ -524,6 +524,7 @@ describe('textFirebaseWriter', () => {
         fileId: 'file123',
         fileName: 'test.pdf',
         modifiedTime: '2026-04-28T00:00:00.000Z',
+        objectName: 'documents/abc123',
       });
     });
 

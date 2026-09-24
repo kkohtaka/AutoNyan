@@ -19,6 +19,14 @@ resource "google_project_iam_member" "calendar_registrar_vertex_ai" {
   member  = "serviceAccount:${google_service_account.calendar_registrar.email}"
 }
 
+# Read access to the stored source files, which Gemini reads for the layout the
+# OCR text loses
+resource "google_storage_bucket_iam_member" "calendar_registrar_document_storage" {
+  bucket = var.document_storage_bucket_name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.calendar_registrar.email}"
+}
+
 # IAM binding for PubSub publisher (to publish notifications)
 resource "google_project_iam_member" "calendar_registrar_pubsub_publisher" {
   project = var.project_id
@@ -97,6 +105,7 @@ resource "google_cloudfunctions2_function" "calendar_registrar" {
   depends_on = [
     google_project_iam_member.calendar_registrar_firestore,
     google_project_iam_member.calendar_registrar_vertex_ai,
+    google_storage_bucket_iam_member.calendar_registrar_document_storage,
     google_project_iam_member.calendar_registrar_pubsub_publisher,
     google_project_iam_member.calendar_registrar_service_usage,
     google_pubsub_topic.calendar_registration_trigger,

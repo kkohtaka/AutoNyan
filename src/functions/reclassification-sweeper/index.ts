@@ -187,6 +187,7 @@ export const reclassificationSweeper = async (
           extractedText,
           confidence: Number(data.confidence || 0),
           ...(modifiedTime ? { modifiedTime } : {}),
+          ...(data.objectName ? { objectName: String(data.objectName) } : {}),
           reclassification: true,
         },
         attributes: {

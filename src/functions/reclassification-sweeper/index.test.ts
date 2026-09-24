@@ -30,6 +30,7 @@ interface StoredDocument {
   extractedText?: string;
   confidence?: number;
   modifiedTime?: string;
+  objectName?: string;
   categoryFolderSetHash?: string;
 }
 
@@ -183,7 +184,7 @@ describe('reclassificationSweeper', () => {
     expect(result.skipped).toBe(1);
   });
 
-  it('should carry the stored modifiedTime on the republished message', async () => {
+  it('should carry the stored modifiedTime and source object on the republished message', async () => {
     mockGetFileState.mockResolvedValue({
       parents: ['uncategorized-folder-id'],
       modifiedTime: '2026-09-22T00:00:00.000Z',
@@ -195,6 +196,7 @@ describe('reclassificationSweeper', () => {
         extractedText: '9月の予定',
         confidence: 0.9,
         modifiedTime: '2026-08-31T00:00:00.000Z',
+        objectName: 'documents/abc123',
         categoryFolderSetHash: previousHash,
       },
     ]);
@@ -205,6 +207,7 @@ describe('reclassificationSweeper', () => {
       expect.objectContaining({
         json: expect.objectContaining({
           modifiedTime: '2026-08-31T00:00:00.000Z',
+          objectName: 'documents/abc123',
         }),
       })
     );

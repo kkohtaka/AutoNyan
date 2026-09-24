@@ -101,6 +101,7 @@ describe('fileClassifier', () => {
     extractedText: string;
     confidence: number;
     modifiedTime?: string;
+    objectName?: string;
     reclassification?: boolean;
   }): CloudEvent<MessagePublishedData> => ({
     specversion: '1.0',
@@ -749,6 +750,7 @@ describe('fileClassifier', () => {
         extractedText: '5月の予定',
         confidence: 1,
         modifiedTime: '2026-04-28T00:00:00.000Z',
+        objectName: 'documents/abc123',
       });
 
     const calendarMessage = () =>
@@ -771,6 +773,7 @@ describe('fileClassifier', () => {
         categoryFolderId: 'folder-school',
         classificationConfidence: 0.95,
         modifiedTime: '2026-04-28T00:00:00.000Z',
+        objectName: 'documents/abc123',
       });
     });
 

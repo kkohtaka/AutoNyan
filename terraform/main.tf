@@ -286,6 +286,7 @@ module "calendar_registrar" {
   environment                         = var.environment
   region                              = var.region
   function_bucket_name                = google_storage_bucket.function_bucket.name
+  document_storage_bucket_name        = google_storage_bucket.document_storage.name
   category_calendars                  = var.calendar_category_calendars
   time_zone                           = var.calendar_time_zone
   default_event_duration_minutes      = var.calendar_default_event_duration_minutes

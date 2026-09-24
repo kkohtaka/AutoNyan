@@ -1,5 +1,6 @@
 import { VertexAI } from '@google-cloud/vertexai';
 import { PermanentError } from 'autonyan-shared';
+import { SourceDocument } from './source-document';
 
 export interface ExtractedEvent {
   title: string;
@@ -77,13 +78,15 @@ export function resolveEventDate(date: string, referenceDate: Date): string {
  * @param referenceDate Date the source document was last modified, used to
  *   resolve dates written without a year
  * @param timeZone IANA time zone the document's times are written in
+ * @param sourceDocument The original file, when Gemini can read it
  * @returns The extracted events and whether the text had to be truncated
  */
 export async function extractEventsWithGemini(
   projectId: string,
   text: string,
   referenceDate: Date,
-  timeZone: string
+  timeZone: string,
+  sourceDocument: SourceDocument | null
 ): Promise<ExtractionResult> {
   const location = process.env.VERTEX_AI_LOCATION || 'us-central1';
 
@@ -100,9 +103,18 @@ export async function extractEventsWithGemini(
   const truncatedText = text.substring(0, MAX_TEXT_LENGTH);
   const referenceDateText = referenceDate.toISOString().substring(0, 10);
 
-  const prompt = `
-あなたは文書から予定を抽出する専門家です。以下のテキストに含まれる予定をすべて抽出してください。
+  // OCR reads a calendar grid out of column order, so the text alone cannot
+  // tell which day's cell an event sits in; only the original file can.
+  const sourceInstruction = sourceDocument
+    ? `
+【原本】
+添付ファイルはこの文書の原本です。【文書テキスト】は原本をOCRしたもので、表の行や列の並びが崩れている場合があります。予定の日付は必ず原本のレイアウト（カレンダー表ならその予定が書かれたマスの日付）から判断し、テキストは文字の読み取りの補助として使ってください。
+`
+    : '';
 
+  const prompt = `
+あなたは文書から予定を抽出する専門家です。以下の文書に含まれる予定をすべて抽出してください。
+${sourceInstruction}
 【基準日】
 ${referenceDateText}（この文書が作成された日。タイムゾーンは ${timeZone}）
 
@@ -134,7 +146,13 @@ ${truncatedText}
 注意: confidence は 0.0 から 1.0 の範囲の数値で、抽出の確信度を表してください。
 `;
 
-  const result = await model.generateContent(prompt);
+  const parts = sourceDocument
+    ? [{ inlineData: sourceDocument }, { text: prompt }]
+    : [{ text: prompt }];
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts }],
+  });
   const responseText =
     result.response.candidates?.[0]?.content?.parts?.[0]?.text;
 

@@ -18,6 +18,11 @@ variable "function_bucket_name" {
   type        = string
 }
 
+variable "document_storage_bucket_name" {
+  description = "The name of the bucket holding the source documents"
+  type        = string
+}
+
 variable "category_calendars" {
   description = "Classification categories whose documents produce calendar events, and the calendar each one registers on"
   type = list(object({
