@@ -247,6 +247,9 @@ export const textFirebaseWriter = async (
           // Carried through to calendar registration, where it is the
           // reference date for resolving year-less dates.
           modifiedTime: originalModifiedTime,
+          // Carried through to calendar registration, which reads the source
+          // file for the layout the extracted text loses.
+          objectName: originalObjectName,
         };
 
         const topic = pubsub.topic(classifierTopicName);

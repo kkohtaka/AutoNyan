@@ -34,8 +34,12 @@ jest.mock('./calendar', () => {
   };
 });
 
+jest.mock('./source-document');
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 const extraction = require('./extraction');
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+const sourceDocument = require('./source-document');
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 const calendar = require('./calendar');
 
@@ -98,7 +102,10 @@ describe('calendarRegistrar', () => {
     mockSet.mockResolvedValue(undefined);
     calendar.registerEvent.mockResolvedValue('created');
 
+    sourceDocument.loadSourceDocument.mockResolvedValue(null);
+
     process.env.PROJECT_ID = 'test-project';
+    process.env.ENVIRONMENT = 'staging';
     process.env.NOTIFICATION_TOPIC = 'notification-topic';
     process.env.CALENDAR_CATEGORY_CALENDARS = JSON.stringify([
       { category: MAPPED_CATEGORY, calendar_id: CALENDAR_ID },
@@ -107,6 +114,7 @@ describe('calendarRegistrar', () => {
 
   afterEach(() => {
     delete process.env.PROJECT_ID;
+    delete process.env.ENVIRONMENT;
     delete process.env.NOTIFICATION_TOPIC;
     delete process.env.CALENDAR_CATEGORY_CALENDARS;
     delete process.env.CALENDAR_CLASSIFICATION_CONFIDENCE_THRESHOLD;
@@ -198,6 +206,37 @@ describe('calendarRegistrar', () => {
 
     const referenceDate = extraction.extractEventsWithGemini.mock.calls[0][2];
     expect(referenceDate.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('should give Gemini the source file the message points at', async () => {
+    const pdf = { mimeType: 'application/pdf', data: 'JVBERi0=' };
+    sourceDocument.loadSourceDocument.mockResolvedValue(pdf);
+    extraction.extractEventsWithGemini.mockResolvedValue({
+      events: [],
+      truncated: false,
+    });
+
+    await calendarRegistrar(
+      createPubSubEvent({ ...baseMessage, objectName: 'documents/abc123' })
+    );
+
+    expect(sourceDocument.loadSourceDocument).toHaveBeenCalledWith(
+      'test-project-staging-document-storage',
+      'documents/abc123'
+    );
+    expect(extraction.extractEventsWithGemini.mock.calls[0][4]).toBe(pdf);
+  });
+
+  it('should extract from the text alone when the message has no source object', async () => {
+    extraction.extractEventsWithGemini.mockResolvedValue({
+      events: [],
+      truncated: false,
+    });
+
+    await calendarRegistrar(createPubSubEvent(baseMessage));
+
+    expect(sourceDocument.loadSourceDocument).not.toHaveBeenCalled();
+    expect(extraction.extractEventsWithGemini.mock.calls[0][4]).toBeNull();
   });
 
   it('should register confident events and report the ones dropped for low confidence', async () => {

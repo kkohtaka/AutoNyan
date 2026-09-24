@@ -21,6 +21,7 @@ import {
   extractEventsWithGemini,
   MAX_EVENTS_PER_DOCUMENT,
 } from './extraction';
+import { loadSourceDocument } from './source-document';
 
 interface CalendarRegistrationEventData extends Record<string, unknown> {
   firestoreDocId: string;
@@ -33,6 +34,9 @@ interface CalendarRegistrationEventData extends Record<string, unknown> {
   categoryFolderId?: string;
   classificationConfidence?: number;
   modifiedTime?: string;
+  // The source file in the document-storage bucket, which keeps the layout
+  // the OCR text loses.
+  objectName?: string;
 }
 
 export interface CategoryCalendar {
@@ -178,16 +182,26 @@ export const calendarRegistrar = async (
       ? new Date(eventData.modifiedTime)
       : new Date();
 
+    const projectId = getProjectId();
+    const sourceDocument = eventData.objectName
+      ? await loadSourceDocument(
+          documentBucketName(projectId),
+          eventData.objectName
+        )
+      : null;
+
     logger.info('Extracting calendar events', {
       fileName: eventData.fileName,
       category: mapping.category,
+      sourceDocument: sourceDocument?.mimeType ?? null,
     });
 
     const extraction = await extractEventsWithGemini(
-      getProjectId(),
+      projectId,
       eventData.extractedText,
       referenceDate,
-      timeZone
+      timeZone,
+      sourceDocument
     );
 
     if (extraction.events.length > MAX_EVENTS_PER_DOCUMENT) {
@@ -315,6 +329,14 @@ export const calendarRegistrar = async (
     });
   }
 };
+
+function documentBucketName(projectId: string): string {
+  const environment = process.env.ENVIRONMENT;
+  if (!environment) {
+    throw new Error('ENVIRONMENT environment variable is required but not set');
+  }
+  return `${projectId}-${environment}-document-storage`;
+}
 
 function skippedResult(
   message: string,

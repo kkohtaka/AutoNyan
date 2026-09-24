@@ -29,6 +29,8 @@ interface ClassificationEventData extends Record<string, unknown> {
   confidence: number;
   // Reference date for resolving year-less dates during calendar extraction.
   modifiedTime?: string;
+  // Source file for calendar extraction, which needs the document's layout.
+  objectName?: string;
   // Set by the re-classification sweep, so the notification can tell the
   // recipient this document was filed once before under Uncategorized.
   reclassification?: boolean;
@@ -363,6 +365,7 @@ async function publishCalendarRegistration(
         categoryFolderId,
         classificationConfidence: classification.confidence,
         modifiedTime: eventData.modifiedTime,
+        objectName: eventData.objectName,
       },
       attributes: {
         operation: 'calendar-registration',
