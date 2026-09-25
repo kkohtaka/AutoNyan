@@ -189,7 +189,7 @@ This command builds the functions and deploys all infrastructure via Terraform.
 
 #### 4. Configure Google Drive Access
 
-Google Drive requires **manual folder sharing** with the service account. Use the automated setup script:
+Drive permissions cannot be expressed in Terraform, so each environment has two Drive identities (a writer and an organizer service account, created by Terraform) that the folders are shared with **once**. Functions borrow one of them at runtime through an IAM binding Terraform owns, so this is an environment bootstrap step — not something to repeat per deployment or per new function. Use the automated setup script:
 
 1. Authenticate with Drive API scope (required once per machine):
 
@@ -218,7 +218,7 @@ Google Drive requires **manual folder sharing** with the service account. Use th
    ```
 
 **Why Manual Sharing?**
-Drive API doesn't support project-level IAM roles. Service accounts can only access explicitly shared folders, ensuring least-privilege access and preventing accidental access to unintended files.
+Drive API doesn't support project-level IAM roles. Sharing the folders with two identities that the functions impersonate keeps access explicit and least-privilege, and moves the one manual step to environment bootstrap instead of after every deploy.
 
 #### 5. Share the target calendars (for calendar registration)
 
