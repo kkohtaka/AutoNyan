@@ -122,7 +122,7 @@ npm run deploy             # Full deployment: build + terraform apply
 npm run setup:terraform-backend    # Create GCS bucket for Terraform state
 npm run setup:github-actions       # Configure Workload Identity Federation
 npm run setup:terraform-variables  # Interactive variable configuration
-npm run setup:share-drive-folders  # Share Drive folders with service accounts (post-deployment)
+npm run setup:share-drive-folders  # Share Drive folders with the environment's Drive identities (bootstrap, once per environment)
 ```
 
 ## Development Patterns
@@ -478,7 +478,7 @@ required check is still pending — see the Required Status Check Invariant belo
 **Least privilege per function:**
 - Each function has dedicated service account
 - IAM roles granted only for required operations
-- Drive access via manual folder sharing (not project-level IAM)
+- Drive access borrowed from an environment-scoped Drive identity, never held by the function's own account (see Google Drive Integration)
 - Storage access scoped to specific buckets
 
 **Example IAM pattern:**
@@ -648,25 +648,34 @@ delegated to `lint-fix` / `test-fix`.
 
 ## Google Drive Integration
 
-### Service Account Pattern
+### Drive Identity Pattern
 
-**Manual folder sharing required:**
-- Drive API doesn't support project-level IAM
-- Service account must be explicitly granted access to folders
-- Ensures least-privilege access (only shared folders accessible)
+**Drive access is an environment fixture, not a per-function artifact:**
+- Drive API doesn't support project-level IAM, so folder access can only be granted by sharing
+- Each environment has two Drive identities, created by the `drive-access` Terraform module: a **writer** identity shared on the folders as `writer`, and an **organizer** identity shared as `fileOrganizer`
+- The folders are shared with those two identities once, at environment bootstrap; no function's own service account is ever shared
+- A function that calls the Drive API borrows the identity it needs. Its Terraform module binds `roles/iam.serviceAccountTokenCreator` on that identity (on the identity itself, never project-wide) to the function's runtime account and sets `DRIVE_IDENTITY_EMAIL` to the identity's email; the code builds its Drive client with `createDriveAuth(scopes)` from the shared library, which impersonates that identity
+- Functions that do not call the Drive API get no binding and no variable
 
-**Initial setup workflow:**
-1. Deploy infrastructure: `npm run deploy`
+**Why this shape:** sharing a per-function account had to happen by hand *after* the deploy that put the function live, and a forgotten share failed silently — Drive answers a folder the caller cannot see with an empty listing, not an error. With the identities shared up front, adding a Drive-consuming function is a Terraform-only change (the binding and the variable), and a missing binding fails the function's first Drive call with an IAM error visible in Cloud Logging.
+
+**Guardrails:**
+- `createDriveAuth` throws when `DRIVE_IDENTITY_EMAIL` is unset. There is deliberately no fallback to the runtime account's own credentials — that would reproduce the silent empty listing the pattern exists to remove
+- Bind token-creator with `google_service_account_iam_member` on the target identity, never with a project-level binding
+- Trade-offs accepted: Drive audit logs attribute activity to the shared identity (the calling function is identifiable from Cloud Logging), and each cold start mints one impersonated token through the IAM Credentials API, cached by the auth library
+
+**Environment bootstrap (once per environment, same class as `setup:terraform-backend`):**
+1. Deploy infrastructure: `npm run deploy` — creates the identities and the bindings
 2. Authenticate with Drive scope (required once per machine):
    ```bash
    gcloud auth login --enable-gdrive-access
    ```
    Note: `gcloud auth application-default login` does NOT work for Drive API — Google blocks unverified apps requesting Drive scope via ADC.
-3. Share Drive folders with service accounts (one-time setup). The script reads
-   the service accounts from `terraform output`, which answers from whichever
-   state the last `terraform init` selected, so initialize the same environment
-   first — the script refuses to run on a mismatch rather than pairing one
-   environment's folders with another's accounts:
+3. Share the Drive folders with the two identities. The script reads their
+   emails from `terraform output`, which answers from whichever state the last
+   `terraform init` selected, so initialize the same environment first — the
+   script refuses to run on a mismatch rather than pairing one environment's
+   folders with another's identities:
    ```bash
    # staging uses values from terraform/environments/staging.tfvars
    npm run terraform:init
@@ -678,22 +687,22 @@ delegated to `lint-fix` / `test-fix`.
    ENVIRONMENT=production npm run terraform:init
    ENVIRONMENT=production npm run setup:share-drive-folders
    ```
-   - **Note**: This is a one-time setup. Once shared, permissions persist across deployments
+   - **Note**: This is a bootstrap step, not a post-deploy step. Once shared, the grant persists across deployments and covers every function added later
    - Not required in CI/CD (manual setup only)
 4. Test access via Drive check: `npm run test:e2e:check-drive`
 
 **Permission model:**
 - The scanned and category folders live on a **shared drive**; the sharing
-  script grants each service account a per-folder role
+  script grants the writer identity `writer`, the organizer identity
+  `fileOrganizer`, and the CI account `fileOrganizer` (it trashes E2E artifacts)
 - ✅ Can access: Explicitly shared folders and files
 - ✅ Can perform (role `writer`): List, read, create folders, copy files
 - ⚠️ Moving (re-parenting) and trashing items requires the `fileOrganizer`
   (Content Manager) role — `writer` can edit files but not move or trash
   them, and the attempt fails with a **non-transient 403** ("insufficient
   permissions for this file"; `files.delete` surfaces it as a misleading
-  404 "File not found"). The sharing script grants `fileOrganizer` only to
-  the accounts that organize content (the classifier moves files, the CI
-  account trashes E2E artifacts), `writer` to all others.
+  404 "File not found"). The classifier borrows the organizer identity because
+  it moves files; every other Drive consumer borrows the writer identity.
 - ❌ Cannot access: Unshared folders, other users' private content
 - ❌ Cannot perform: Permanently delete files (`fileOrganizer` can only
   trash; `files.delete` needs the Manager role), modify permissions

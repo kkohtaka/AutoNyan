@@ -109,6 +109,15 @@ pattern:
   type (PubSub topic, or Storage object-finalized).
 - Inputs in `variables.tf` and any values other stages need (e.g. `topic_name`)
   in `outputs.tf`.
+- If the function calls the Drive API, it borrows the environment Drive
+  identity instead of being shared on the folders itself (the Drive Identity
+  Pattern in `CLAUDE.md`): add a `google_service_account_iam_member` granting
+  `roles/iam.serviceAccountTokenCreator` on the identity to the function's
+  runtime account, and set `DRIVE_IDENTITY_EMAIL` in its environment variables.
+  Take both inputs (`drive_identity_service_account_name` and
+  `drive_identity_service_account_email`) from an existing Drive-consuming
+  module, and build the client with `createDriveAuth(scopes)` from
+  `autonyan-shared`. No sharing step follows the deploy.
 
 ### Step 4 — Wire the module into main.tf and the pipeline
 
@@ -117,7 +126,9 @@ standard inputs (`project_id`, `environment`, `region`,
 `function_bucket_name`, …) the same way the sibling modules do. Connect it to
 the pipeline by passing the upstream/downstream topic or bucket references
 (e.g. `next_stage_topic_name = module.<other>.topic_name`) so the new stage is
-reachable. Add a `depends_on` if it touches Firestore or another resource that
+reachable. A Drive-consuming function also takes its identity from
+`module.drive_access` — the writer identity to read and copy, the organizer
+identity to move or trash. Add a `depends_on` if it touches Firestore or another resource that
 must exist first.
 
 ### Step 5 — Add the function to both CI matrices
