@@ -18,11 +18,13 @@ jest.mock('@google-cloud/storage', () => ({
   Storage: jest.fn().mockImplementation(() => mockStorage),
 }));
 
+jest.mock('autonyan-shared', () => ({
+  ...jest.requireActual('autonyan-shared'),
+  createDriveAuth: jest.fn().mockResolvedValue({ mockDriveAuth: true }),
+}));
+
 jest.mock('googleapis', () => ({
   google: {
-    auth: {
-      GoogleAuth: jest.fn(),
-    },
     drive: jest.fn().mockReturnValue({
       files: {
         get: jest.fn(),
@@ -33,6 +35,9 @@ jest.mock('googleapis', () => ({
 
 jest.mock('@google-cloud/pubsub');
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+const { createDriveAuth: mockCreateDriveAuth } = require('autonyan-shared');
 
 describe('docProcessor', () => {
   let mockDrive: any;
@@ -178,6 +183,9 @@ describe('docProcessor', () => {
     expect(result.bucketName).toBe('test-project-staging-document-storage');
     expect(result.contentType).toBe('application/pdf');
     expect(result.size).toBe(1024);
+    expect(mockCreateDriveAuth).toHaveBeenCalledWith([
+      'https://www.googleapis.com/auth/drive.readonly',
+    ]);
     expect(result.objectName).toMatch(/^documents\/[a-f0-9]{64}$/); // SHA256 hash
 
     // Verify Drive API calls

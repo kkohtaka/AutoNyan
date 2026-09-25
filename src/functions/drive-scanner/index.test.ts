@@ -4,12 +4,13 @@ import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { driveScanner } from './index';
 
-// Mock the Google APIs
+jest.mock('autonyan-shared', () => ({
+  ...jest.requireActual('autonyan-shared'),
+  createDriveAuth: jest.fn().mockResolvedValue({ mockDriveAuth: true }),
+}));
+
 jest.mock('googleapis', () => ({
   google: {
-    auth: {
-      GoogleAuth: jest.fn(),
-    },
     drive: jest.fn().mockReturnValue({
       files: {
         list: jest.fn(),
@@ -21,6 +22,9 @@ jest.mock('googleapis', () => ({
 
 jest.mock('@google-cloud/pubsub');
 jest.mock('@google-cloud/firestore');
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+const { createDriveAuth: mockCreateDriveAuth } = require('autonyan-shared');
 
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 const mockFirestore = Firestore as jest.MockedClass<typeof Firestore>;
@@ -66,8 +70,6 @@ describe('driveScanner', () => {
       },
     };
     google.drive.mockReturnValue(mockDrive);
-
-    google.auth.GoogleAuth.mockImplementation(() => ({}) as any);
 
     // Mock PubSub
     mockPublishMessage = jest.fn();
@@ -188,6 +190,9 @@ describe('driveScanner', () => {
       expect(result.publishedMessages).toBe(1);
       expect(result.skippedMessages).toBe(0);
       expect(result.topicName).toBe('doc-process-trigger');
+      expect(mockCreateDriveAuth).toHaveBeenCalledWith([
+        'https://www.googleapis.com/auth/drive',
+      ]);
 
       // Verify the file was recorded as scanned after publishing
       expect(mockCollection).toHaveBeenCalledWith('scanned_files');

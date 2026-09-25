@@ -3,3 +3,4 @@ export * from './parameter-parser';
 export * from './logger';
 export * from './email-renderer';
 export * from './category-folders';
+export * from './drive-auth';

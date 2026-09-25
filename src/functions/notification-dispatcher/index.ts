@@ -2,6 +2,7 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
   parsePubSubEvent,
+  createDriveAuth,
   createErrorResponse,
   logger,
   renderSuccessEmail,
@@ -174,9 +175,9 @@ async function listFolderRecipients(
   folderId: string,
   roles: string[]
 ): Promise<string[]> {
-  const auth = new google.auth.GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
+  const auth = await createDriveAuth([
+    'https://www.googleapis.com/auth/drive.readonly',
+  ]);
   const drive = google.drive({ version: 'v3', auth });
 
   const permissionsResponse = await drive.permissions.list({
@@ -254,9 +255,9 @@ async function handleFailureNotification(
   const fromEmail = process.env.NOTIFICATION_FROM_EMAIL || '';
   const saKey = JSON.parse(saKeyJson) as ServiceAccountKey;
 
-  const auth = new google.auth.GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  });
+  const auth = await createDriveAuth([
+    'https://www.googleapis.com/auth/drive.readonly',
+  ]);
   const drive = google.drive({ version: 'v3', auth });
 
   let lookupFolderId: string | undefined;
