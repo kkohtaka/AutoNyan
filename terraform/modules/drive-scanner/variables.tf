@@ -31,3 +31,8 @@ variable "drive_identity_service_account_name" {
   description = "Full resource name of the environment Drive identity this function impersonates for Drive API calls"
   type        = string
 }
+
+variable "drive_identity_service_account_email" {
+  description = "Email of the environment Drive identity this function impersonates; exposed to the function as DRIVE_IDENTITY_EMAIL"
+  type        = string
+}
