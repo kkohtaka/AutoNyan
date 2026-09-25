@@ -216,13 +216,14 @@ module "drive_access" {
 module "notification_dispatcher" {
   source = "./modules/notification-dispatcher"
 
-  project_id                          = var.project_id
-  environment                         = var.environment
-  region                              = var.region
-  function_bucket_name                = google_storage_bucket.function_bucket.name
-  drive_identity_service_account_name = module.drive_access.writer_service_account_name
-  notification_from_email             = var.notification_from_email
-  email_subject_prefix                = local.email_subject_prefix
+  project_id                           = var.project_id
+  environment                          = var.environment
+  region                               = var.region
+  function_bucket_name                 = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name  = module.drive_access.writer_service_account_name
+  drive_identity_service_account_email = module.drive_access.writer_service_account_email
+  notification_from_email              = var.notification_from_email
+  email_subject_prefix                 = local.email_subject_prefix
 
   depends_on = [
     google_project_service.secretmanager_api,
@@ -235,13 +236,14 @@ module "notification_dispatcher" {
 module "drive_scanner" {
   source = "./modules/drive-scanner"
 
-  project_id                          = var.project_id
-  environment                         = var.environment
-  region                              = var.region
-  function_bucket_name                = google_storage_bucket.function_bucket.name
-  drive_identity_service_account_name = module.drive_access.writer_service_account_name
-  doc_process_trigger_topic_name      = module.doc_processor.topic_name
-  notification_topic_name             = module.notification_dispatcher.topic_name
+  project_id                           = var.project_id
+  environment                          = var.environment
+  region                               = var.region
+  function_bucket_name                 = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name  = module.drive_access.writer_service_account_name
+  drive_identity_service_account_email = module.drive_access.writer_service_account_email
+  doc_process_trigger_topic_name       = module.doc_processor.topic_name
+  notification_topic_name              = module.notification_dispatcher.topic_name
 
   # Firestore database must exist before the scanner records scanned files
   depends_on = [google_firestore_database.default]
@@ -252,12 +254,13 @@ module "drive_scanner" {
 module "doc_processor" {
   source = "./modules/doc-processor"
 
-  project_id                          = var.project_id
-  environment                         = var.environment
-  region                              = var.region
-  function_bucket_name                = google_storage_bucket.function_bucket.name
-  drive_identity_service_account_name = module.drive_access.writer_service_account_name
-  notification_topic_name             = module.notification_dispatcher.topic_name
+  project_id                           = var.project_id
+  environment                          = var.environment
+  region                               = var.region
+  function_bucket_name                 = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name  = module.drive_access.writer_service_account_name
+  drive_identity_service_account_email = module.drive_access.writer_service_account_email
+  notification_topic_name              = module.notification_dispatcher.topic_name
 }
 
 # Text Vision Processor Module
@@ -279,14 +282,15 @@ module "text_vision_processor" {
 module "file_classifier" {
   source = "./modules/file-classifier"
 
-  project_id                          = var.project_id
-  environment                         = var.environment
-  region                              = var.region
-  function_bucket_name                = google_storage_bucket.function_bucket.name
-  drive_identity_service_account_name = module.drive_access.organizer_service_account_name
-  category_root_folder_id             = var.category_root_folder_id
-  uncategorized_folder_id             = var.uncategorized_folder_id
-  notification_topic_name             = module.notification_dispatcher.topic_name
+  project_id                           = var.project_id
+  environment                          = var.environment
+  region                               = var.region
+  function_bucket_name                 = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name  = module.drive_access.organizer_service_account_name
+  drive_identity_service_account_email = module.drive_access.organizer_service_account_email
+  category_root_folder_id              = var.category_root_folder_id
+  uncategorized_folder_id              = var.uncategorized_folder_id
+  notification_topic_name              = module.notification_dispatcher.topic_name
 
   # Calendar registration hangs off classification: the classifier publishes
   # the category it decided on, and the registrar owns the category-to-calendar
@@ -326,14 +330,15 @@ module "calendar_registrar" {
 module "reclassification_sweeper" {
   source = "./modules/reclassification-sweeper"
 
-  project_id                          = var.project_id
-  environment                         = var.environment
-  region                              = var.region
-  function_bucket_name                = google_storage_bucket.function_bucket.name
-  drive_identity_service_account_name = module.drive_access.writer_service_account_name
-  category_root_folder_id             = var.category_root_folder_id
-  uncategorized_folder_id             = var.uncategorized_folder_id
-  file_classifier_trigger_topic       = module.file_classifier.topic_name
+  project_id                           = var.project_id
+  environment                          = var.environment
+  region                               = var.region
+  function_bucket_name                 = google_storage_bucket.function_bucket.name
+  drive_identity_service_account_name  = module.drive_access.writer_service_account_name
+  drive_identity_service_account_email = module.drive_access.writer_service_account_email
+  category_root_folder_id              = var.category_root_folder_id
+  uncategorized_folder_id              = var.uncategorized_folder_id
+  file_classifier_trigger_topic        = module.file_classifier.topic_name
 
   depends_on = [google_firestore_database.default]
 }

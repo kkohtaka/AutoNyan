@@ -6,7 +6,7 @@ resource "google_pubsub_topic" "doc_process_trigger" {
 }
 
 # Dedicated service account for the document scan preparation function
-# Accesses Google Drive through manual folder sharing (not project-level IAM)
+# Reaches Google Drive only by impersonating the environment Drive identity
 # Includes permissions for API access, Cloud Storage, and PubSub
 resource "google_service_account" "doc_processor_sa" {
   account_id   = "${var.environment}-doc-processor-sa"
@@ -73,9 +73,10 @@ resource "google_cloudfunctions2_function" "doc_processor" {
     available_memory   = "512M"
     timeout_seconds    = 540
     environment_variables = {
-      PROJECT_ID         = var.project_id
-      ENVIRONMENT        = var.environment
-      NOTIFICATION_TOPIC = var.notification_topic_name
+      PROJECT_ID           = var.project_id
+      ENVIRONMENT          = var.environment
+      NOTIFICATION_TOPIC   = var.notification_topic_name
+      DRIVE_IDENTITY_EMAIL = var.drive_identity_service_account_email
     }
     service_account_email = google_service_account.doc_processor_sa.email
   }

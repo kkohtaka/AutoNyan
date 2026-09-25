@@ -6,7 +6,7 @@ resource "google_pubsub_topic" "drive_scan_trigger" {
 }
 
 # Dedicated service account for the drive scanner function
-# Accesses Google Drive through manual folder sharing (not project-level IAM)
+# Reaches Google Drive only by impersonating the environment Drive identity
 # Includes permissions for API access and PubSub publishing
 resource "google_service_account" "drive_scanner_sa" {
   account_id   = "${var.environment}-drive-scanner-sa"
@@ -94,6 +94,7 @@ resource "google_cloudfunctions2_function" "drive_scanner" {
       ENVIRONMENT               = var.environment
       FIRESTORE_DATABASE_ID     = var.environment
       NOTIFICATION_TOPIC        = var.notification_topic_name
+      DRIVE_IDENTITY_EMAIL      = var.drive_identity_service_account_email
     }
     service_account_email = google_service_account.drive_scanner_sa.email
   }

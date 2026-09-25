@@ -79,6 +79,7 @@ resource "google_cloudfunctions2_function" "notification_dispatcher" {
       ENVIRONMENT             = var.environment
       NOTIFICATION_FROM_EMAIL = var.notification_from_email
       EMAIL_SUBJECT_PREFIX    = var.email_subject_prefix
+      DRIVE_IDENTITY_EMAIL    = var.drive_identity_service_account_email
     }
     secret_environment_variables {
       key        = "NOTIFICATION_SA_KEY"

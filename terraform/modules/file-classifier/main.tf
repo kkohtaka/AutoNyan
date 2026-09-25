@@ -70,6 +70,7 @@ resource "google_cloudfunctions2_function" "file_classifier" {
       FIRESTORE_DATABASE_ID    = var.environment
       NOTIFICATION_TOPIC       = var.notification_topic_name
       CALENDAR_REGISTRAR_TOPIC = var.calendar_registrar_topic
+      DRIVE_IDENTITY_EMAIL     = var.drive_identity_service_account_email
     }
     service_account_email = google_service_account.file_classifier.email
   }

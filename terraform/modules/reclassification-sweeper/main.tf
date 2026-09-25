@@ -68,6 +68,7 @@ resource "google_cloudfunctions2_function" "reclassification_sweeper" {
       ENVIRONMENT             = var.environment
       FIRESTORE_DATABASE_ID   = var.environment
       FILE_CLASSIFIER_TOPIC   = var.file_classifier_trigger_topic
+      DRIVE_IDENTITY_EMAIL    = var.drive_identity_service_account_email
     }
     service_account_email = google_service_account.reclassification_sweeper.email
   }
