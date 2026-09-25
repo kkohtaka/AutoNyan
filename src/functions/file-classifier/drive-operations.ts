@@ -1,4 +1,5 @@
 import { google, drive_v3 } from 'googleapis';
+import { DriveAuth } from 'autonyan-shared';
 
 export interface CategoryFolder {
   id: string;
@@ -7,12 +8,12 @@ export interface CategoryFolder {
 
 /**
  * List all folders within a specified parent folder in Google Drive
- * @param auth GoogleAuth instance for authentication
+ * @param auth Drive identity credentials
  * @param rootFolderId Parent folder ID to list subfolders from
  * @returns Array of category folders
  */
 export async function listCategoryFolders(
-  auth: InstanceType<typeof google.auth.GoogleAuth>,
+  auth: DriveAuth,
   rootFolderId: string
 ): Promise<CategoryFolder[]> {
   const drive = google.drive({ version: 'v3', auth });
@@ -44,13 +45,13 @@ const MAX_REFERENCE_FILE_NAMES = 20;
  * own collision list and be renamed away from a name nothing else holds, so
  * the caller excludes the document it is classifying by id.
  *
- * @param auth GoogleAuth instance for authentication
+ * @param auth Drive identity credentials
  * @param folderId Folder ID to list files from
  * @param excludeFileId File ID to omit from the result, if present
  * @returns File names capped at MAX_REFERENCE_FILE_NAMES
  */
 export async function listFileNamesInFolder(
-  auth: InstanceType<typeof google.auth.GoogleAuth>,
+  auth: DriveAuth,
   folderId: string,
   excludeFileId?: string
 ): Promise<string[]> {
@@ -85,13 +86,13 @@ export async function listFileNamesInFolder(
  * non-transient 403. That role is granted by the share-drive-folders setup
  * script; do not retry 403s here, they never resolve on their own.
  *
- * @param auth GoogleAuth instance for authentication
+ * @param auth Drive identity credentials
  * @param fileId File ID to move
  * @param targetFolderId Destination folder ID
  * @param newName New file name; omit to keep the current name
  */
 export async function moveFileInDrive(
-  auth: InstanceType<typeof google.auth.GoogleAuth>,
+  auth: DriveAuth,
   fileId: string,
   targetFolderId: string,
   newName?: string

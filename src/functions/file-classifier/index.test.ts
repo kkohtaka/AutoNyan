@@ -12,18 +12,18 @@ jest.mock('@google-cloud/firestore', () => ({
 jest.mock('@google-cloud/pubsub');
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 
-jest.mock('googleapis', () => ({
-  google: {
-    auth: {
-      GoogleAuth: jest.fn(() => ({ mockGoogleAuthInstance: true })),
-    },
-  },
+jest.mock('autonyan-shared', () => ({
+  ...jest.requireActual('autonyan-shared'),
+  createDriveAuth: jest.fn().mockResolvedValue({ mockDriveAuth: true }),
 }));
 
 jest.mock('./drive-operations');
 jest.mock('./classification');
 jest.mock('./firestore-operations');
 jest.mock('./rename');
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+const { createDriveAuth: mockCreateDriveAuth } = require('autonyan-shared');
 
 const mockListCategoryFolders = jest.fn();
 const mockListFileNamesInFolder = jest.fn();
@@ -161,8 +161,11 @@ describe('fileClassifier', () => {
     expect(result.fileId).toBe('file-123');
     expect(result.fileName).toBe('invoice.pdf');
 
+    expect(mockCreateDriveAuth).toHaveBeenCalledWith([
+      'https://www.googleapis.com/auth/drive',
+    ]);
     expect(mockListCategoryFolders).toHaveBeenCalledWith(
-      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      expect.objectContaining({ mockDriveAuth: true }),
       'root-folder-id'
     );
     expect(mockClassifyWithGemini).toHaveBeenCalledWith(
@@ -176,7 +179,7 @@ describe('fileClassifier', () => {
     // The processed file is excluded so it cannot collide with its own name
     // when it is already in the target folder.
     expect(mockListFileNamesInFolder).toHaveBeenCalledWith(
-      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      expect.objectContaining({ mockDriveAuth: true }),
       'folder-invoices',
       'file-123'
     );
@@ -196,7 +199,7 @@ describe('fileClassifier', () => {
       ['2024-01-15_請求書_ネコ商会.pdf']
     );
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      expect.objectContaining({ mockDriveAuth: true }),
       'file-123',
       'folder-invoices',
       '2024-01-31_請求書_サンプル商事.pdf'
@@ -247,7 +250,7 @@ describe('fileClassifier', () => {
     await fileClassifier(event);
 
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      expect.objectContaining({ mockDriveAuth: true }),
       'file-123',
       'folder-invoices',
       undefined
@@ -292,7 +295,7 @@ describe('fileClassifier', () => {
 
     expect(result.category).toBe('請求書');
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      expect.objectContaining({ mockDriveAuth: true }),
       'file-123',
       'folder-invoices',
       undefined
@@ -546,7 +549,7 @@ describe('fileClassifier', () => {
     expect(mockListFileNamesInFolder).not.toHaveBeenCalled();
     expect(mockGenerateFileName).not.toHaveBeenCalled();
     expect(mockMoveFileInDrive).toHaveBeenCalledWith(
-      expect.objectContaining({ mockGoogleAuthInstance: true }),
+      expect.objectContaining({ mockDriveAuth: true }),
       'file-456',
       'uncategorized-folder-id',
       undefined

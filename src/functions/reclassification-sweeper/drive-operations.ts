@@ -1,4 +1,5 @@
 import { drive_v3, google } from 'googleapis';
+import { DriveAuth } from 'autonyan-shared';
 
 export interface CategoryFolder {
   id: string;
@@ -7,12 +8,12 @@ export interface CategoryFolder {
 
 /**
  * List all folders within a specified parent folder in Google Drive
- * @param auth GoogleAuth instance for authentication
+ * @param auth Drive identity credentials
  * @param rootFolderId Parent folder ID to list subfolders from
  * @returns Array of category folders
  */
 export async function listCategoryFolders(
-  auth: InstanceType<typeof google.auth.GoogleAuth>,
+  auth: DriveAuth,
   rootFolderId: string
 ): Promise<CategoryFolder[]> {
   const drive = google.drive({ version: 'v3', auth });
@@ -52,13 +53,13 @@ export interface FileState {
  * an error: its Firestore document outlives it, and a sweep that threw here
  * would be retried forever and never reach the documents behind it.
  *
- * @param auth GoogleAuth instance for authentication
+ * @param auth Drive identity credentials
  * @param fileId File ID to inspect
  * @returns Parent folder IDs (empty when the file has none) and modified time,
  *   null when the file is no longer reachable
  */
 export async function getFileState(
-  auth: InstanceType<typeof google.auth.GoogleAuth>,
+  auth: DriveAuth,
   fileId: string
 ): Promise<FileState | null> {
   const drive = google.drive({ version: 'v3', auth });

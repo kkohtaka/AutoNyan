@@ -5,7 +5,6 @@ import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePubl
 jest.mock('googleapis', () => ({
   google: {
     auth: {
-      GoogleAuth: jest.fn(() => ({ mockGoogleAuthInstance: true })),
       JWT: jest.fn(() => ({ mockJWTInstance: true })),
     },
     drive: jest.fn(),
@@ -16,6 +15,7 @@ jest.mock('googleapis', () => ({
 jest.mock('autonyan-shared', () => ({
   // Keep the real structured logger so stdout/stderr assertions exercise it.
   ...jest.requireActual('autonyan-shared'),
+  createDriveAuth: jest.fn().mockResolvedValue({ mockDriveAuth: true }),
   parsePubSubEvent: jest.fn(),
   createErrorResponse: jest.fn((error: unknown, context: string) => ({
     error: error instanceof Error ? error.message : String(error),
@@ -26,6 +26,8 @@ jest.mock('autonyan-shared', () => ({
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 const { parsePubSubEvent: mockParsePubSubEvent } = require('autonyan-shared');
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+const { createDriveAuth: mockCreateDriveAuth } = require('autonyan-shared');
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
 const { google } = require('googleapis');
 
@@ -441,6 +443,10 @@ describe('notificationDispatcher', () => {
       });
       await notificationDispatcher(event);
 
+      expect(mockCreateDriveAuth).toHaveBeenCalledTimes(2);
+      expect(mockCreateDriveAuth).toHaveBeenCalledWith([
+        'https://www.googleapis.com/auth/drive.readonly',
+      ]);
       expect(mockFilesGet).toHaveBeenCalledWith({
         fileId: 'file-456',
         fields: 'parents',

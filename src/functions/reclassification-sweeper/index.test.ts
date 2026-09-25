@@ -11,15 +11,15 @@ const mockFirestore = Firestore as jest.MockedClass<typeof Firestore>;
 jest.mock('@google-cloud/pubsub');
 const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 
-jest.mock('googleapis', () => ({
-  google: {
-    auth: {
-      GoogleAuth: jest.fn(() => ({ mockGoogleAuthInstance: true })),
-    },
-  },
+jest.mock('autonyan-shared', () => ({
+  ...jest.requireActual('autonyan-shared'),
+  createDriveAuth: jest.fn().mockResolvedValue({ mockDriveAuth: true }),
 }));
 
 jest.mock('./drive-operations');
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+const { createDriveAuth: mockCreateDriveAuth } = require('autonyan-shared');
 
 const mockListCategoryFolders = jest.fn();
 const mockGetFileState = jest.fn();
@@ -146,6 +146,9 @@ describe('reclassificationSweeper', () => {
     });
     expect(result.republished).toBe(1);
     expect(result.skipped).toBe(0);
+    expect(mockCreateDriveAuth).toHaveBeenCalledWith([
+      'https://www.googleapis.com/auth/drive.readonly',
+    ]);
   });
 
   it('should republish a document classified before the hash was recorded', async () => {

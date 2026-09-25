@@ -4,6 +4,7 @@ import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
   categoryFolderSetHash,
+  createDriveAuth,
   createErrorResponse,
   getProjectId,
   isPermanentError,
@@ -11,7 +12,6 @@ import {
   parsePubSubEvent,
   validateRequiredFields,
 } from 'autonyan-shared';
-import { google } from 'googleapis';
 import { classifyWithGemini, ClassificationResult } from './classification';
 import {
   listCategoryFolders,
@@ -83,10 +83,9 @@ export const fileClassifier = async (
       fileId: eventData.fileId,
     });
 
-    // Initialize Google Auth for Drive API
-    const auth = new google.auth.GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    });
+    const auth = await createDriveAuth([
+      'https://www.googleapis.com/auth/drive',
+    ]);
 
     // Get category folders from Google Drive
     logger.info('Fetching category folders', { categoryRootFolderId });

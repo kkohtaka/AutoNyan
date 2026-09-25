@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { DriveAuth } from 'autonyan-shared';
 import { getFileState } from './drive-operations';
 
 const mockFilesGet = jest.fn();
@@ -9,7 +9,7 @@ jest.mock('googleapis', () => ({
   },
 }));
 
-const auth = {} as InstanceType<typeof google.auth.GoogleAuth>;
+const auth = {} as DriveAuth;
 
 describe('getFileState', () => {
   beforeEach(() => {

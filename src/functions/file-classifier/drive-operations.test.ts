@@ -1,3 +1,4 @@
+import { DriveAuth } from 'autonyan-shared';
 import { google } from 'googleapis';
 import { listFileNamesInFolder } from './drive-operations';
 
@@ -11,7 +12,7 @@ const mockGoogle = google as jest.Mocked<typeof google>;
 
 describe('listFileNamesInFolder', () => {
   const mockList = jest.fn();
-  const auth = {} as InstanceType<typeof google.auth.GoogleAuth>;
+  const auth = {} as DriveAuth;
 
   beforeEach(() => {
     jest.clearAllMocks();

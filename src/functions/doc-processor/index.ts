@@ -3,6 +3,7 @@ import { GetFileMetadataResponse, Storage } from '@google-cloud/storage';
 import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
+  createDriveAuth,
   createErrorResponse,
   getProjectId,
   isPermanentError,
@@ -50,10 +51,9 @@ export const docProcessor = async (
 
     logger.info('Parsed message data', { messageData });
 
-    // Initialize Google Drive API with default credentials
-    const auth = new google.auth.GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-    });
+    const auth = await createDriveAuth([
+      'https://www.googleapis.com/auth/drive.readonly',
+    ]);
     const drive = google.drive({ version: 'v3', auth });
 
     // Initialize Cloud Storage client

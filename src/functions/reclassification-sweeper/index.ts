@@ -4,10 +4,10 @@ import { PubSub } from '@google-cloud/pubsub';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import {
   categoryFolderSetHash,
+  createDriveAuth,
   createErrorResponse,
   logger,
 } from 'autonyan-shared';
-import { google } from 'googleapis';
 import { getFileState, listCategoryFolders } from './drive-operations';
 
 const EXTRACTED_TEXTS_COLLECTION = 'extracted_texts';
@@ -60,9 +60,9 @@ export const reclassificationSweeper = async (
 
     // The sweep only inspects Drive: it lists the category folders and reads a
     // file's parents. Moving the file is the classifier's job.
-    const auth = new google.auth.GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-    });
+    const auth = await createDriveAuth([
+      'https://www.googleapis.com/auth/drive.readonly',
+    ]);
 
     const categoryFolders = await listCategoryFolders(
       auth,
