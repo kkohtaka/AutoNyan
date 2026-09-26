@@ -564,9 +564,8 @@ npm run deploy
 
 **Drive Access Errors:**
 
-- Verify the folder has been shared with the service account
-- Check the service account email from `terraform output service_account_email`
-- Ensure "Editor" permissions were granted
+- Verify the folder has been shared with the two Drive identities; get their emails from `terraform output drive_writer_service_account_email` and `terraform output drive_organizer_service_account_email`
+- Ensure the writer identity holds "Contributor" and the organizer identity "Content manager"
 - Wait a few minutes after sharing for permissions to propagate
 
 **Terraform State Lock:**
