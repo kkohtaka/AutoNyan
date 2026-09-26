@@ -8,7 +8,6 @@ import * as path from 'path';
  * @param drive - Drive API client
  * @param folderId - Parent folder ID
  * @param filePath - Local file path
- * @param serviceAccountEmails - Optional service account emails to share file with
  * @param mimeType - Optional explicit MIME type; without it Drive sniffs the
  *                   content, which the negative E2E case must prevent (HTML
  *                   bytes must be stored as application/pdf)
@@ -18,7 +17,6 @@ export async function uploadTestFile(
   drive: drive_v3.Drive,
   folderId: string,
   filePath: string,
-  serviceAccountEmails?: string[],
   mimeType?: string
 ): Promise<drive_v3.Schema$File> {
   const fileName = path.basename(filePath);
@@ -42,35 +40,6 @@ export async function uploadTestFile(
       fields: 'id,name,mimeType',
       supportsAllDrives: true,
     });
-
-    const fileId = response.data.id!;
-
-    // Share file with service accounts if provided
-    if (serviceAccountEmails && serviceAccountEmails.length > 0) {
-      console.log(
-        `Sharing file ${fileId} with ${serviceAccountEmails.length} service account(s)...`
-      );
-      for (const email of serviceAccountEmails) {
-        try {
-          await drive.permissions.create({
-            fileId: fileId,
-            requestBody: {
-              type: 'user',
-              role: 'writer',
-              emailAddress: email,
-            },
-            sendNotificationEmail: false,
-            supportsAllDrives: true,
-          });
-          console.log(`  ✅ Successfully shared file with ${email}`);
-        } catch (error) {
-          console.warn(
-            `  ❌ Failed to share file ${fileId} with ${email}:`,
-            error
-          );
-        }
-      }
-    }
 
     return response.data;
   } catch (error) {
@@ -164,8 +133,7 @@ export async function trashDriveItem(
 export async function createTestFolder(
   drive: drive_v3.Drive,
   parentFolderId: string,
-  folderName: string,
-  serviceAccountEmails?: string[]
+  folderName: string
 ): Promise<string> {
   const response = await drive.files.create({
     requestBody: {
@@ -181,36 +149,5 @@ export async function createTestFolder(
     supportsAllDrives: true,
   });
 
-  const folderId = response.data.id!;
-
-  // Share folder with service accounts if provided
-  if (serviceAccountEmails && serviceAccountEmails.length > 0) {
-    console.log(
-      `Sharing folder ${folderId} with ${serviceAccountEmails.length} service account(s)...`
-    );
-    for (const email of serviceAccountEmails) {
-      try {
-        await drive.permissions.create({
-          fileId: folderId,
-          requestBody: {
-            type: 'user',
-            role: 'writer',
-            emailAddress: email,
-          },
-          sendNotificationEmail: false,
-          supportsAllDrives: true,
-        });
-        console.log(`  ✅ Successfully shared with ${email}`);
-      } catch (error) {
-        console.warn(
-          `  ❌ Failed to share folder ${folderId} with ${email}:`,
-          error
-        );
-      }
-    }
-  } else {
-    console.log('No service accounts to share folder with');
-  }
-
-  return folderId;
+  return response.data.id!;
 }

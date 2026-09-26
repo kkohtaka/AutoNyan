@@ -155,8 +155,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     testRunFolderId = await createTestFolder(
       drive,
       testFolderId,
-      `e2e-run-${Date.now()}`,
-      [outputs.file_classifier_service_account_email]
+      `e2e-run-${Date.now()}`
     );
     logger.log('setup', 'Isolated test run folder created', {
       testRunFolderId,
@@ -167,8 +166,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
     categoryFolderId = await createTestFolder(
       drive,
       categoryRootFolderId,
-      '請求書',
-      [outputs.file_classifier_service_account_email]
+      '請求書'
     );
     logger.log('setup', 'Test category folder created', {
       categoryFolderId,
@@ -284,9 +282,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       fixture: fixture.label,
     });
 
-    const caseFolderId = await createTestFolder(drive, testRunFolderId, 'case', [
-      outputs.file_classifier_service_account_email,
-    ]);
+    const caseFolderId = await createTestFolder(drive, testRunFolderId, 'case');
 
     logger.log('stage-1', 'Uploading test file to Google Drive', {
       fixturePath: fixture.fixturePath,
@@ -297,7 +293,6 @@ describe('AutoNyan E2E - Full Pipeline', () => {
       drive,
       caseFolderId,
       fixture.fixturePath,
-      [outputs.file_classifier_service_account_email],
       fixture.mimeType
     );
     const fileId = testFile.id!;
@@ -475,7 +470,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         } else {
           logger.log('stage-5', 'File was not moved within timeout', {
             expectedFolderId,
-            note: 'Classification succeeded but the file move failed - check the classifier service account has fileOrganizer on the shared drive folders',
+            note: 'Classification succeeded but the file move failed - check the Drive organizer identity has fileOrganizer on the shared drive folders',
           });
         }
 
