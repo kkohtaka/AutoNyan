@@ -24,7 +24,7 @@ jobs:
       # Generate authentication token using GitHub App credentials
       - name: Generate token
         id: generate-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APPROVER_APP_ID }}
           private-key: ${{ secrets.APPROVER_APP_PRIVATE_KEY }}
