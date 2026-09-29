@@ -65,7 +65,7 @@ jobs:
     steps:
       - name: Get PR details
         id: pr
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             let details;
@@ -131,7 +131,7 @@ jobs:
     steps:
       - name: Comment acknowledgment for manual trigger
         if: github.event_name == 'issue_comment'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const issueNumber = Number('${{ needs.pr-details.outputs.number }}');
@@ -148,7 +148,7 @@ jobs:
             });
 
       - name: Set status to pending
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             await github.rest.repos.createCommitStatus({
@@ -163,7 +163,7 @@ jobs:
             });
 
       - name: Checkout PR code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.pr-details.outputs.sha }}
           fetch-depth: 0
@@ -214,7 +214,7 @@ jobs:
           fi
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -286,7 +286,7 @@ jobs:
 
       - name: Comment PR with plan results
         if: needs.pr-details.outputs.number != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const exitCode = '${{ steps.plan.outputs.plan_exit_code || steps.skip.outputs.plan_exit_code }}';
@@ -360,7 +360,7 @@ jobs:
           (steps.plan.outputs.plan_exit_code == '0' || steps.skip.outputs.plan_exit_code == '0') &&
           github.event_name == 'workflow_dispatch' &&
           needs.pr-details.outputs.ref == 'master'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const deployRef = '${{ needs.pr-details.outputs.ref }}';
@@ -392,7 +392,7 @@ jobs:
 
     steps:
       - name: Set final status
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const planResult = '${{ needs.terraform-plan.result }}';
