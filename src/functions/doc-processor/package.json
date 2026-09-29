@@ -16,7 +16,7 @@
     "@google-cloud/pubsub": "^6.0.0",
     "@google-cloud/storage": "^8.0.0",
     "@google/events": "^5.4.0",
-    "googleapis": "^181.0.0",
+    "googleapis": "^182.0.0",
     "autonyan-shared": "file:../../shared",
     "google-auth-library": "^11.0.0"
   },
