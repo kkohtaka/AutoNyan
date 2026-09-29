@@ -231,7 +231,7 @@ jobs:
         if: steps.detect.outputs.needs_terraform == 'true'
         uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: '1.8.5'
+          terraform_version: '1.16.4'
 
       - name: Authenticate to Google Cloud
         if: steps.detect.outputs.needs_terraform == 'true'
