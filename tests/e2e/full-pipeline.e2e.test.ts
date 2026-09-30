@@ -118,7 +118,7 @@ describe('AutoNyan E2E - Full Pipeline', () => {
   const seededReferenceFileIds: string[] = [];
 
   const logger = new E2ELogger('full-pipeline');
-  const TEST_TIMEOUT = 1500000; // 25 minutes: stage2(5m) + stage3(9m) + stage4(1m) + stage5(5m) + stage6(3m) + buffer
+  const TEST_TIMEOUT = 1620000; // 27 minutes: stage2(5m) + stage3(9m) + stage4(1m) + stage5(5m) + stage5c(2m) + stage6(3m) + buffer
 
   beforeAll(async () => {
     logger.log('setup', 'Starting E2E test setup');
@@ -529,6 +529,37 @@ describe('AutoNyan E2E - Full Pipeline', () => {
             'Skipping Drive name verification (file move did not complete)'
           );
         }
+
+        // ========================================
+        // Stage 5c: Verify the calendar registration hand-off
+        // ========================================
+        // The classifier publishes every classified document to the calendar
+        // registrar, which discards unmapped categories before any billable
+        // call. Reaching that skip proves the topic, the classifier's publish
+        // grant, and the registrar's trigger are wired, at no Gemini cost.
+        // Assumes staging maps neither the test category nor Uncategorized to
+        // a calendar.
+        logger.log(
+          'stage-5',
+          'Waiting for Calendar Registrar to skip the unmapped category'
+        );
+
+        const calendarSkipLog = await pollForFunctionLogEntry(
+          `${process.env.ENVIRONMENT}-calendar-registrar`,
+          outputs.region,
+          caseStartTime,
+          {
+            message: 'Document category is not mapped to a calendar, skipping',
+            fileName: testFileName,
+          },
+          { timeout: 120000, interval: 15000 }
+        );
+
+        expect(calendarSkipLog).toBeTruthy();
+
+        logger.log('stage-5', 'Calendar Registrar skipped unmapped category', {
+          logEntry: calendarSkipLog,
+        });
 
         // ========================================
         // Stage 6: Wait for notification dispatch
