@@ -131,7 +131,7 @@ npm run test:e2e:check-drive
 npm run test:e2e
 ```
 
-This runs the complete 6-stage pipeline test with a 25-minute timeout per case.
+This runs the complete 6-stage pipeline test with a 27-minute timeout per case.
 
 ### Format Matrix
 
@@ -187,8 +187,9 @@ tests/e2e/
 - **Vision Processor**: 300 seconds (5 minutes) - OCR processing
 - **Firebase Writer**: 60 seconds
 - **File Classifier**: 120 seconds (2 minutes) - AI classification
+- **Calendar Registrar**: 120 seconds (2 minutes) - log-based verification of the unmapped-category skip
 - **Notification Dispatcher**: 180 seconds (3 minutes) - log-based verification
-- **Full Pipeline**: 1500 seconds (25 minutes)
+- **Full Pipeline**: 1620 seconds (27 minutes)
 
 ## What the Test Does
 
@@ -199,8 +200,9 @@ tests/e2e/
 5. **Waits** for Firebase Writer to create Firestore document in `extracted_texts` collection
 6. **Waits** for File Classifier to add category and move file in Drive
 7. **Verifies** the file was moved to the correct category folder
-8. **Verifies** the Notification Dispatcher logged `Sent success notification` for the test file
-9. **Cleans up** all created resources (Drive files, Storage objects, Firestore docs)
+8. **Verifies** the Calendar Registrar received the classified document and skipped it as an unmapped category
+9. **Verifies** the Notification Dispatcher logged `Sent success notification` for the test file
+10. **Cleans up** all created resources (Drive files, Storage objects, Firestore docs)
 
 ## Debugging Failures
 
