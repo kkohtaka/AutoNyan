@@ -29,11 +29,42 @@ const EVENT_ID_LENGTH = 26;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// Brackets as a newsletter writes them: a qualifier such as 運動会（雨天延期）
+// names the same event as 運動会, so what sits inside is dropped. Runs after
+// NFKC, which has already folded the full-width pair into ASCII parentheses.
+const BRACKETED_QUALIFIER =
+  /[([{【〔《〈「『][^)\]}】〕》〉」』]*[)\]}】〕》〉」』]/gu;
+const PUNCTUATION_OR_SPACE = /[\s\p{P}\p{S}]/gu;
+
+// The lookup is an API call per event, so the response is bounded twice: by
+// the file ID property and by a window around the event's date.
+const LOOKUP_PAGE_SIZE = 250;
+
+/**
+ * Reduce a title to the form two extractions of the same event agree on.
+ *
+ * Gemini's wording for one event drifts between runs — spacing, full-width
+ * versus half-width characters, a bracketed qualifier — and the ID hash and
+ * the pre-insert lookup both have to see through that drift the same way.
+ * @param title Event title as extracted
+ * @returns Normalized title, or the trimmed original when nothing survives
+ */
+export function normalizeTitle(title: string): string {
+  const normalized = title
+    .normalize('NFKC')
+    .replace(BRACKETED_QUALIFIER, '')
+    .replace(PUNCTUATION_OR_SPACE, '')
+    .toLowerCase();
+
+  return normalized || title.trim().toLowerCase();
+}
+
 /**
  * Derive a Calendar event ID that is stable across re-scans and retries.
  *
  * Registration is therefore idempotent without any extra state: a repeat makes
- * events.insert return 409 rather than creating a second copy.
+ * events.insert return 409 rather than creating a second copy. The title is
+ * normalized first so a reworded re-extraction lands on the same ID.
  * @param fileId Drive file ID of the source document
  * @param start Event start, as written into the Calendar event
  * @param title Event title
@@ -45,7 +76,7 @@ export function buildEventId(
   title: string
 ): string {
   const digest = createHash('sha256')
-    .update(`${fileId}:${start}:${title}`)
+    .update(`${fileId}:${start}:${normalizeTitle(title)}`)
     .digest();
 
   let bits = 0;
@@ -121,7 +152,80 @@ function addMinutes(
 }
 
 /**
- * Insert one event into a calendar
+ * Find an event already registered from the same document for the same start
+ * and the same normalized title.
+ *
+ * The deterministic ID only catches a byte-identical repeat. An event whose
+ * title was reworded by a re-extraction, or that was registered before titles
+ * were normalized, carries a different ID and would otherwise be inserted
+ * next to the original.
+ * @param calendar Authenticated Calendar API client
+ * @param calendarId Target calendar
+ * @param event Event about to be inserted
+ * @returns The matching registered event, or undefined when there is none
+ */
+export async function findRegisteredEvent(
+  calendar: calendar_v3.Calendar,
+  calendarId: string,
+  event: CalendarEvent
+): Promise<calendar_v3.Schema$Event | undefined> {
+  const { timeMin, timeMax } = lookupWindow(event.start);
+  const title = normalizeTitle(event.title);
+  let pageToken: string | undefined;
+
+  do {
+    let response;
+    try {
+      response = await calendar.events.list({
+        calendarId,
+        privateExtendedProperty: [`autonyanFileId=${event.sourceFileId}`],
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        maxResults: LOOKUP_PAGE_SIZE,
+        ...(pageToken ? { pageToken } : {}),
+      });
+    } catch (error) {
+      throw translateAccessError(error, calendarId);
+    }
+
+    const match = response.data.items?.find(
+      (item) =>
+        eventStart(item) === event.start &&
+        normalizeTitle(item.summary ?? '') === title
+    );
+    if (match) {
+      return match;
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return undefined;
+}
+
+// The Calendar API filters on the event's own time zone, so the window is
+// padded by a day on either side rather than converted; the exact-start match
+// on the result keeps the extra day from mattering.
+function lookupWindow(start: string): { timeMin: string; timeMax: string } {
+  const day = new Date(`${start.substring(0, 10)}T00:00:00Z`).getTime();
+  return {
+    timeMin: new Date(day - MS_PER_DAY).toISOString(),
+    timeMax: new Date(day + 2 * MS_PER_DAY).toISOString(),
+  };
+}
+
+// A registered timed event comes back with its offset appended, which the
+// start written at registration never carried.
+function eventStart(item: calendar_v3.Schema$Event): string | undefined {
+  if (item.start?.date) {
+    return item.start.date;
+  }
+  return item.start?.dateTime?.substring(0, 19);
+}
+
+/**
+ * Insert one event into a calendar unless an equivalent one is already there
  * @param calendar Authenticated Calendar API client
  * @param calendarId Target calendar
  * @param event Event to insert
@@ -134,6 +238,10 @@ export async function registerEvent(
   event: CalendarEvent,
   timeZone: string
 ): Promise<RegistrationStatus> {
+  if (await findRegisteredEvent(calendar, calendarId, event)) {
+    return 'duplicate';
+  }
+
   const requestBody: calendar_v3.Schema$Event = {
     id: event.id,
     summary: event.title,
@@ -159,16 +267,20 @@ export async function registerEvent(
       return 'duplicate';
     }
 
-    // The calendar has not been shared with the service account; retrying
-    // cannot fix that.
-    if (status === 403 || status === 404) {
-      throw new PermanentError(
-        `Calendar ${calendarId} is not accessible (HTTP ${status}); share it with the function's service account`
-      );
-    }
-
-    throw error;
+    throw translateAccessError(error, calendarId);
   }
+}
+
+// The calendar has not been shared with the service account; retrying cannot
+// fix that.
+function translateAccessError(error: unknown, calendarId: string): unknown {
+  const status = errorStatus(error);
+  if (status === 403 || status === 404) {
+    return new PermanentError(
+      `Calendar ${calendarId} is not accessible (HTTP ${status}); share it with the function's service account`
+    );
+  }
+  return error;
 }
 
 /**
