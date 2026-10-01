@@ -2,6 +2,8 @@ import { PermanentError } from 'autonyan-shared';
 import {
   buildCalendarEvent,
   buildEventId,
+  findRegisteredEvent,
+  normalizeTitle,
   registerEvent,
   CalendarEvent,
 } from './calendar';
@@ -20,6 +22,27 @@ const timedEvent: ExtractedEvent = {
   confidence: 0.9,
 };
 
+describe('normalizeTitle', () => {
+  it('should fold full-width characters and spacing', () => {
+    expect(normalizeTitle('ＰＴＡ 総会')).toBe(normalizeTitle('PTA総会'));
+  });
+
+  it('should drop a bracketed qualifier', () => {
+    expect(normalizeTitle('運動会（雨天延期）')).toBe(normalizeTitle('運動会'));
+    expect(normalizeTitle('運動会【要上履き】')).toBe(normalizeTitle('運動会'));
+  });
+
+  it('should drop punctuation', () => {
+    expect(normalizeTitle('保護者会・懇談会!')).toBe(
+      normalizeTitle('保護者会 懇談会')
+    );
+  });
+
+  it('should keep a title that is only punctuation from collapsing to nothing', () => {
+    expect(normalizeTitle('★')).toBe('★');
+  });
+});
+
 describe('buildEventId', () => {
   it('should produce a base32hex ID of the length the Calendar API accepts', () => {
     const id = buildEventId('file-1', '2026-05-16', '運動会');
@@ -28,6 +51,12 @@ describe('buildEventId', () => {
 
   it('should be stable for the same document, start and title', () => {
     expect(buildEventId('file-1', '2026-05-16', '運動会')).toBe(
+      buildEventId('file-1', '2026-05-16', '運動会')
+    );
+  });
+
+  it('should be stable across a reworded re-extraction of the same event', () => {
+    expect(buildEventId('file-1', '2026-05-16', '運動会（雨天延期）')).toBe(
       buildEventId('file-1', '2026-05-16', '運動会')
     );
   });
@@ -91,8 +120,17 @@ describe('registerEvent', () => {
     sourceFileId: 'file-1',
   };
 
-  const createCalendar = (insert: jest.Mock) =>
-    ({ events: { insert } }) as never;
+  const emptyListing = { data: { items: [] } };
+  const createCalendar = (
+    insert: jest.Mock,
+    list: jest.Mock = jest.fn().mockResolvedValue(emptyListing)
+  ) => ({ events: { insert, list } }) as never;
+
+  const registeredAs = (
+    summary: string,
+    start: { date?: string; dateTime?: string },
+    id = 'other-id'
+  ) => ({ data: { items: [{ id, summary, start }] } });
 
   it('should report a created event', async () => {
     const insert = jest.fn().mockResolvedValue({});
@@ -135,6 +173,132 @@ describe('registerEvent', () => {
     });
   });
 
+  it("should look the document's events up around the event date before inserting", async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const list = jest.fn().mockResolvedValue(emptyListing);
+    await registerEvent(
+      createCalendar(insert, list),
+      'calendar-1',
+      event,
+      'Asia/Tokyo'
+    );
+
+    expect(list).toHaveBeenCalledTimes(1);
+    const params = list.mock.calls[0][0];
+    expect(params.calendarId).toBe('calendar-1');
+    expect(params.privateExtendedProperty).toEqual(['autonyanFileId=file-1']);
+    expect(params.timeMin).toBe('2026-05-15T00:00:00.000Z');
+    expect(params.timeMax).toBe('2026-05-18T00:00:00.000Z');
+    expect(params.singleEvents).toBe(true);
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not insert when a reworded copy of the event is already registered', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const list = jest
+      .fn()
+      .mockResolvedValue(
+        registeredAs('運動会（雨天延期）', { date: '2026-05-16' })
+      );
+
+    const status = await registerEvent(
+      createCalendar(insert, list),
+      'calendar-1',
+      event,
+      'Asia/Tokyo'
+    );
+
+    expect(status).toBe('duplicate');
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('should match a timed event registered with its offset appended', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const list = jest
+      .fn()
+      .mockResolvedValue(
+        registeredAs('保護者会', { dateTime: '2026-05-20T14:00:00+09:00' })
+      );
+
+    const status = await registerEvent(
+      createCalendar(insert, list),
+      'calendar-1',
+      {
+        ...event,
+        title: '保護者会',
+        allDay: false,
+        start: '2026-05-20T14:00:00',
+        end: '2026-05-20T15:00:00',
+      },
+      'Asia/Tokyo'
+    );
+
+    expect(status).toBe('duplicate');
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('should insert when the registered event has the same title on another start', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const list = jest
+      .fn()
+      .mockResolvedValue(registeredAs('運動会', { date: '2026-05-17' }));
+
+    const status = await registerEvent(
+      createCalendar(insert, list),
+      'calendar-1',
+      event,
+      'Asia/Tokyo'
+    );
+
+    expect(status).toBe('created');
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('should insert when the registered event on the same day is a different one', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const list = jest
+      .fn()
+      .mockResolvedValue(registeredAs('遠足', { date: '2026-05-16' }));
+
+    const status = await registerEvent(
+      createCalendar(insert, list),
+      'calendar-1',
+      event,
+      'Asia/Tokyo'
+    );
+
+    expect(status).toBe('created');
+  });
+
+  it('should treat an unshared calendar as permanent when the lookup is refused', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const list = jest.fn().mockRejectedValue({ code: 404 });
+
+    await expect(
+      registerEvent(
+        createCalendar(insert, list),
+        'calendar-1',
+        event,
+        'Asia/Tokyo'
+      )
+    ).rejects.toBeInstanceOf(PermanentError);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('should rethrow a transient lookup failure so the message is retried', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    const list = jest.fn().mockRejectedValue({ response: { status: 503 } });
+
+    await expect(
+      registerEvent(
+        createCalendar(insert, list),
+        'calendar-1',
+        event,
+        'Asia/Tokyo'
+      )
+    ).rejects.not.toBeInstanceOf(PermanentError);
+  });
+
   it('should treat 409 as success so a re-scan creates no duplicate', async () => {
     const insert = jest.fn().mockRejectedValue({ code: 409 });
     const status = await registerEvent(
@@ -161,5 +325,74 @@ describe('registerEvent', () => {
     await expect(
       registerEvent(createCalendar(insert), 'calendar-1', event, 'Asia/Tokyo')
     ).rejects.not.toBeInstanceOf(PermanentError);
+  });
+});
+
+describe('findRegisteredEvent', () => {
+  const event: CalendarEvent = {
+    id: 'abcdefghijklmnopqrstuvabcd',
+    title: '運動会',
+    allDay: true,
+    start: '2026-05-16',
+    end: '2026-05-17',
+    confidence: 0.9,
+    sourceFileId: 'file-1',
+  };
+
+  it('should follow the listing onto its next page', async () => {
+    const list = jest
+      .fn()
+      .mockResolvedValueOnce({
+        data: { items: [], nextPageToken: 'page-2' },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            { id: 'old-id', summary: '運動会', start: { date: '2026-05-16' } },
+          ],
+        },
+      });
+
+    const match = await findRegisteredEvent(
+      { events: { list } } as never,
+      'calendar-1',
+      event
+    );
+
+    expect(match?.id).toBe('old-id');
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(list.mock.calls[1][0].pageToken).toBe('page-2');
+  });
+
+  it("should count the event's own earlier registration as a match", async () => {
+    const list = jest.fn().mockResolvedValue({
+      data: {
+        items: [
+          { id: event.id, summary: '運動会', start: { date: '2026-05-16' } },
+        ],
+      },
+    });
+
+    const match = await findRegisteredEvent(
+      { events: { list } } as never,
+      'calendar-1',
+      event
+    );
+
+    expect(match?.id).toBe(event.id);
+  });
+
+  it('should tolerate a registered event without a summary or a start', async () => {
+    const list = jest.fn().mockResolvedValue({
+      data: { items: [{ id: 'bare' }] },
+    });
+
+    const match = await findRegisteredEvent(
+      { events: { list } } as never,
+      'calendar-1',
+      event
+    );
+
+    expect(match).toBeUndefined();
   });
 });

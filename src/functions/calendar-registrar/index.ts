@@ -14,6 +14,7 @@ import {
 import {
   buildCalendarEvent,
   createCalendarClient,
+  normalizeTitle,
   registerEvent,
 } from './calendar';
 import {
@@ -210,15 +211,18 @@ export const calendarRegistrar = async (
       );
     }
 
-    const confident = extraction.events.filter(
+    const distinct = collapseRepeatedEvents(extraction.events);
+    const confident = distinct.filter(
       (event) => event.confidence >= CONFIDENCE_THRESHOLD
     );
-    const dropped = extraction.events.filter(
+    const dropped = distinct.filter(
       (event) => event.confidence < CONFIDENCE_THRESHOLD
     );
+    let duplicates = extraction.events.length - distinct.length;
 
     logger.info('Extraction completed', {
       total: extraction.events.length,
+      repeated: duplicates,
       confident: confident.length,
       dropped: dropped.length,
       truncated: extraction.truncated,
@@ -230,7 +234,6 @@ export const calendarRegistrar = async (
     const auditCollection = firestore.collection('calendar_events');
 
     const registered: ExtractedEvent[] = [];
-    let duplicates = 0;
 
     for (const extracted of confident) {
       const event = buildCalendarEvent(
@@ -329,6 +332,31 @@ export const calendarRegistrar = async (
     });
   }
 };
+
+/**
+ * Collapse the entries one extraction lists more than once for the same event
+ *
+ * A newsletter repeats an event in its calendar grid and in its prose, and
+ * the model reads each mention out with its own wording. The entry it was
+ * surest about is kept, so a repeat can only raise an event's confidence.
+ * @param events Events as extracted, in document order
+ * @returns One entry per distinct date, start time and normalized title
+ */
+export function collapseRepeatedEvents(
+  events: ExtractedEvent[]
+): ExtractedEvent[] {
+  const byKey = new Map<string, ExtractedEvent>();
+
+  for (const event of events) {
+    const key = `${event.date}|${event.startTime ?? ''}|${normalizeTitle(event.title)}`;
+    const kept = byKey.get(key);
+    if (!kept || event.confidence > kept.confidence) {
+      byKey.set(key, event);
+    }
+  }
+
+  return [...byKey.values()];
+}
 
 function documentBucketName(projectId: string): string {
   const environment = process.env.ENVIRONMENT;

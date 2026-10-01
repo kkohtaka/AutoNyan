@@ -1,7 +1,7 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { PubSub } from '@google-cloud/pubsub';
-import { calendarRegistrar } from './index';
+import { calendarRegistrar, collapseRepeatedEvents } from './index';
 import { ExtractedEvent } from './extraction';
 
 const mockSet = jest.fn();
@@ -284,6 +284,44 @@ describe('calendarRegistrar', () => {
     expect(mockPublishMessage.mock.calls[0][0].json.truncated).toBe(true);
   });
 
+  it('should register an event the extraction listed twice only once', async () => {
+    extraction.extractEventsWithGemini.mockResolvedValue({
+      events: [
+        event('運動会', '2026-05-16', 0.8),
+        event('運動会（雨天延期）', '2026-05-16', 0.95),
+      ],
+      truncated: false,
+    });
+
+    const result = await calendarRegistrar(createPubSubEvent(baseMessage));
+
+    expect(result.registered).toBe(1);
+    expect(result.duplicates).toBe(1);
+    expect(calendar.registerEvent).toHaveBeenCalledTimes(1);
+    expect(calendar.registerEvent.mock.calls[0][2].title).toBe(
+      '運動会（雨天延期）'
+    );
+    expect(mockPublishMessage.mock.calls[0][0].json.registeredEvents).toEqual([
+      expect.objectContaining({
+        title: '運動会（雨天延期）',
+        confidence: 0.95,
+      }),
+    ]);
+  });
+
+  it('should count a repeat collapsed in-run and one found on the calendar together', async () => {
+    extraction.extractEventsWithGemini.mockResolvedValue({
+      events: [event('遠足', '2026-05-16'), event('遠足', '2026-05-16')],
+      truncated: false,
+    });
+    calendar.registerEvent.mockResolvedValue('duplicate');
+
+    const result = await calendarRegistrar(createPubSubEvent(baseMessage));
+
+    expect(result.registered).toBe(0);
+    expect(result.duplicates).toBe(2);
+  });
+
   it('should send no mail when a reprocess registered no new event', async () => {
     extraction.extractEventsWithGemini.mockResolvedValue({
       events: [event('遠足', '2026-05-16')],
@@ -352,5 +390,37 @@ describe('calendarRegistrar', () => {
 
     expect(result.skipped).toBe(true);
     expect(result.message).toMatch(/not valid JSON/);
+  });
+});
+
+describe('collapseRepeatedEvents', () => {
+  it('should keep the entry the model was surest about', () => {
+    const kept = collapseRepeatedEvents([
+      event('運動会', '2026-05-16', 0.7),
+      event('運動会（雨天延期）', '2026-05-16', 0.9),
+      event('運動会', '2026-05-16', 0.8),
+    ]);
+
+    expect(kept).toEqual([event('運動会（雨天延期）', '2026-05-16', 0.9)]);
+  });
+
+  it('should keep the same title on different days or start times apart', () => {
+    const kept = collapseRepeatedEvents([
+      event('保護者会', '2026-05-20'),
+      event('保護者会', '2026-05-21'),
+      { ...event('保護者会', '2026-05-20'), startTime: '14:00' },
+    ]);
+
+    expect(kept).toHaveLength(3);
+  });
+
+  it('should keep document order among distinct events', () => {
+    const kept = collapseRepeatedEvents([
+      event('遠足', '2026-05-16'),
+      event('中間考査', '2026-05-18'),
+      event('遠足', '2026-05-16', 0.5),
+    ]);
+
+    expect(kept.map((entry) => entry.title)).toEqual(['遠足', '中間考査']);
   });
 });
