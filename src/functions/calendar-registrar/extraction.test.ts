@@ -1,8 +1,13 @@
-import { extractEventsWithGemini, resolveEventDate } from './extraction';
+import {
+  EVENTS_RESPONSE_SCHEMA,
+  extractEventsWithGemini,
+  resolveEventDate,
+} from './extraction';
 
 const mockGenerateContent = jest.fn();
 
 jest.mock('@google-cloud/vertexai', () => ({
+  ...jest.requireActual('@google-cloud/vertexai'),
   VertexAI: jest.fn().mockImplementation(() => ({
     getGenerativeModel: jest.fn().mockReturnValue({
       generateContent: mockGenerateContent,
@@ -51,6 +56,27 @@ describe('extractEventsWithGemini', () => {
     expect(parts[1].text).toContain('【原本】');
     expect(parts[1].text).toContain('中間考査');
     expect(result.events[0].date).toBe('2026-09-24');
+  });
+
+  it('should turn sampling off and pin the response shape', async () => {
+    await extractEventsWithGemini(
+      'project',
+      '中間考査',
+      referenceDate,
+      'Asia/Tokyo',
+      null
+    );
+
+    const { generationConfig } = mockGenerateContent.mock.calls[0][0];
+    expect(generationConfig.temperature).toBe(0);
+    expect(generationConfig.responseMimeType).toBe('application/json');
+    expect(generationConfig.responseSchema).toBe(EVENTS_RESPONSE_SCHEMA);
+    expect(EVENTS_RESPONSE_SCHEMA.required).toEqual(['events']);
+    expect(EVENTS_RESPONSE_SCHEMA.properties?.events.items?.required).toEqual([
+      'title',
+      'date',
+      'confidence',
+    ]);
   });
 
   it('should send the text alone when there is no source file', async () => {
