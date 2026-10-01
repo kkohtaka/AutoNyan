@@ -1,4 +1,4 @@
-import { VertexAI } from '@google-cloud/vertexai';
+import { ResponseSchema, SchemaType, VertexAI } from '@google-cloud/vertexai';
 import { PermanentError } from 'autonyan-shared';
 import { SourceDocument } from './source-document';
 
@@ -40,6 +40,40 @@ const MAX_TEXT_LENGTH = 30000;
 export const MAX_EVENTS_PER_DOCUMENT = 50;
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+// Registration is idempotent only as far as two extractions of one document
+// agree, so sampling is turned off and the output shape is pinned; a field
+// the model would have invented on one run and not the next is then absent on
+// both.
+const EXTRACTION_TEMPERATURE = 0;
+
+const nullableString: ResponseSchema = {
+  type: SchemaType.STRING,
+  nullable: true,
+};
+
+export const EVENTS_RESPONSE_SCHEMA: ResponseSchema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    events: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          title: { type: SchemaType.STRING },
+          date: { type: SchemaType.STRING },
+          startTime: nullableString,
+          endTime: nullableString,
+          location: nullableString,
+          description: nullableString,
+          confidence: { type: SchemaType.NUMBER },
+        },
+        required: ['title', 'date', 'confidence'],
+      },
+    },
+  },
+  required: ['events'],
+};
 const MONTH_DAY = /^\d{2}-\d{2}$/;
 const TIME_OF_DAY = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -152,6 +186,11 @@ ${truncatedText}
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts }],
+    generationConfig: {
+      temperature: EXTRACTION_TEMPERATURE,
+      responseMimeType: 'application/json',
+      responseSchema: EVENTS_RESPONSE_SCHEMA,
+    },
   });
   const responseText =
     result.response.candidates?.[0]?.content?.parts?.[0]?.text;
