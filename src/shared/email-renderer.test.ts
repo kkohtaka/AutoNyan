@@ -273,6 +273,77 @@ describe('renderCalendarEmail', () => {
     expect(email.html).toContain('保護者会');
   });
 
+  it('should collapse lunch menus into one summary line after the regular events', () => {
+    const email = renderCalendarEmail({
+      ...data,
+      registeredEvents: [
+        {
+          kind: 'lunch_menu',
+          title: 'ドライカレー、みかん',
+          date: '2026-10-01',
+          confidence: 0.9,
+        },
+        ...data.registeredEvents.map((event) => ({
+          ...event,
+          kind: 'event' as const,
+        })),
+        {
+          kind: 'lunch_menu',
+          title: 'さばの塩焼き、みそ汁',
+          date: '2026-10-31',
+          confidence: 0.9,
+        },
+        {
+          kind: 'lunch_menu',
+          title: 'カレー',
+          date: '2026-10-31',
+          confidence: 0.9,
+        },
+      ],
+    });
+    expect(email.subject).toContain('5件');
+    expect(email.text).toContain('- 2026-05-16（終日） 遠足');
+    expect(email.text).toContain('- 給食献立: 10/1–10/31（2日分）');
+    expect(email.text).not.toContain('ドライカレー');
+    expect(email.text.indexOf('遠足')).toBeLessThan(
+      email.text.indexOf('給食献立')
+    );
+    expect(email.html).toContain('給食献立: 10/1–10/31（2日分）');
+    expect(email.html).not.toContain('さばの塩焼き');
+  });
+
+  it('should summarize a single menu day without a range', () => {
+    const email = renderCalendarEmail({
+      ...data,
+      registeredEvents: [
+        {
+          kind: 'lunch_menu',
+          title: 'カレー',
+          date: '2026-10-05',
+          confidence: 0.9,
+        },
+      ],
+    });
+    expect(email.text).toContain('- 給食献立: 10/5（1日分）');
+  });
+
+  it('should list a dropped lunch menu individually so it can be checked', () => {
+    const email = renderCalendarEmail({
+      ...data,
+      droppedEvents: [
+        {
+          kind: 'lunch_menu',
+          title: 'カレー、みかん',
+          date: '2026-10-05',
+          confidence: 0.4,
+        },
+      ],
+    });
+    expect(email.text).toContain(
+      '- 2026-10-05（終日） カレー、みかん [確信度 40%]'
+    );
+  });
+
   it('should list events dropped for low confidence separately', () => {
     const email = renderCalendarEmail({
       ...data,

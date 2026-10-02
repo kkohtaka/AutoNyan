@@ -78,9 +78,18 @@ const event = (
   date: string,
   confidence = 0.9
 ): ExtractedEvent => ({
+  kind: 'event',
   title,
   date,
   confidence,
+});
+
+const lunchMenu = (date: string, items: string[]): ExtractedEvent => ({
+  kind: 'lunch_menu',
+  title: items.join('、'),
+  date,
+  items,
+  confidence: 0.9,
 });
 
 describe('calendarRegistrar', () => {
@@ -253,6 +262,38 @@ describe('calendarRegistrar', () => {
     const published = mockPublishMessage.mock.calls[0][0];
     expect(published.json.registeredEvents).toHaveLength(1);
     expect(published.json.droppedEvents[0].title).toBe('未確定');
+  });
+
+  it('should register menu entries alongside regular events and tell the mail which is which', async () => {
+    extraction.extractEventsWithGemini.mockResolvedValue({
+      events: [
+        event('遠足', '2026-05-16'),
+        lunchMenu('2026-05-16', ['ドライカレー', 'みかん']),
+        lunchMenu('2026-05-18', ['さばの塩焼き', 'みそ汁']),
+      ],
+      truncated: false,
+    });
+
+    const result = await calendarRegistrar(createPubSubEvent(baseMessage));
+
+    expect(result.registered).toBe(3);
+    expect(calendar.registerEvent).toHaveBeenCalledTimes(3);
+    const built = calendar.registerEvent.mock.calls.map(
+      (call: unknown[]) => call[2]
+    );
+    expect(built.map((entry: { kind: string }) => entry.kind)).toEqual([
+      'event',
+      'lunch_menu',
+      'lunch_menu',
+    ]);
+    expect(built[1].title).toBe('🍽️ 給食: ドライカレー');
+
+    const published = mockPublishMessage.mock.calls[0][0];
+    expect(
+      published.json.registeredEvents.map(
+        (entry: { kind: string }) => entry.kind
+      )
+    ).toEqual(['event', 'lunch_menu', 'lunch_menu']);
   });
 
   it('should fail the document without registering anything when the event cap is exceeded', async () => {

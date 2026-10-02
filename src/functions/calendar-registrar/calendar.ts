@@ -1,12 +1,13 @@
 import { createHash } from 'crypto';
 import { calendar_v3, google } from 'googleapis';
 import { PermanentError } from 'autonyan-shared';
-import { ExtractedEvent } from './extraction';
+import { EventKind, ExtractedEvent } from './extraction';
 
 export interface CalendarEvent {
   // Deterministic ID, so a repeat of the same event collides instead of
   // duplicating. See buildEventId.
   id: string;
+  kind: EventKind;
   title: string;
   allDay: boolean;
   // YYYY-MM-DD for an all-day event, YYYY-MM-DDTHH:MM:SS otherwise.
@@ -39,6 +40,8 @@ const PUNCTUATION_OR_SPACE = /[\s\p{P}\p{S}]/gu;
 // The lookup is an API call per event, so the response is bounded twice: by
 // the file ID property and by a window around the event's date.
 const LOOKUP_PAGE_SIZE = 250;
+
+const LUNCH_MENU_TITLE_PREFIX = '🍽️ 給食: ';
 
 /**
  * Reduce a title to the form two extractions of the same event agree on.
@@ -110,6 +113,10 @@ export function buildCalendarEvent(
   fileId: string,
   defaultDurationMinutes: number
 ): CalendarEvent {
+  if (event.kind === 'lunch_menu') {
+    return buildLunchMenuEvent(event, fileId);
+  }
+
   const allDay = event.startTime === undefined;
   const start = allDay ? event.date : `${event.date}T${event.startTime}:00`;
   const end = allDay
@@ -118,12 +125,36 @@ export function buildCalendarEvent(
 
   return {
     id: buildEventId(fileId, start, event.title),
+    kind: event.kind,
     title: event.title,
     allDay,
     start,
     end,
     ...(event.location ? { location: event.location } : {}),
     ...(event.description ? { description: event.description } : {}),
+    confidence: event.confidence,
+    sourceFileId: fileId,
+  };
+}
+
+// A whole menu as the title is truncated in month view, so the main dish
+// names the day and the full menu moves to the description. A menu is served
+// at lunchtime whatever the document says, so any extracted time is ignored.
+function buildLunchMenuEvent(
+  event: ExtractedEvent,
+  fileId: string
+): CalendarEvent {
+  const items = event.items?.length ? event.items : [event.title];
+  const title = `${LUNCH_MENU_TITLE_PREFIX}${items[0]}`;
+
+  return {
+    id: buildEventId(fileId, event.date, title),
+    kind: 'lunch_menu',
+    title,
+    allDay: true,
+    start: event.date,
+    end: nextDay(event.date),
+    description: items.map((item) => `・${item}`).join('\n'),
     confidence: event.confidence,
     sourceFileId: fileId,
   };
@@ -252,8 +283,16 @@ export async function registerEvent(
       : { dateTime: event.start, timeZone },
     end: event.allDay ? { date: event.end } : { dateTime: event.end, timeZone },
     extendedProperties: { private: { autonyanFileId: event.sourceFileId } },
-    // The calendar owner's own reminder settings decide how they are notified.
-    reminders: { useDefault: true },
+    ...(event.kind === 'lunch_menu'
+      ? // A menu is not an appointment: it must not show the day as busy nor
+        // ring the calendar's default reminder every school day.
+        {
+          transparency: 'transparent',
+          reminders: { useDefault: false, overrides: [] },
+        }
+      : // The calendar owner's own reminder settings decide how they are
+        // notified.
+        { reminders: { useDefault: true } }),
   };
 
   try {

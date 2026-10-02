@@ -2,7 +2,13 @@ import { ResponseSchema, SchemaType, VertexAI } from '@google-cloud/vertexai';
 import { PermanentError } from 'autonyan-shared';
 import { SourceDocument } from './source-document';
 
+// A lunch menu is reference information rather than an appointment, so the
+// registrar renders it differently: it must neither block the day nor ring a
+// reminder.
+export type EventKind = 'event' | 'lunch_menu';
+
 export interface ExtractedEvent {
+  kind: EventKind;
   title: string;
   // Resolved calendar date of the event start, as YYYY-MM-DD.
   date: string;
@@ -11,6 +17,8 @@ export interface ExtractedEvent {
   endTime?: string;
   location?: string;
   description?: string;
+  // Menu items with the main dish first; present only on a lunch_menu entry.
+  items?: string[];
   confidence: number;
 }
 
@@ -20,12 +28,14 @@ export interface ExtractionResult {
 }
 
 interface GeminiEvent {
+  kind?: string | null;
   title: string;
   date: string;
   startTime?: string | null;
   endTime?: string | null;
   location?: string | null;
   description?: string | null;
+  items?: unknown[] | null;
   confidence: number;
 }
 
@@ -60,12 +70,18 @@ export const EVENTS_RESPONSE_SCHEMA: ResponseSchema = {
       items: {
         type: SchemaType.OBJECT,
         properties: {
+          kind: nullableString,
           title: { type: SchemaType.STRING },
           date: { type: SchemaType.STRING },
           startTime: nullableString,
           endTime: nullableString,
           location: nullableString,
           description: nullableString,
+          items: {
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING },
+            nullable: true,
+          },
           confidence: { type: SchemaType.NUMBER },
         },
         required: ['title', 'date', 'confidence'],
@@ -161,17 +177,31 @@ ${truncatedText}
 - 年が明記されている場合は "YYYY-MM-DD"、年が書かれていない場合は "MM-DD" の形式で日付を出力してください（年を推測して補わないでください）
 - 時刻が書かれていない終日の予定は startTime を null にしてください
 - 時刻は24時間表記の "HH:MM" で出力してください
+- 給食の献立（その日に提供される料理の一覧）は、1日分を1件として kind を "lunch_menu" にし、items に料理名を主菜から順に列挙してください。title には料理名を「、」で連結したものを入れてください。献立以外の予定は kind を "event" にし、items は null にしてください
 - 回答は以下のJSON形式で出力してください：
 
 {
   "events": [
     {
+      "kind": "event",
       "title": "予定の名称",
       "date": "MM-DD",
       "startTime": "09:00",
       "endTime": null,
       "location": "場所",
       "description": "補足",
+      "items": null,
+      "confidence": 0.95
+    },
+    {
+      "kind": "lunch_menu",
+      "title": "ドライカレー、サラダ、みかん",
+      "date": "MM-DD",
+      "startTime": null,
+      "endTime": null,
+      "location": null,
+      "description": null,
+      "items": ["ドライカレー", "サラダ", "みかん"],
       "confidence": 0.95
     }
   ]
@@ -212,8 +242,11 @@ function normalizeEvent(
 ): ExtractedEvent {
   const startTime = normalizeTime(event.startTime);
   const endTime = normalizeTime(event.endTime);
+  const kind = normalizeKind(event.kind);
+  const items = kind === 'lunch_menu' ? menuItems(event) : [];
 
   return {
+    kind,
     title: event.title.trim(),
     date: resolveEventDate(event.date.trim(), referenceDate),
     ...(startTime ? { startTime } : {}),
@@ -221,8 +254,34 @@ function normalizeEvent(
     ...(startTime && endTime ? { endTime } : {}),
     ...(event.location ? { location: event.location } : {}),
     ...(event.description ? { description: event.description } : {}),
+    ...(items.length > 0 ? { items } : {}),
     confidence: Math.max(0, Math.min(1, event.confidence)),
   };
+}
+
+// An unknown kind is the model inventing a category; the entry is still a
+// dated item, so it is kept as an ordinary event rather than dropped.
+function normalizeKind(value: string | null | undefined): EventKind {
+  return value === 'lunch_menu' ? 'lunch_menu' : 'event';
+}
+
+const MENU_SEPARATOR = /[、,，/／]/;
+
+// The dishes are what the entry is rendered from, so a menu the model listed
+// only in its title is split rather than left without any.
+function menuItems(event: GeminiEvent): string[] {
+  const listed = Array.isArray(event.items) ? event.items : [];
+  const items = listed
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (items.length > 0) {
+    return items;
+  }
+  return event.title
+    .split(MENU_SEPARATOR)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 }
 
 function normalizeTime(value: string | null | undefined): string | undefined {

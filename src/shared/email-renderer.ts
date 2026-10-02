@@ -29,6 +29,8 @@ export interface SuccessEmailData {
 }
 
 export interface CalendarEventSummary {
+  // Absent on a payload from before menus were classified, which means event.
+  kind?: 'event' | 'lunch_menu';
   title: string;
   // Resolved calendar date, as YYYY-MM-DD.
   date: string;
@@ -277,14 +279,40 @@ function formatEventLine(event: CalendarEventSummary): string {
   return `${formatEventTime(event)} ${event.title}${location}`;
 }
 
-function renderEventList(events: CalendarEventSummary[]): string {
-  const items = events
-    .map(
-      (event) =>
-        `<li style="margin:0 0 6px;">${escapeHtml(formatEventLine(event))}</li>`
-    )
+function renderEventList(lines: string[]): string {
+  const items = lines
+    .map((line) => `<li style="margin:0 0 6px;">${escapeHtml(line)}</li>`)
     .join('');
   return `<ul style="margin:0;padding-left:20px;">${items}</ul>`;
+}
+
+function formatMonthDay(date: string): string {
+  const [, month, day] = date.split('-');
+  return `${parseInt(month, 10)}/${parseInt(day, 10)}`;
+}
+
+// A monthly menu is one entry per school day, so listing each would bury the
+// handful of real events; the recipient needs only the range that was covered.
+function formatLunchMenuSummary(menus: CalendarEventSummary[]): string {
+  const dates = [...new Set(menus.map((menu) => menu.date))].sort();
+  const first = formatMonthDay(dates[0]);
+  const last = formatMonthDay(dates[dates.length - 1]);
+  const range = first === last ? first : `${first}–${last}`;
+  return `給食献立: ${range}（${dates.length}日分）`;
+}
+
+function formatRegisteredLines(events: CalendarEventSummary[]): string[] {
+  const menus = events.filter((event) => event.kind === 'lunch_menu');
+  const regular = events.filter((event) => event.kind !== 'lunch_menu');
+  const lines = regular.map(formatEventLine);
+  if (menus.length > 0) {
+    lines.push(formatLunchMenuSummary(menus));
+  }
+  return lines;
+}
+
+function formatDroppedLine(event: CalendarEventSummary): string {
+  return `${formatEventLine(event)} [確信度 ${Math.round(event.confidence * 100)}%]`;
 }
 
 export function renderCalendarEmail(data: CalendarEmailData): RenderedEmail {
@@ -293,21 +321,21 @@ export function renderCalendarEmail(data: CalendarEmailData): RenderedEmail {
 
   const subject = `${subjectPrefix()}[${data.category}] ${registeredCount}件の予定を登録しました: ${data.fileName}`;
 
+  const registeredLines = formatRegisteredLines(data.registeredEvents);
+  const droppedLines = data.droppedEvents.map(formatDroppedLine);
+
   const textLines = [
     `ファイル「${data.fileName}」から ${registeredCount} 件の予定を「${data.category}」カレンダーに登録しました。`,
     '',
     '登録した予定:',
-    ...data.registeredEvents.map((event) => `- ${formatEventLine(event)}`),
+    ...registeredLines.map((line) => `- ${line}`),
   ];
 
-  if (data.droppedEvents.length > 0) {
+  if (droppedLines.length > 0) {
     textLines.push(
       '',
       '確信度が低いため登録しなかった予定（内容をご確認ください）:',
-      ...data.droppedEvents.map(
-        (event) =>
-          `- ${formatEventLine(event)} [確信度 ${Math.round(event.confidence * 100)}%]`
-      )
+      ...droppedLines.map((line) => `- ${line}`)
     );
   }
 
@@ -323,10 +351,10 @@ export function renderCalendarEmail(data: CalendarEmailData): RenderedEmail {
   const html = renderLayout(
     `<p style="margin:0 0 20px;">ファイル「<strong>${escapeHtml(data.fileName)}</strong>」から <strong>${registeredCount}</strong> 件の予定を「${escapeHtml(data.category)}」カレンダーに登録しました。</p>` +
       '<p style="margin:0 0 8px;font-weight:bold;">登録した予定</p>' +
-      renderEventList(data.registeredEvents) +
-      (data.droppedEvents.length > 0
+      renderEventList(registeredLines) +
+      (droppedLines.length > 0
         ? '<p style="margin:20px 0 8px;font-weight:bold;color:#c5221f;">確信度が低いため登録しなかった予定</p>' +
-          renderEventList(data.droppedEvents)
+          renderEventList(droppedLines)
         : '') +
       (data.truncated
         ? '<p style="margin:20px 0 0;color:#c5221f;">文書が長いため一部のみを解析しました。登録されていない予定がある可能性があります。</p>'
