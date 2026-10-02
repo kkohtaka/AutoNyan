@@ -429,6 +429,7 @@ async function publishNotification(
 
 function toNotificationEvent(event: ExtractedEvent): Record<string, unknown> {
   return {
+    kind: event.kind,
     title: event.title,
     date: event.date,
     ...(event.startTime ? { startTime: event.startTime } : {}),

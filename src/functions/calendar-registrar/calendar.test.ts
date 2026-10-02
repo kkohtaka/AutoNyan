@@ -10,15 +10,25 @@ import {
 import { ExtractedEvent } from './extraction';
 
 const allDayEvent: ExtractedEvent = {
+  kind: 'event',
   title: '運動会',
   date: '2026-05-16',
   confidence: 0.9,
 };
 
 const timedEvent: ExtractedEvent = {
+  kind: 'event',
   title: '保護者会',
   date: '2026-05-20',
   startTime: '14:00',
+  confidence: 0.9,
+};
+
+const lunchMenu: ExtractedEvent = {
+  kind: 'lunch_menu',
+  title: 'ドライカレー、じゃがいものハニーサラダ、みかん',
+  date: '2026-05-16',
+  items: ['ドライカレー', 'じゃがいものハニーサラダ', 'みかん'],
   confidence: 0.9,
 };
 
@@ -107,11 +117,53 @@ describe('buildCalendarEvent', () => {
       'file-1'
     );
   });
+
+  it('should keep a regular event as an ordinary event', () => {
+    expect(buildCalendarEvent(allDayEvent, 'file-1', 60).kind).toBe('event');
+  });
+
+  it('should title a lunch menu by its main dish and list the items', () => {
+    const event = buildCalendarEvent(lunchMenu, 'file-1', 60);
+    expect(event.kind).toBe('lunch_menu');
+    expect(event.title).toBe('🍽️ 給食: ドライカレー');
+    expect(event.description).toBe(
+      '・ドライカレー\n・じゃがいものハニーサラダ\n・みかん'
+    );
+  });
+
+  it('should make a lunch menu all-day whatever time was extracted', () => {
+    const event = buildCalendarEvent(
+      { ...lunchMenu, startTime: '12:15', endTime: '13:00' },
+      'file-1',
+      60
+    );
+    expect(event.allDay).toBe(true);
+    expect(event.start).toBe('2026-05-16');
+    expect(event.end).toBe('2026-05-17');
+  });
+
+  it('should derive a lunch menu ID from its rendered title', () => {
+    const event = buildCalendarEvent(lunchMenu, 'file-1', 60);
+    expect(event.id).toBe(
+      buildEventId('file-1', '2026-05-16', '🍽️ 給食: ドライカレー')
+    );
+  });
+
+  it('should fall back to the title when a lunch menu lists no items', () => {
+    const event = buildCalendarEvent(
+      { ...lunchMenu, title: 'カレー', items: undefined },
+      'file-1',
+      60
+    );
+    expect(event.title).toBe('🍽️ 給食: カレー');
+    expect(event.description).toBe('・カレー');
+  });
 });
 
 describe('registerEvent', () => {
   const event: CalendarEvent = {
     id: 'abcdefghijklmnopqrstuvabcd',
+    kind: 'event',
     title: '運動会',
     allDay: true,
     start: '2026-05-16',
@@ -147,9 +199,35 @@ describe('registerEvent', () => {
     expect(requestBody.start).toEqual({ date: '2026-05-16' });
     expect(requestBody.end).toEqual({ date: '2026-05-17' });
     expect(requestBody.reminders).toEqual({ useDefault: true });
+    expect(requestBody.transparency).toBeUndefined();
     expect(requestBody.extendedProperties.private.autonyanFileId).toBe(
       'file-1'
     );
+  });
+
+  it('should register a lunch menu as transparent with no reminders', async () => {
+    const insert = jest.fn().mockResolvedValue({});
+    await registerEvent(
+      createCalendar(insert),
+      'calendar-1',
+      {
+        ...event,
+        kind: 'lunch_menu',
+        title: '🍽️ 給食: ドライカレー',
+        description: '・ドライカレー\n・みかん',
+      },
+      'Asia/Tokyo'
+    );
+
+    const requestBody = insert.mock.calls[0][0].requestBody;
+    expect(requestBody.summary).toBe('🍽️ 給食: ドライカレー');
+    expect(requestBody.description).toBe('・ドライカレー\n・みかん');
+    expect(requestBody.start).toEqual({ date: '2026-05-16' });
+    expect(requestBody.transparency).toBe('transparent');
+    expect(requestBody.reminders).toEqual({
+      useDefault: false,
+      overrides: [],
+    });
   });
 
   it('should apply the time zone to a timed event', async () => {
@@ -331,6 +409,7 @@ describe('registerEvent', () => {
 describe('findRegisteredEvent', () => {
   const event: CalendarEvent = {
     id: 'abcdefghijklmnopqrstuvabcd',
+    kind: 'event',
     title: '運動会',
     allDay: true,
     start: '2026-05-16',

@@ -40,6 +40,25 @@ describe('extractEventsWithGemini', () => {
   const sentParts = () =>
     mockGenerateContent.mock.calls[0][0].contents[0].parts;
 
+  const respondWith = (events: unknown[]) => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        candidates: [
+          { content: { parts: [{ text: JSON.stringify({ events }) }] } },
+        ],
+      },
+    });
+  };
+
+  const extract = () =>
+    extractEventsWithGemini(
+      'project',
+      '献立表',
+      referenceDate,
+      'Asia/Tokyo',
+      null
+    );
+
   it('should send the source file ahead of the prompt so dates come from its layout', async () => {
     const pdf = { mimeType: 'application/pdf', data: 'JVBERi0=' };
 
@@ -77,6 +96,68 @@ describe('extractEventsWithGemini', () => {
       'date',
       'confidence',
     ]);
+  });
+
+  it('should treat an entry without a kind as a regular event', async () => {
+    const { events } = await extract();
+    expect(events[0].kind).toBe('event');
+    expect(events[0].items).toBeUndefined();
+  });
+
+  it('should treat an unknown kind as a regular event', async () => {
+    respondWith([
+      { kind: 'holiday', title: '休校', date: '09-24', confidence: 0.9 },
+    ]);
+    const { events } = await extract();
+    expect(events[0].kind).toBe('event');
+  });
+
+  it('should keep a lunch menu with its items in document order', async () => {
+    respondWith([
+      {
+        kind: 'lunch_menu',
+        title: 'ドライカレー、みかん',
+        date: '09-24',
+        items: [' ドライカレー ', '', null, 'みかん'],
+        confidence: 0.9,
+      },
+    ]);
+    const { events } = await extract();
+    expect(events[0]).toEqual({
+      kind: 'lunch_menu',
+      title: 'ドライカレー、みかん',
+      date: '2026-09-24',
+      items: ['ドライカレー', 'みかん'],
+      confidence: 0.9,
+    });
+  });
+
+  it('should split a lunch menu from its title when no items were listed', async () => {
+    respondWith([
+      {
+        kind: 'lunch_menu',
+        title: 'ドライカレー、サラダ／みかん',
+        date: '09-24',
+        items: null,
+        confidence: 0.9,
+      },
+    ]);
+    const { events } = await extract();
+    expect(events[0].items).toEqual(['ドライカレー', 'サラダ', 'みかん']);
+  });
+
+  it('should ignore items on a regular event', async () => {
+    respondWith([
+      {
+        kind: 'event',
+        title: '遠足',
+        date: '09-24',
+        items: ['弁当'],
+        confidence: 0.9,
+      },
+    ]);
+    const { events } = await extract();
+    expect(events[0].items).toBeUndefined();
   });
 
   it('should send the text alone when there is no source file', async () => {
