@@ -23,7 +23,7 @@
     "@types/jest": "^30.0.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.6",
-    "googleapis": "^182.0.0"
+    "googleapis": "^183.0.0"
   },
   "files": [
     "dist/**/*"
