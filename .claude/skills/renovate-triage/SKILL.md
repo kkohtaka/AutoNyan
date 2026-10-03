@@ -94,20 +94,58 @@ Group the PRs and give a recommendation per group:
 - **Needs attention** — red CI, major version bump, and/or runtime dependency →
   recommend holding for review, with the reason.
 
+A `terraform/plan/staging` of **`error`** (not `failure`) means the plan never
+ran — usually it was evicted from the `terraform-staging` concurrency group when
+several plans were dispatched at once (CLAUDE.md, Required Status Check
+Invariant). It says nothing about the update, so do not count it against the
+PR's risk; clear it in Step 4.
+
 ### Step 4 — Confirmation gate before merging
 
-STOP. List exactly which PR(s) you propose to merge and wait for the user's
-explicit approval of the specific PR(s) (CONVENTIONS.md §4.3). Never merge without
-it, and never force-merge past failing CI. On approval, merge only the approved
-PRs using the project's merge method:
+Renovate turns on GitHub auto-merge for its PRs (`platformAutomerge` in
+`.github/renovate.json5`), so a PR lands by itself once its required checks pass.
+In practice "merging" is getting `terraform/plan/staging` to `success` — and
+approving a status re-run is effectively approving the merge.
+
+STOP. List exactly which PR(s) you propose to merge or re-run, and wait for the
+user's explicit approval of the specific PR(s) (CONVENTIONS.md §4.3). Never merge
+without it, and never force-merge past failing CI.
+
+**Clearing an evicted plan (`error`)** — one PR at a time:
+
+1. Wait until no Test, Terraform Plan (Staging), or Deploy run is queued or in
+   progress; a master Deploy joins the same group and evicts pending PR plans
+   too:
+
+   ```bash
+   gh run list --json workflowName,status --jq '.[] | select(.status != "completed")'
+   ```
+
+2. Re-run the `trigger-terraform-plan` job of the PR's latest Test run. The job
+   id changes on every attempt, so re-read it each time:
+
+   ```bash
+   gh run view <test-run-id> --json jobs --jq '.jobs[] | select(.name == "trigger-terraform-plan") | .databaseId'
+   gh run rerun <test-run-id> --job <job-id>
+   ```
+
+   Let that plan report before moving to the next PR.
+
+The owner-only `/terraform plan` comment also clears the status, but it runs
+`terraform-plan.yml` from master, so it does not exercise tooling version bumps
+the PR makes in workflow files. Prefer the re-run.
+
+If auto-merge is off for an approved PR, merge it with the ruleset's only
+allowed method:
 
 ```bash
-gh pr merge <number> --squash
+gh pr merge <number> --rebase
 ```
 
-Without `gh`, merge through the GitHub MCP tools, squash method, one approved PR
-at a time. The confirmation gate above applies unchanged — the route does not
-make the merge any less irreversible.
+Without `gh`, merge through the GitHub MCP tools, rebase method, one approved PR
+at a time. A cloud session cannot re-run a job (no Actions write — CLAUDE.md, In
+a Cloud Session), so ask the user to run step 2. The confirmation gate above
+applies unchanged — the route does not make the merge any less irreversible.
 
 Report the result of each merge honestly (CONVENTIONS.md §4.6), including any that
 failed or were skipped.
