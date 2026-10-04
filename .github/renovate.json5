@@ -61,6 +61,14 @@
         "Group Terraform version updates across devcontainer and GitHub Actions",
     },
     {
+      matchManagers: ["github-actions"],
+      matchDepTypes: ["uses-with"],
+      matchDepNames: ["terraform"],
+      enabled: false,
+      description:
+        "Track terraform_version only via the regex custom manager, which also covers the devcontainer and keeps the unprefixed version; the built-in uses-with extraction would open a conflicting PR with a v-prefixed value",
+    },
+    {
       matchManagers: ["terraform"],
       addLabels: ["terraform"],
       commitMessagePrefix: "chore(terraform):",
