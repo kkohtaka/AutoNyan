@@ -19,6 +19,7 @@ import {
   moveFileInDrive,
 } from './drive-operations';
 import { updateDocumentWithClassification } from './firestore-operations';
+import { PageInfo } from './partial-input';
 import { generateFileName, resolveRenamedFileName } from './rename';
 
 interface ClassificationEventData extends Record<string, unknown> {
@@ -31,6 +32,10 @@ interface ClassificationEventData extends Record<string, unknown> {
   modifiedTime?: string;
   // Source file for calendar extraction, which needs the document's layout.
   objectName?: string;
+  // Page coverage of extractedText: the writer stores only the opening pages
+  // of a long document, and the prompts say so when the two differ.
+  totalPages?: number;
+  includedPages?: number;
   // Set by the re-classification sweep, so the notification can tell the
   // recipient this document was filed once before under Uncategorized.
   reclassification?: boolean;
@@ -109,11 +114,21 @@ export const fileClassifier = async (
       categoryFolders.map((folder) => folder.id)
     );
 
-    logger.info('Classifying document with Gemini AI');
+    const pageInfo: PageInfo | undefined =
+      typeof eventData.totalPages === 'number' &&
+      typeof eventData.includedPages === 'number'
+        ? {
+            totalPages: eventData.totalPages,
+            includedPages: eventData.includedPages,
+          }
+        : undefined;
+
+    logger.info('Classifying document with Gemini AI', { pageInfo });
     const classification = await classifyWithGemini(
       projectId,
       eventData.extractedText,
-      categoryFolders
+      categoryFolders,
+      pageInfo
     );
 
     logger.info('Classification result', { classification });
@@ -146,7 +161,8 @@ export const fileClassifier = async (
           projectId,
           eventData.extractedText,
           eventData.fileName,
-          existingFileNames
+          existingFileNames,
+          pageInfo
         );
 
         renameConfidence = generated.confidence;

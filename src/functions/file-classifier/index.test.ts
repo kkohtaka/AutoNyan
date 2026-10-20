@@ -102,6 +102,8 @@ describe('fileClassifier', () => {
     confidence: number;
     modifiedTime?: string;
     objectName?: string;
+    totalPages?: number;
+    includedPages?: number;
     reclassification?: boolean;
   }): CloudEvent<MessagePublishedData> => ({
     specversion: '1.0',
@@ -174,7 +176,8 @@ describe('fileClassifier', () => {
       [
         { id: 'folder-invoices', name: '請求書' },
         { id: 'folder-contracts', name: '契約書' },
-      ]
+      ],
+      undefined
     );
     // The processed file is excluded so it cannot collide with its own name
     // when it is already in the target folder.
@@ -187,7 +190,8 @@ describe('fileClassifier', () => {
       'test-project',
       '請求書 金額: 10000円 支払期限: 2024-01-31',
       'invoice.pdf',
-      ['2024-01-15_請求書_ネコ商会.pdf']
+      ['2024-01-15_請求書_ネコ商会.pdf'],
+      undefined
     );
     expect(mockResolveRenamedFileName).toHaveBeenCalledWith(
       {
@@ -830,5 +834,46 @@ describe('fileClassifier', () => {
       expect(result.category).toBe('学校');
       expect(mockUpdateDocumentWithClassification).toHaveBeenCalled();
     });
+  });
+  it('should pass the page coverage through to classification and naming', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'report.pdf',
+      extractedText: '表紙のテキスト',
+      confidence: 1,
+      totalPages: 200,
+      includedPages: 20,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-invoices', name: '請求書' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.8,
+      reasoning: '表紙から判断',
+      summary: '報告書',
+    });
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    const pageInfo = { totalPages: 200, includedPages: 20 };
+    expect(mockClassifyWithGemini).toHaveBeenCalledWith(
+      'test-project',
+      '表紙のテキスト',
+      [{ id: 'folder-invoices', name: '請求書' }],
+      pageInfo
+    );
+    expect(mockGenerateFileName).toHaveBeenCalledWith(
+      'test-project',
+      '表紙のテキスト',
+      'report.pdf',
+      [],
+      pageInfo
+    );
   });
 });
