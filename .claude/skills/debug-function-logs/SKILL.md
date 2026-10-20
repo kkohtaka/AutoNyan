@@ -212,6 +212,11 @@ Report honestly (CONVENTIONS.md §4.6):
   roles, or trigger config) so the fix can proceed through the normal change
   workflow. This skill does not apply the fix.
 
+Log entries carry the maintainer's private data — file and folder names, Drive
+IDs, document text, classification output. Quoting them in this report is fine.
+When the findings feed an issue, a pull request, or a comment, they follow the
+Private Data Policy in `CLAUDE.md`: carry the incident's shape, not those values.
+
 If neither route was available, say so plainly and name what is missing — an
 absent connector or a missing IAM grant is a setup gap with a known fix, not a
 diagnosis about the function.
