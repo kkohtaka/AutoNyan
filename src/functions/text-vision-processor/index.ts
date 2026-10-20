@@ -1,4 +1,4 @@
-import { Storage } from '@google-cloud/storage';
+import { Bucket, File, Storage } from '@google-cloud/storage';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { PubSub } from '@google-cloud/pubsub';
 import { StorageObjectData } from '@google/events/cloud/storage/v1/StorageObjectData';
@@ -36,6 +36,62 @@ const SUPPORTED_MIME_TYPES = [
   ...VISION_FILE_MIME_TYPES,
   ...VISION_IMAGE_MIME_TYPES,
 ];
+
+// Pages per Vision output shard. Vision writes one object per batch, so a
+// document longer than this arrives in several shards (see mergeVisionShards).
+const VISION_BATCH_SIZE = 20;
+
+const SHARD_NAME_PATTERN = /output-(\d+)-to-(\d+)\.json$/;
+
+interface VisionShardResult {
+  responses?: unknown[];
+}
+
+/**
+ * Read every shard Vision wrote under a prefix and concatenate their
+ * responses in page order.
+ *
+ * The downstream writer treats one result object as one document, so a
+ * sharded output has to be merged here or a long document is stored and
+ * classified once per shard. Shards are sorted on the numeric start page in
+ * their name: the bucket lists them lexicographically, which puts
+ * `output-101-to-120` before `output-21-to-40`.
+ *
+ * @param bucket Vision results bucket
+ * @param rawPath Prefix the operation wrote its shards under
+ * @returns Merged responses and the shard objects they came from
+ */
+async function mergeVisionShards(
+  bucket: Bucket,
+  rawPath: string
+): Promise<{ responses: unknown[]; shardFiles: File[] }> {
+  const [shardFiles] = await bucket.getFiles({ prefix: rawPath });
+
+  if (shardFiles.length === 0) {
+    throw new Error(`Vision API wrote no output under ${rawPath}`);
+  }
+
+  const shards = shardFiles
+    .map((file) => {
+      const match = file.name.match(SHARD_NAME_PATTERN);
+      return {
+        file,
+        startPage: match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER,
+      };
+    })
+    .sort((a, b) => a.startPage - b.startPage);
+
+  const shardResults = await Promise.all(
+    shards.map(async ({ file }) => {
+      const [content] = await file.download();
+      return JSON.parse(content.toString('utf-8')) as VisionShardResult;
+    })
+  );
+
+  const responses = shardResults.flatMap((shard) => shard.responses ?? []);
+
+  return { responses, shardFiles };
+}
 
 export const textVisionProcessor = async (
   storageObjectData: StorageObjectData
@@ -211,7 +267,10 @@ export const textVisionProcessor = async (
       return imageResultObj;
     }
 
-    // For PDFs, TIFFs, and GIFs, use Vision API async batch processing
+    // For PDFs, TIFFs, and GIFs, use Vision API async batch processing.
+    // Vision writes its shards under raw/, a prefix the writer ignores; the
+    // merged result is what lands under results/ and triggers it.
+    const rawPath = `raw/${contentHash}/`;
     const request = {
       requests: [
         {
@@ -224,9 +283,9 @@ export const textVisionProcessor = async (
           features: [{ type: 'DOCUMENT_TEXT_DETECTION' as const }],
           outputConfig: {
             gcsDestination: {
-              uri: `gs://${outputBucket}/${outputPath}`,
+              uri: `gs://${outputBucket}/${rawPath}`,
             },
-            batchSize: 20,
+            batchSize: VISION_BATCH_SIZE,
           },
         },
       ],
@@ -264,6 +323,47 @@ export const textVisionProcessor = async (
 
     if (responseCount === 0) {
       throw new Error('No responses received from Vision API');
+    }
+
+    const resultsBucket = storage.bucket(outputBucket);
+    const { responses, shardFiles } = await mergeVisionShards(
+      resultsBucket,
+      rawPath
+    );
+
+    const mergedResult = { responses };
+
+    await resultsBucket
+      .file(`${outputPath}output-1-to-1.json`)
+      .save(JSON.stringify(mergedResult), {
+        metadata: {
+          contentType: 'application/json',
+          metadata: {
+            originalFileId: originalFileId,
+            originalFileName: originalFileName,
+            originalMimeType: contentType,
+            contentHash: contentHash,
+            processedAt: new Date().toISOString(),
+          },
+        },
+      });
+
+    logger.info('Merged Vision API output shards', {
+      originalFileName,
+      shardCount: shardFiles.length,
+      pageCount: responses.length,
+    });
+
+    // The merged object is already written, so a leftover shard costs only
+    // storage; failing here would retry the whole function and bill another
+    // Vision run.
+    try {
+      await Promise.all(shardFiles.map((file) => file.delete()));
+    } catch (deleteError) {
+      logger.warn('Failed to delete raw Vision API output shards', {
+        rawPath,
+        error: deleteError,
+      });
     }
 
     const result_obj = {

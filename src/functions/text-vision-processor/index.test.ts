@@ -13,6 +13,7 @@ const mockVision = {
   batchAnnotateImages: jest.fn(),
 };
 
+const mockGetFiles = jest.fn();
 const mockStorage = {
   bucket: jest.fn().mockReturnValue({
     file: jest.fn().mockReturnValue({
@@ -20,8 +21,43 @@ const mockStorage = {
       download: jest.fn(),
       save: jest.fn(),
     }),
+    getFiles: mockGetFiles,
   }),
 };
+
+// A Vision output shard as the results bucket lists it
+const shard = (name: string, responses: unknown[]) => ({
+  name,
+  download: jest
+    .fn()
+    .mockResolvedValue([Buffer.from(JSON.stringify({ responses }))]),
+  delete: jest.fn().mockResolvedValue(undefined),
+});
+
+const pdfMetadata = {
+  metadata: {
+    originalFileId: 'file123',
+    originalFileName: 'test.pdf',
+    contentHash: 'abc123',
+  },
+};
+
+const pdfOperation = () => ({
+  name: 'operation123',
+  promise: jest.fn().mockResolvedValue([
+    {
+      responses: [
+        {
+          outputConfig: {
+            gcsDestination: {
+              uri: 'gs://test-project-staging-vision-results/raw/abc123/',
+            },
+          },
+        },
+      ],
+    },
+  ]),
+});
 
 // Mock the constructors
 // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
@@ -65,30 +101,23 @@ describe('textVisionProcessor', () => {
     } as StorageObjectData,
   });
 
-  it('should process PDF files with Vision API', async () => {
+  it('should process PDF files with Vision API and merge the output shards', async () => {
     const cloudEvent = createCloudEvent({
       contentType: 'application/pdf',
     });
 
-    const mockMetadata = {
-      metadata: {
-        originalFileId: 'file123',
-        originalFileName: 'test.pdf',
-        contentHash: 'abc123',
-      },
-    };
-
-    const mockOperation = {
-      name: 'operation123',
-      promise: jest.fn().mockResolvedValue([
-        {
-          responses: [{ fullTextAnnotation: { text: 'extracted text' } }],
-        },
+    const shards = [
+      shard('raw/abc123/output-1-to-20.json', [
+        { fullTextAnnotation: { text: 'page 1' } },
       ]),
-    };
+      shard('raw/abc123/output-21-to-40.json', [
+        { fullTextAnnotation: { text: 'page 21' } },
+      ]),
+    ];
 
-    mockStorage.bucket().file().getMetadata.mockResolvedValue([mockMetadata]);
-    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([mockOperation]);
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([pdfMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([pdfOperation()]);
+    mockGetFiles.mockResolvedValue([shards]);
 
     const result = await textVisionProcessor(cloudEvent.data!);
 
@@ -107,13 +136,92 @@ describe('textVisionProcessor', () => {
           features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
           outputConfig: {
             gcsDestination: {
-              uri: 'gs://test-project-staging-vision-results/results/abc123/',
+              uri: 'gs://test-project-staging-vision-results/raw/abc123/',
             },
             batchSize: 20,
           },
         },
       ],
     });
+
+    expect(mockGetFiles).toHaveBeenCalledWith({ prefix: 'raw/abc123/' });
+    expect(mockStorage.bucket().file).toHaveBeenCalledWith(
+      'results/abc123/output-1-to-1.json'
+    );
+
+    const [savedContent, saveOptions] = mockStorage.bucket().file().save.mock
+      .calls[0];
+    expect(JSON.parse(savedContent)).toEqual({
+      responses: [
+        { fullTextAnnotation: { text: 'page 1' } },
+        { fullTextAnnotation: { text: 'page 21' } },
+      ],
+    });
+    expect(saveOptions.metadata.metadata).toMatchObject({
+      originalFileId: 'file123',
+      originalFileName: 'test.pdf',
+      originalMimeType: 'application/pdf',
+      contentHash: 'abc123',
+    });
+
+    for (const shardFile of shards) {
+      expect(shardFile.delete).toHaveBeenCalled();
+    }
+  });
+
+  it('should merge shards in page order, not in listing order', async () => {
+    const cloudEvent = createCloudEvent({ contentType: 'application/pdf' });
+
+    // Lexicographic listing order: 1-to-20, 101-to-120, 21-to-40
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([pdfMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([pdfOperation()]);
+    mockGetFiles.mockResolvedValue([
+      [
+        shard('raw/abc123/output-1-to-20.json', [{ text: 'first' }]),
+        shard('raw/abc123/output-101-to-120.json', [{ text: 'third' }]),
+        shard('raw/abc123/output-21-to-40.json', [{ text: 'second' }]),
+      ],
+    ]);
+
+    await textVisionProcessor(cloudEvent.data!);
+
+    const [savedContent] = mockStorage.bucket().file().save.mock.calls[0];
+    expect(JSON.parse(savedContent).responses).toEqual([
+      { text: 'first' },
+      { text: 'second' },
+      { text: 'third' },
+    ]);
+  });
+
+  it('should throw (retry) when Vision reports success but wrote no shards', async () => {
+    const cloudEvent = createCloudEvent({ contentType: 'application/pdf' });
+
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([pdfMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([pdfOperation()]);
+    mockGetFiles.mockResolvedValue([[]]);
+
+    await expect(textVisionProcessor(cloudEvent.data!)).rejects.toThrow(
+      'Vision API wrote no output under raw/abc123/'
+    );
+    expect(mockStorage.bucket().file().save).not.toHaveBeenCalled();
+  });
+
+  it('should succeed even when deleting the raw shards fails', async () => {
+    const cloudEvent = createCloudEvent({ contentType: 'application/pdf' });
+
+    const failingShard = shard('raw/abc123/output-1-to-20.json', [
+      { fullTextAnnotation: { text: 'page 1' } },
+    ]);
+    failingShard.delete.mockRejectedValue(new Error('delete failed'));
+
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([pdfMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([pdfOperation()]);
+    mockGetFiles.mockResolvedValue([[failingShard]]);
+
+    const result = await textVisionProcessor(cloudEvent.data!);
+
+    expect(result.skipped).toBeUndefined();
+    expect(mockStorage.bucket().file().save).toHaveBeenCalled();
   });
 
   it('should process image files with synchronous Vision annotation', async () => {

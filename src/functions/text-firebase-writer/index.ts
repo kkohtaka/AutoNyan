@@ -11,9 +11,17 @@ import {
   PermanentError,
 } from 'autonyan-shared';
 
-interface PageText {
+// Firestore caps a document at 1 MiB and the classification prompt reads only
+// a document's opening, so a long document is stored and passed on by its
+// first pages. The complete text stays in the result object at
+// visionResultPath.
+const MAX_STORED_PAGES = 20;
+
+// gRPC status for a create() on a document that already exists.
+const FIRESTORE_ALREADY_EXISTS = 6;
+
+interface PageConfidence {
   pageNumber: number;
-  text: string;
   confidence: number;
 }
 
@@ -22,7 +30,11 @@ interface ExtractedText {
   objectName: string;
   extractedText: string;
   confidence: number;
-  pages: PageText[];
+  pages: PageConfidence[];
+  // Pages with text in the Vision result, and how many of them extractedText
+  // holds; the classifier tells the model when the two differ.
+  totalPages: number;
+  includedPages: number;
   extractedAt: string;
   mimeType: string;
   fileName: string;
@@ -43,6 +55,7 @@ interface Result {
   originalFileName: string;
   classificationTriggered: boolean;
   skipped?: boolean;
+  duplicate?: boolean;
 }
 
 interface VisionApiResponse {
@@ -77,6 +90,23 @@ export const textFirebaseWriter = async (
       name: objectName,
       contentType,
     } = parseStorageEvent(storageObjectData);
+
+    // Vision's per-batch shards land under raw/ until text-vision-processor
+    // merges them under results/; a shard is not a document to store.
+    if (objectName.startsWith('raw/')) {
+      logger.info('Ignoring raw Vision API output shard', { objectName });
+
+      return {
+        message: `Ignored raw Vision API output shard: ${objectName}`,
+        firestoreDocId: '',
+        textLength: 0,
+        confidence: 0,
+        pages: 0,
+        originalFileName: '',
+        classificationTriggered: false,
+        skipped: true,
+      };
+    }
 
     // Only process JSON files from Vision API
     if (
@@ -156,35 +186,28 @@ export const textFirebaseWriter = async (
       throw new PermanentError('No responses found in Vision API result');
     }
 
-    // Aggregate text from all pages
-    let extractedText = '';
+    const pageTexts: string[] = [];
+    const pages: PageConfidence[] = [];
     let totalConfidence = 0;
-    let pageCount = 0;
-    const pages: PageText[] = [];
 
     for (const response of visionResult.responses) {
-      if (response.fullTextAnnotation) {
-        const pageText = response.fullTextAnnotation.text || '';
-        const confidence =
-          response.fullTextAnnotation.pages?.[0]?.confidence || 0;
-
-        if (pageText.trim()) {
-          extractedText += pageText;
-          if (pageCount > 0) {
-            extractedText += '\n'; // Add newline between pages
-          }
-
-          totalConfidence += confidence;
-          pageCount++;
-
-          pages.push({
-            pageNumber: pageCount,
-            text: pageText,
-            confidence: confidence,
-          });
-        }
+      const annotation = response.fullTextAnnotation;
+      if (!annotation) {
+        continue;
       }
+
+      const pageText = annotation.text || '';
+      if (!pageText.trim()) {
+        continue;
+      }
+
+      const confidence = annotation.pages?.[0]?.confidence || 0;
+      totalConfidence += confidence;
+      pageTexts.push(pageText);
+      pages.push({ pageNumber: pages.length + 1, confidence });
     }
+
+    const totalPages = pages.length;
 
     // Vision embeds per-file extraction failures in the result JSON instead
     // of failing the operation, so a result with no usable text is an
@@ -193,7 +216,7 @@ export const textFirebaseWriter = async (
       .filter((response) => response.error)
       .map((response) => response.error?.message || 'unknown error');
 
-    if (pageCount === 0) {
+    if (totalPages === 0) {
       throw new PermanentError(
         embeddedErrors.length > 0
           ? `Vision API result contains only errors: ${embeddedErrors.join('; ')}`
@@ -208,7 +231,9 @@ export const textFirebaseWriter = async (
       });
     }
 
-    const overallConfidence = totalConfidence / pageCount;
+    const overallConfidence = totalConfidence / totalPages;
+    const includedPages = Math.min(totalPages, MAX_STORED_PAGES);
+    const extractedText = pageTexts.slice(0, includedPages).join('\n');
 
     // Prepare data for Firestore
     const extractedTextDoc: ExtractedText = {
@@ -217,6 +242,8 @@ export const textFirebaseWriter = async (
       extractedText: extractedText,
       confidence: overallConfidence,
       pages: pages,
+      totalPages,
+      includedPages,
       extractedAt: new Date().toISOString(),
       mimeType: originalMimeType || 'unknown',
       fileName: originalFileName,
@@ -226,9 +253,35 @@ export const textFirebaseWriter = async (
       ...(originalModifiedTime ? { modifiedTime: originalModifiedTime } : {}),
     };
 
-    // Store extracted text in Firestore
-    const collection = firestore.collection('extracted_texts');
-    const docRef = await collection.add(extractedTextDoc);
+    // Keyed by content hash so that a second finalize event for the same
+    // result object cannot store the document, or classify it, twice.
+    const docRef = firestore.collection('extracted_texts').doc(contentHash);
+
+    try {
+      await docRef.create(extractedTextDoc);
+    } catch (createError) {
+      if (
+        (createError as { code?: number }).code !== FIRESTORE_ALREADY_EXISTS
+      ) {
+        throw createError;
+      }
+
+      logger.info('Extracted text already stored, skipping duplicate event', {
+        originalFileName,
+        contentHash,
+      });
+
+      return {
+        message: `Extracted text already stored for ${originalFileName}`,
+        firestoreDocId: docRef.id,
+        textLength: extractedText.length,
+        confidence: overallConfidence,
+        pages: totalPages,
+        originalFileName: originalFileName,
+        classificationTriggered: false,
+        duplicate: true,
+      };
+    }
 
     // Trigger file classification via PubSub (if topic is configured)
     const classifierTopicName = process.env.FILE_CLASSIFIER_TOPIC;
@@ -244,6 +297,8 @@ export const textFirebaseWriter = async (
           fileName: originalFileName,
           extractedText: extractedText,
           confidence: overallConfidence,
+          totalPages,
+          includedPages,
           // Carried through to calendar registration, where it is the
           // reference date for resolving year-less dates.
           modifiedTime: originalModifiedTime,
@@ -285,7 +340,7 @@ export const textFirebaseWriter = async (
       firestoreDocId: docRef.id,
       textLength: extractedText.length,
       confidence: overallConfidence,
-      pages: pages.length,
+      pages: totalPages,
       originalFileName: originalFileName,
       classificationTriggered: classificationTriggered,
     };
