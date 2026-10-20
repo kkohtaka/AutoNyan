@@ -7,11 +7,20 @@ jest.mock('@google-cloud/firestore');
 jest.mock('@google-cloud/storage');
 jest.mock('@google-cloud/pubsub');
 
+const mockCreate = jest.fn();
+const mockDoc = jest.fn().mockReturnValue({ id: 'abc123', create: mockCreate });
 const mockFirestore = {
-  collection: jest.fn().mockReturnValue({
-    add: jest.fn().mockResolvedValue({ id: 'doc123' }),
-  }),
+  collection: jest.fn().mockReturnValue({ doc: mockDoc }),
 };
+
+// Vision result pages, each with distinct text and the same confidence
+const pagesOfText = (count: number, confidence = 0.9) =>
+  Array.from({ length: count }, (_, index) => ({
+    fullTextAnnotation: {
+      text: `page ${index + 1}`,
+      pages: [{ confidence }],
+    },
+  }));
 
 const mockStorage = {
   bucket: jest.fn().mockReturnValue({
@@ -44,6 +53,7 @@ describe('textFirebaseWriter', () => {
     process.env.PROJECT_ID = 'test-project';
     process.env.ENVIRONMENT = 'staging';
     process.env.FILE_CLASSIFIER_TOPIC = 'file-classification-trigger';
+    mockCreate.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -116,8 +126,8 @@ describe('textFirebaseWriter', () => {
     expect(result.message).toContain(
       'Successfully stored extracted text from test.pdf'
     );
-    expect(result.firestoreDocId).toBe('doc123');
-    expect(result.textLength).toBe('Page 1 textPage 2 text\n'.length);
+    expect(result.firestoreDocId).toBe('abc123');
+    expect(result.textLength).toBe('Page 1 text\nPage 2 text'.length);
     expect(result.confidence).toBe(0.925); // Average of 0.95 and 0.90
     expect(result.pages).toBe(2);
     expect(result.classificationTriggered).toBe(true);
@@ -126,15 +136,18 @@ describe('textFirebaseWriter', () => {
       'test-project-staging-document-storage'
     );
     expect(mockFirestore.collection).toHaveBeenCalledWith('extracted_texts');
-    expect(mockFirestore.collection().add).toHaveBeenCalledWith({
+    expect(mockDoc).toHaveBeenCalledWith('abc123');
+    expect(mockCreate).toHaveBeenCalledWith({
       fileId: 'file123',
       objectName: 'documents/abc123',
-      extractedText: 'Page 1 textPage 2 text\n',
+      extractedText: 'Page 1 text\nPage 2 text',
       confidence: 0.925,
       pages: [
-        { pageNumber: 1, text: 'Page 1 text', confidence: 0.95 },
-        { pageNumber: 2, text: 'Page 2 text', confidence: 0.9 },
+        { pageNumber: 1, confidence: 0.95 },
+        { pageNumber: 2, confidence: 0.9 },
       ],
+      totalPages: 2,
+      includedPages: 2,
       extractedAt: expect.any(String),
       mimeType: 'application/pdf',
       fileName: 'test.pdf',
@@ -189,7 +202,119 @@ describe('textFirebaseWriter', () => {
 
     expect(result.pages).toBe(2); // Only non-empty pages counted
     expect(result.confidence).toBe(0.915); // Average of 0.95 and 0.88
-    expect(result.textLength).toBe('Valid textMore valid text\n'.length);
+    expect(result.textLength).toBe('Valid text\nMore valid text'.length);
+  });
+
+  it('should ignore raw Vision shards without storing or notifying', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
+    const cloudEvent = createCloudEvent({
+      name: 'raw/abc123/output-21-to-40.json',
+      contentType: 'application/octet-stream',
+    });
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.skipped).toBe(true);
+    expect(result.message).toContain('Ignored raw Vision API output shard');
+    expect(mockStorage.bucket().file().getMetadata).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockPublishMessage).not.toHaveBeenCalled();
+  });
+
+  it('should store and pass on only the first 20 pages of a long document', async () => {
+    const cloudEvent = createCloudEvent({});
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([
+        Buffer.from(JSON.stringify({ responses: pagesOfText(45) })),
+      ]);
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    const expectedText = Array.from(
+      { length: 20 },
+      (_, index) => `page ${index + 1}`
+    ).join('\n');
+
+    expect(result.pages).toBe(45);
+    expect(result.textLength).toBe(expectedText.length);
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extractedText: expectedText,
+        totalPages: 45,
+        includedPages: 20,
+      })
+    );
+    const [{ pages }] = mockCreate.mock.calls[0];
+    expect(pages).toHaveLength(45);
+    expect(pages[44]).toEqual({ pageNumber: 45, confidence: 0.9 });
+
+    const published = mockPublishMessage.mock.calls.find(
+      (call) => call[0].attributes?.operation === 'file-classification'
+    );
+    expect(published[0].json).toMatchObject({
+      extractedText: expectedText,
+      totalPages: 45,
+      includedPages: 20,
+    });
+  });
+
+  it('should publish no second classification for a document already stored', async () => {
+    const cloudEvent = createCloudEvent({});
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([
+        Buffer.from(JSON.stringify({ responses: pagesOfText(1) })),
+      ]);
+    // gRPC ALREADY_EXISTS from Firestore's create()
+    mockCreate.mockRejectedValue(
+      Object.assign(new Error('Document already exists'), { code: 6 })
+    );
+
+    const result = await textFirebaseWriter(cloudEvent.data!);
+
+    expect(result.duplicate).toBe(true);
+    expect(result.skipped).toBeUndefined();
+    expect(result.classificationTriggered).toBe(false);
+    expect(result.firestoreDocId).toBe('abc123');
+    expect(result.message).toContain('Extracted text already stored');
+    expect(mockPublishMessage).not.toHaveBeenCalled();
+  });
+
+  it('should throw (retry) on other Firestore write failures', async () => {
+    const cloudEvent = createCloudEvent({});
+
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([originalDocMetadata]);
+    mockStorage
+      .bucket()
+      .file()
+      .download.mockResolvedValue([
+        Buffer.from(JSON.stringify({ responses: pagesOfText(1) })),
+      ]);
+    mockCreate.mockRejectedValue(
+      Object.assign(new Error('Deadline exceeded'), { code: 4 })
+    );
+
+    await expect(textFirebaseWriter(cloudEvent.data!)).rejects.toThrow(
+      'Firebase storage failed: Deadline exceeded'
+    );
+    expect(mockPublishMessage).not.toHaveBeenCalled();
   });
 
   it('should ACK (skip) non-JSON files without retrying', async () => {
@@ -201,7 +326,7 @@ describe('textFirebaseWriter', () => {
 
     expect(result.skipped).toBe(true);
     expect(result.message).toContain('Unsupported file type: text/plain');
-    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('should ACK (skip) when PROJECT_ID environment variable is missing', async () => {
@@ -228,7 +353,7 @@ describe('textFirebaseWriter', () => {
     expect(result.message).toContain(
       'Unexpected Vision API result object path'
     );
-    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('should publish a failure notification on permanent failure when NOTIFICATION_TOPIC is set', async () => {
@@ -326,7 +451,7 @@ describe('textFirebaseWriter', () => {
     expect(result.message).toContain(
       'Vision API result contains only errors: Unsupported input file format.'
     );
-    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
     expect(mockPublishMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         attributes: expect.objectContaining({
@@ -367,7 +492,7 @@ describe('textFirebaseWriter', () => {
     expect(result.message).toContain(
       'Vision API result contains no extracted text'
     );
-    expect(mockFirestore.collection().add).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it('should store partial results when some pages have text and others errors', async () => {
@@ -404,7 +529,7 @@ describe('textFirebaseWriter', () => {
     expect(result.skipped).toBeUndefined();
     expect(result.textLength).toBe('Readable page'.length);
     expect(result.pages).toBe(1);
-    expect(mockFirestore.collection().add).toHaveBeenCalled();
+    expect(mockCreate).toHaveBeenCalled();
   });
 
   it('should throw (retry) on transient storage failures', async () => {
@@ -454,7 +579,7 @@ describe('textFirebaseWriter', () => {
     expect(result.message).toContain(
       'Successfully stored extracted text from test.pdf'
     );
-    expect(result.firestoreDocId).toBe('doc123');
+    expect(result.firestoreDocId).toBe('abc123');
     expect(result.classificationTriggered).toBe(false); // Not triggered
 
     // Verify PubSub was not called
@@ -497,7 +622,7 @@ describe('textFirebaseWriter', () => {
 
       await textFirebaseWriter(createCloudEvent({}).data!);
 
-      expect(mockFirestore.collection().add).toHaveBeenCalledWith(
+      expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           modifiedTime: '2026-04-28T00:00:00.000Z',
         })
@@ -521,10 +646,13 @@ describe('textFirebaseWriter', () => {
         (call) => call[0].attributes?.operation === 'file-classification'
       );
       expect(published[0].json).toMatchObject({
+        firestoreDocId: 'abc123',
         fileId: 'file123',
         fileName: 'test.pdf',
         modifiedTime: '2026-04-28T00:00:00.000Z',
         objectName: 'documents/abc123',
+        totalPages: 1,
+        includedPages: 1,
       });
     });
 

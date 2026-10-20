@@ -66,11 +66,12 @@ async function testFirestoreTrigger(): Promise<void> {
       confidence: 1.0,
       pages: [
         {
-          text: 'Test content',
           pageNumber: 1,
           confidence: 1.0,
         },
       ],
+      totalPages: 1,
+      includedPages: 1,
       extractedAt: new Date().toISOString(),
       mimeType: 'text/plain',
       fileSize: 100,
