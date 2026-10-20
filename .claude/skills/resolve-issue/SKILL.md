@@ -131,6 +131,8 @@ steps here.
 - The branch name and the commits that will be pushed.
 - The PR title and a preview of the body (including the `Closes #<issue-number>`
   line).
+- That the body, the commit messages, and any new test fixtures contain nothing
+  the Private Data Policy in `CLAUDE.md` forbids.
 
 Wait for explicit approval.
 

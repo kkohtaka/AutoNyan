@@ -197,6 +197,14 @@ Skill Markdown (`SKILL.md`) is written in **English**, consistent with
 `CLAUDE.md`. Artifacts a skill produces (issues, PRs, commits) follow the
 convention documented in that skill.
 
+### 4.10 Private data
+
+The Private Data Policy in `CLAUDE.md` defines what must never reach an
+outward-facing artifact. A skill that reads production data (logs, Firestore,
+Drive) or writes an outward artifact (issue, PR, comment, commit, Slack) points
+at that policy at the step where the data would cross — its report, its
+confirmation gate, or its `Prohibited` section — rather than restating the list.
+
 ## 5. Shared "fix loop" for run-and-fix skills
 
 Skills that run a check command and then fix what it reports share one
@@ -225,4 +233,6 @@ Before considering a skill done, verify:
 - [ ] No duplicated behavior; delegations point to sibling skills (§4.4).
 - [ ] Tools that a cloud session lacks (`gh`, `gcloud`, local Terraform state)
       are probed for and have a second route (§4.8).
+- [ ] A skill that reads production data or writes outward artifacts points at
+      the Private Data Policy where the data would cross (§4.10).
 - [ ] Verified by manual invocation, with reproduction steps recorded.
