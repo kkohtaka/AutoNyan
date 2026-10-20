@@ -31,6 +31,8 @@ interface StoredDocument {
   confidence?: number;
   modifiedTime?: string;
   objectName?: string;
+  totalPages?: number;
+  includedPages?: number;
   categoryFolderSetHash?: string;
 }
 
@@ -214,6 +216,49 @@ describe('reclassificationSweeper', () => {
         }),
       })
     );
+  });
+
+  it('should carry the stored page coverage on the republished message', async () => {
+    givenDocuments([
+      {
+        fileId: 'file-123',
+        fileName: 'report.pdf',
+        extractedText: '表紙のテキスト',
+        confidence: 0.9,
+        totalPages: 200,
+        includedPages: 20,
+        categoryFolderSetHash: previousHash,
+      },
+    ]);
+
+    await reclassificationSweeper(cloudEvent);
+
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          totalPages: 200,
+          includedPages: 20,
+        }),
+      })
+    );
+  });
+
+  it('should omit page coverage for a document stored before it was recorded', async () => {
+    givenDocuments([
+      {
+        fileId: 'file-123',
+        fileName: 'invoice.pdf',
+        extractedText: '請求書',
+        confidence: 0.9,
+        categoryFolderSetHash: previousHash,
+      },
+    ]);
+
+    await reclassificationSweeper(cloudEvent);
+
+    const [{ json }] = mockPublishMessage.mock.calls[0];
+    expect(json).not.toHaveProperty('totalPages');
+    expect(json).not.toHaveProperty('includedPages');
   });
 
   it("should fall back to Drive's modifiedTime for a document extracted before it was stored", async () => {

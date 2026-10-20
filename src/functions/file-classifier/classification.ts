@@ -1,5 +1,6 @@
 import { VertexAI } from '@google-cloud/vertexai';
 import { CategoryFolder } from './drive-operations';
+import { PageInfo, preparePromptInput } from './partial-input';
 
 export interface ClassificationResult {
   categoryName: string | null;
@@ -17,19 +18,20 @@ interface GeminiResponse {
 }
 
 const UNCATEGORIZED = 'UNCATEGORIZED';
-const MAX_TEXT_LENGTH = 3000;
 
 /**
  * Classify document text using Gemini AI
  * @param projectId GCP Project ID
  * @param text Extracted text from document
  * @param categories Available category folders
+ * @param pageInfo Page coverage of the text, when the writer recorded it
  * @returns Classification result with category, confidence, and reasoning
  */
 export async function classifyWithGemini(
   projectId: string,
   text: string,
-  categories: CategoryFolder[]
+  categories: CategoryFolder[],
+  pageInfo?: PageInfo
 ): Promise<ClassificationResult> {
   // Use region from environment variable, fallback to us-central1 if not set
   const location = process.env.VERTEX_AI_LOCATION || 'us-central1';
@@ -47,7 +49,10 @@ export async function classifyWithGemini(
     .map((c, i) => `${i + 1}. ${c.name}`)
     .join('\n');
 
-  const truncatedText = text.substring(0, MAX_TEXT_LENGTH);
+  const { text: truncatedText, partialInputNote } = preparePromptInput(
+    text,
+    pageInfo
+  );
 
   const prompt = `
 あなたは文書分類の専門家です。以下のテキスト内容を分析し、最も適切なカテゴリーを選択してください。
@@ -55,7 +60,7 @@ export async function classifyWithGemini(
 【利用可能なカテゴリー】
 ${categoriesList}
 
-【文書テキスト】
+${partialInputNote}【文書テキスト】
 ${truncatedText}
 
 【指示】

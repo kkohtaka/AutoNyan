@@ -188,6 +188,13 @@ export const reclassificationSweeper = async (
           confidence: Number(data.confidence || 0),
           ...(modifiedTime ? { modifiedTime } : {}),
           ...(data.objectName ? { objectName: String(data.objectName) } : {}),
+          ...(typeof data.totalPages === 'number' &&
+          typeof data.includedPages === 'number'
+            ? {
+                totalPages: data.totalPages,
+                includedPages: data.includedPages,
+              }
+            : {}),
           reclassification: true,
         },
         attributes: {

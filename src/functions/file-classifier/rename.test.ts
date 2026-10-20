@@ -75,6 +75,50 @@ describe('generateFileName', () => {
     expect(prompt).not.toContain('既存ファイル名（新しい順）');
   });
 
+  it('should tell the model when only the opening pages are included', async () => {
+    mockGenerateContent.mockResolvedValue(
+      geminiResponse(
+        JSON.stringify({
+          fileName: '報告書',
+          confidence: 0.8,
+          reasoning: '表紙から命名しました',
+        })
+      )
+    );
+
+    await generateFileName('test-project', '表紙', 'scan_0001.pdf', [], {
+      totalPages: 200,
+      includedPages: 20,
+    });
+
+    const prompt = mockGenerateContent.mock.calls[0][0] as string;
+    expect(prompt).toContain('【注意：テキストは一部のみ】');
+    expect(prompt).toContain('この文書は全200ページです');
+    expect(prompt.indexOf('テキストは一部のみ')).toBeLessThan(
+      prompt.indexOf('【文書テキスト】')
+    );
+  });
+
+  it('should send no partial-input note for complete input', async () => {
+    mockGenerateContent.mockResolvedValue(
+      geminiResponse(
+        JSON.stringify({
+          fileName: '請求書',
+          confidence: 0.8,
+          reasoning: '内容から命名しました',
+        })
+      )
+    );
+
+    await generateFileName('test-project', '請求書', 'scan_0001.pdf', [], {
+      totalPages: 1,
+      includedPages: 1,
+    });
+
+    const prompt = mockGenerateContent.mock.calls[0][0] as string;
+    expect(prompt).not.toContain('テキストは一部のみ');
+  });
+
   it('should parse JSON wrapped in a markdown code block', async () => {
     mockGenerateContent.mockResolvedValue(
       geminiResponse(

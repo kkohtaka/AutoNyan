@@ -1,4 +1,5 @@
 import { VertexAI } from '@google-cloud/vertexai';
+import { PageInfo, preparePromptInput } from './partial-input';
 
 export interface FileNameGenerationResult {
   fileName: string;
@@ -11,8 +12,6 @@ interface GeminiFileNameResponse {
   confidence: number;
   reasoning: string;
 }
-
-const MAX_TEXT_LENGTH = 3000;
 
 // Below this confidence the generated name is discarded and the file keeps
 // its original name.
@@ -27,13 +26,15 @@ const MAX_BASE_NAME_LENGTH = 100;
  * @param text Extracted text from document
  * @param originalFileName Current name of the file
  * @param existingFileNames File names already in the destination folder (most-recent first)
+ * @param pageInfo Page coverage of the text, when the writer recorded it
  * @returns Proposed base name (without extension), confidence, and reasoning
  */
 export async function generateFileName(
   projectId: string,
   text: string,
   originalFileName: string,
-  existingFileNames: string[]
+  existingFileNames: string[],
+  pageInfo?: PageInfo
 ): Promise<FileNameGenerationResult> {
   // Use region from environment variable, fallback to us-central1 if not set
   const location = process.env.VERTEX_AI_LOCATION || 'us-central1';
@@ -47,7 +48,10 @@ export async function generateFileName(
     model: 'gemini-2.5-flash',
   });
 
-  const truncatedText = text.substring(0, MAX_TEXT_LENGTH);
+  const { text: truncatedText, partialInputNote } = preparePromptInput(
+    text,
+    pageInfo
+  );
 
   const existingNamesSection =
     existingFileNames.length > 0
@@ -68,7 +72,7 @@ ${existingFileNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}
 【元のファイル名】
 ${originalFileName}
 
-${existingNamesSection}【文書テキスト】
+${existingNamesSection}${partialInputNote}【文書テキスト】
 ${truncatedText}
 
 【指示】
