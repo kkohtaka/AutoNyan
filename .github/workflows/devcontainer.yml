@@ -1,0 +1,79 @@
+---
+name: Devcontainer
+
+run-name: |
+  ${{
+    github.event_name == 'pull_request' &&
+    format('Devcontainer - PR #{0} ({1})', github.event.pull_request.number, github.event.pull_request.head.ref) ||
+    'Devcontainer'
+  }}
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.devcontainer/**'
+      - '.nvmrc'
+      - '.github/workflows/devcontainer.yml'
+  # Most breakages come from upstream drift (the floating base image tag, apt
+  # packages, feature releases), which no pull request in this repository
+  # triggers, so the build also runs on a schedule.
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Not a required check yet: the build is network-heavy (apt, GitHub releases,
+  # Google's package repository), and a flaky required check would block every
+  # Renovate automerge. Promoting it means satisfying the Required Status Check
+  # Invariant in CLAUDE.md first.
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      # The Dockerfile picks release assets by architecture, and Apple Silicon
+      # hosts build the arm64 variant.
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install the Dev Container CLI
+        run: npm install -g @devcontainers/cli@0.89.0
+
+      # Building from devcontainer.json, not the Dockerfile alone, exercises the
+      # features too. --skip-post-create leaves out the developer-only lifecycle
+      # commands (postCreateCommand's npm install, postStartCommand's Serena
+      # registration); the smoke test installs dependencies itself.
+      - name: Build the image and start the container
+        run: devcontainer up --workspace-folder . --skip-post-create
+
+      # GITHUB_TOKEN is forwarded for `tflint --init`, which resolves plugin
+      # releases through api.github.com and hits the unauthenticated rate limit
+      # on shared runner addresses.
+      - name: Smoke-test the toolchain
+        run: |
+          devcontainer exec --workspace-folder . \
+            --remote-env "GITHUB_TOKEN=${GITHUB_TOKEN}" \
+            bash .devcontainer/smoke-test.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
