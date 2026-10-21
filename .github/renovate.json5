@@ -109,6 +109,13 @@
     },
     {
       customType: "regex",
+      managerFilePatterns: ["/^\\.devcontainer/Dockerfile$/"],
+      matchStrings: ["ARG TFLINT_VERSION=(?<currentValue>v[0-9.]+)"],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "terraform-linters/tflint",
+    },
+    {
+      customType: "regex",
       managerFilePatterns: ["/^\\.devcontainer/devcontainer\\.json$/"],
       matchStrings: [
         '"ghcr\\.io/devcontainers/features/terraform:1":\\s*\\{\\s*"version":\\s*"(?<currentValue>[^"]+)"',
