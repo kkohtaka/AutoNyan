@@ -133,6 +133,7 @@ If there are uncommitted changes, stage and commit them:
    - Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`
    - Keep the subject line under 72 characters
    - Focus on *why*, not *what*
+   - Keep private data out of it (see **Private data** in Step 4)
 3. Append the Co-Authored-By trailer using the model name you are currently running as
    (e.g. `Claude Sonnet 4.6`, `Claude Opus 4.8`, `Claude Haiku 4.5`):
 
@@ -142,8 +143,10 @@ Co-Authored-By: Claude <model-name> <noreply@anthropic.com>
 
 ### Step 3 — Push the branch
 
-Pushing is an outward-facing action: confirm with the user before the first
-push of a new branch, then run:
+Pushing is an outward-facing action, and it publishes every commit message in
+`git log origin/<default>..HEAD`. Check those messages against **Private
+data** (Step 4), then confirm with the user before the first push of a new
+branch, and run:
 
 ```bash
 git push -u origin <branch-name>
@@ -212,12 +215,32 @@ currently running as (e.g. `Claude Opus 4.8`, `Claude Sonnet 4.6`, `Claude Haiku
 🤖 This pull request was created with the assistance of AI (<model-name>).
 ```
 
+**Private data.** Text drafted here ends up on the remote — a pushed commit, a
+PR, an issue — and in a public repository anyone can read it. Before it goes
+out, re-read the draft and remove:
+
+- anything the repository's own policy keeps out of public artifacts — look for
+  one in `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or similar, and apply it;
+- secrets — credentials, tokens, keys, connection strings;
+- data read during the session from running systems or user storage rather than
+  from the repository — log entries, database records, file and folder names,
+  IDs, document contents;
+- values the repository keeps out of version control on purpose — from
+  gitignored configuration or CI/CD secrets — and identifiers derived from them;
+- personal data about anyone that the repository does not already make public.
+
+Describe what such data showed by its shape instead: counts, sizes, error
+classes, and code paths carry the evidence without identifying anything. Use a
+placeholder (`<fileId>`, `<customer A>`) where a value's role matters, and
+paraphrase an error message that embeds a private value. When unsure whether a
+value is private, treat it as private and ask.
+
 ### Step 5 — Create the PR as a draft
 
-Opening a PR is an outward-facing action: show the user the title and body and
-wait for approval. The title, the body, and this gate are the same on both
-routes — only the call that submits them differs. Use the route the Context
-probe reported.
+Opening a PR is an outward-facing action: re-read the title and body against
+**Private data** (Step 4), then show them to the user and wait for approval.
+The title, the body, and this gate are the same on both routes — only the call
+that submits them differs. Use the route the Context probe reported.
 
 **Route A — `gh` CLI available** (local checkout / devcontainer):
 

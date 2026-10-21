@@ -115,9 +115,30 @@ Fill the chosen structure. Guidelines:
 - Acceptance criteria must be concrete and checkable.
 - Link related issues/PRs/commits where they exist.
 
+**Private data.** Text drafted here ends up on the remote — a pushed commit, a
+PR, an issue — and in a public repository anyone can read it. Before it goes
+out, re-read the draft and remove:
+
+- anything the repository's own policy keeps out of public artifacts — look for
+  one in `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or similar, and apply it;
+- secrets — credentials, tokens, keys, connection strings;
+- data read during the session from running systems or user storage rather than
+  from the repository — log entries, database records, file and folder names,
+  IDs, document contents;
+- values the repository keeps out of version control on purpose — from
+  gitignored configuration or CI/CD secrets — and identifiers derived from them;
+- personal data about anyone that the repository does not already make public.
+
+Describe what such data showed by its shape instead: counts, sizes, error
+classes, and code paths carry the evidence without identifying anything. Use a
+placeholder (`<fileId>`, `<customer A>`) where a value's role matters, and
+paraphrase an error message that embeds a private value. When unsure whether a
+value is private, treat it as private and ask.
+
 ### Step 5 — Confirm before filing
 
-Show the user the proposed **title, labels, body, and parent issue (if any)**.
+Re-read the title and body against **Private data** (Step 4), then show the
+user the proposed **title, labels, body, and parent issue (if any)**.
 Include the Claude Code attribution footer (see Step 6) in the body you show, so
 the user reviews exactly what will be filed. Wait for explicit approval. Filing
 an issue is an outward-facing action — do not file it on either route until the

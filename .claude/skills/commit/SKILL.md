@@ -155,6 +155,26 @@ EOF
 )"
 ```
 
+**Private data.** Text drafted here ends up on the remote — a pushed commit, a
+PR, an issue — and in a public repository anyone can read it. Before it goes
+out, re-read the draft and remove:
+
+- anything the repository's own policy keeps out of public artifacts — look for
+  one in `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, or similar, and apply it;
+- secrets — credentials, tokens, keys, connection strings;
+- data read during the session from running systems or user storage rather than
+  from the repository — log entries, database records, file and folder names,
+  IDs, document contents;
+- values the repository keeps out of version control on purpose — from
+  gitignored configuration or CI/CD secrets — and identifiers derived from them;
+- personal data about anyone that the repository does not already make public.
+
+Describe what such data showed by its shape instead: counts, sizes, error
+classes, and code paths carry the evidence without identifying anything. Use a
+placeholder (`<fileId>`, `<customer A>`) where a value's role matters, and
+paraphrase an error message that embeds a private value. When unsure whether a
+value is private, treat it as private and ask.
+
 ### Step 5 — Repeat for remaining groups
 
 If Step 2 produced more than one group, repeat Steps 3–4 for each remaining

@@ -1,12 +1,12 @@
 lockfile_version: '1'
-generated_at: '2026-08-26T05:19:31.808012+00:00'
-apm_version: 0.23.1
+generated_at: '2026-10-21T16:57:44.567038+00:00'
+apm_version: 0.34.0
 dependencies:
 - repo_url: kkohtaka/agent-skills
   name: agent-skills
   host: github.com
-  resolved_commit: 4183940fd2486ed9426f72f902196b86659328a6
-  resolved_ref: v0.2.0
+  resolved_commit: 05c4f56d525700415f679c36f9b7688c6e330f3d
+  resolved_ref: v0.3.0
   version: 0.3.0
   package_type: apm_package
   deployed_files:
@@ -19,8 +19,81 @@ dependencies:
   - .claude/skills/debug-ci
   - .claude/skills/debug-ci/SKILL.md
   deployed_file_hashes:
-    .claude/skills/commit/SKILL.md: sha256:b634ed66090a2bf913058f73cb3c91fcd33276d08d7d07cdf0128db9f23cde3c
-    .claude/skills/create-issue/SKILL.md: sha256:a4d51c39d9a79fd4ae946773e8426955143a44286b468343e5f3fbf743b04360
-    .claude/skills/create-pr/SKILL.md: sha256:ba69b134c70c6e28d5920b419f9ced4aebdbb7e49e801f7012399b17ed1730f6
+    .claude/skills/commit/SKILL.md: sha256:050600a9e8b5fa63d427a78fbae1c2624058b9d89385b819c2ef0540f8687016
+    .claude/skills/create-issue/SKILL.md: sha256:297b0ff0c8e8554dac4a116bddaa3bc0b4b1e5a6baada2a1d659f9e577149a93
+    .claude/skills/create-pr/SKILL.md: sha256:b9a88edc967492827a2ba73d44ec43c737b20ba9e24f5df102fdf28c086bd343
     .claude/skills/debug-ci/SKILL.md: sha256:3833bc790ad299d4526e6a2abe2d8e4278c462c09ded2c67499a730c2aab9f5f
-  content_hash: sha256:cab1b31cb47b7d8940275a0ca59d2b7dcf96d3812fe421a3ed86ddda2b16f32a
+  content_hash: sha256:1edee89d19a4f0e6efbfbf7cedfc059635b0f128889c3e9e1a8aa794f88b07ff
+deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/skills/commit
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/commit/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: sha256:050600a9e8b5fa63d427a78fbae1c2624058b9d89385b819c2ef0540f8687016
+- kind: project-relative
+  target: claude
+  value: .claude/skills/create-issue
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/create-issue/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: sha256:297b0ff0c8e8554dac4a116bddaa3bc0b4b1e5a6baada2a1d659f9e577149a93
+- kind: project-relative
+  target: claude
+  value: .claude/skills/create-pr
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/create-pr/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: sha256:b9a88edc967492827a2ba73d44ec43c737b20ba9e24f5df102fdf28c086bd343
+- kind: project-relative
+  target: claude
+  value: .claude/skills/debug-ci
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/debug-ci/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - kkohtaka/agent-skills
+  active_owner: kkohtaka/agent-skills
+  content_hash: sha256:3833bc790ad299d4526e6a2abe2d8e4278c462c09ded2c67499a730c2aab9f5f
