@@ -15,9 +15,11 @@ export NVM_DIR="$HOME/.nvm"
 . "$NVM_DIR/nvm.sh"
 nvm use --silent
 
+# Full output, not `| head -1`: a tool that keeps writing after head exits
+# (gcloud does) is killed by SIGPIPE, which pipefail reports as a failure.
 for tool in node npm terraform tflint gcloud shellcheck shfmt yamllint; do
-	printf '%s: ' "$tool"
-	"$tool" --version | head -1
+	echo "== $tool"
+	"$tool" --version
 done
 
 npm ci
