@@ -177,9 +177,15 @@ describe('textVisionProcessor', () => {
     mockVision.asyncBatchAnnotateFiles.mockResolvedValue([pdfOperation()]);
     mockGetFiles.mockResolvedValue([
       [
-        shard('raw/abc123/output-1-to-20.json', [{ text: 'first' }]),
-        shard('raw/abc123/output-101-to-120.json', [{ text: 'third' }]),
-        shard('raw/abc123/output-21-to-40.json', [{ text: 'second' }]),
+        shard('raw/abc123/output-1-to-20.json', [
+          { fullTextAnnotation: { text: 'first' } },
+        ]),
+        shard('raw/abc123/output-101-to-120.json', [
+          { fullTextAnnotation: { text: 'third' } },
+        ]),
+        shard('raw/abc123/output-21-to-40.json', [
+          { fullTextAnnotation: { text: 'second' } },
+        ]),
       ],
     ]);
 
@@ -187,10 +193,104 @@ describe('textVisionProcessor', () => {
 
     const [savedContent] = mockStorage.bucket().file().save.mock.calls[0];
     expect(JSON.parse(savedContent).responses).toEqual([
-      { text: 'first' },
-      { text: 'second' },
-      { text: 'third' },
+      { fullTextAnnotation: { text: 'first' } },
+      { fullTextAnnotation: { text: 'second' } },
+      { fullTextAnnotation: { text: 'third' } },
     ]);
+  });
+
+  it('should keep only the text, first-page confidence and error of each response', async () => {
+    const cloudEvent = createCloudEvent({ contentType: 'application/pdf' });
+
+    const fullAnnotation = (text: string, confidence: number) => ({
+      fullTextAnnotation: {
+        text,
+        pages: [
+          {
+            confidence,
+            width: 612,
+            height: 792,
+            blocks: [
+              {
+                blockType: 'TEXT',
+                boundingBox: { vertices: [{ x: 1, y: 1 }] },
+                paragraphs: [
+                  {
+                    words: [
+                      {
+                        symbols: [{ text: text[0], confidence }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          { confidence: 0.1 },
+        ],
+      },
+      context: { pageNumber: 1, uri: 'gs://test-bucket/documents/test.pdf' },
+    });
+
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([pdfMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([pdfOperation()]);
+    mockGetFiles.mockResolvedValue([
+      [
+        shard('raw/abc123/output-1-to-20.json', [
+          fullAnnotation('alpha', 0.9),
+          fullAnnotation('beta', 0.8),
+        ]),
+        shard('raw/abc123/output-21-to-40.json', [
+          {
+            error: { code: 3, message: 'Bad page.' },
+            context: { pageNumber: 21 },
+          },
+          { fullTextAnnotation: { text: 'gamma' } },
+        ]),
+      ],
+    ]);
+
+    await textVisionProcessor(cloudEvent.data!);
+
+    const [savedContent] = mockStorage.bucket().file().save.mock.calls[0];
+    expect(JSON.parse(savedContent)).toEqual({
+      responses: [
+        { fullTextAnnotation: { text: 'alpha', pages: [{ confidence: 0.9 }] } },
+        { fullTextAnnotation: { text: 'beta', pages: [{ confidence: 0.8 }] } },
+        { error: { code: 3, message: 'Bad page.' } },
+        { fullTextAnnotation: { text: 'gamma' } },
+      ],
+    });
+  });
+
+  it('should merge every page of every shard in page order', async () => {
+    const cloudEvent = createCloudEvent({ contentType: 'application/pdf' });
+
+    const pages = (first: number, count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        fullTextAnnotation: { text: `page ${first + i}` },
+      }));
+
+    mockStorage.bucket().file().getMetadata.mockResolvedValue([pdfMetadata]);
+    mockVision.asyncBatchAnnotateFiles.mockResolvedValue([pdfOperation()]);
+    mockGetFiles.mockResolvedValue([
+      [
+        shard('raw/abc123/output-1-to-20.json', pages(1, 20)),
+        shard('raw/abc123/output-41-to-45.json', pages(41, 5)),
+        shard('raw/abc123/output-21-to-40.json', pages(21, 20)),
+      ],
+    ]);
+
+    await textVisionProcessor(cloudEvent.data!);
+
+    const [savedContent] = mockStorage.bucket().file().save.mock.calls[0];
+    const merged = JSON.parse(savedContent).responses as Array<{
+      fullTextAnnotation: { text: string };
+    }>;
+    expect(merged).toHaveLength(45);
+    expect(merged.map((r) => r.fullTextAnnotation.text)).toEqual(
+      Array.from({ length: 45 }, (_, i) => `page ${i + 1}`)
+    );
   });
 
   it('should throw (retry) when Vision reports success but wrote no shards', async () => {
