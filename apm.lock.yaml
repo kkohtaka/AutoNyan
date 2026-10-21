@@ -1,5 +1,4 @@
 lockfile_version: '1'
-generated_at: '2026-10-21T16:57:44.567038+00:00'
 apm_version: 0.34.0
 dependencies:
 - repo_url: kkohtaka/agent-skills
