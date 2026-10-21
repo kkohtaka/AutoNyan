@@ -43,8 +43,42 @@ const VISION_BATCH_SIZE = 20;
 
 const SHARD_NAME_PATTERN = /output-(\d+)-to-(\d+)\.json$/;
 
+interface VisionShardResponse {
+  fullTextAnnotation?: {
+    text?: string;
+    pages?: Array<{ confidence?: number }>;
+  };
+  error?: unknown;
+}
+
 interface VisionShardResult {
-  responses?: unknown[];
+  responses?: VisionShardResponse[];
+}
+
+/**
+ * Keep only the parts of a Vision response the downstream writer reads.
+ *
+ * A full annotation carries the block/paragraph/word/symbol tree with
+ * bounding boxes for every page, which is nearly all of a shard's size and
+ * nothing downstream consumes. Dropping it as each shard is parsed keeps the
+ * merged object, and the writer's memory while parsing it, proportional to
+ * the document's text rather than its page count.
+ */
+function slimVisionResponse(
+  response: VisionShardResponse
+): VisionShardResponse {
+  const slim: VisionShardResponse = {};
+  if (response.fullTextAnnotation) {
+    const { text, pages } = response.fullTextAnnotation;
+    slim.fullTextAnnotation = { text };
+    if (pages && pages.length > 0) {
+      slim.fullTextAnnotation.pages = [{ confidence: pages[0].confidence }];
+    }
+  }
+  if (response.error !== undefined) {
+    slim.error = response.error;
+  }
+  return slim;
 }
 
 /**
@@ -64,7 +98,7 @@ interface VisionShardResult {
 async function mergeVisionShards(
   bucket: Bucket,
   rawPath: string
-): Promise<{ responses: unknown[]; shardFiles: File[] }> {
+): Promise<{ responses: VisionShardResponse[]; shardFiles: File[] }> {
   const [shardFiles] = await bucket.getFiles({ prefix: rawPath });
 
   if (shardFiles.length === 0) {
@@ -81,14 +115,16 @@ async function mergeVisionShards(
     })
     .sort((a, b) => a.startPage - b.startPage);
 
-  const shardResults = await Promise.all(
-    shards.map(async ({ file }) => {
-      const [content] = await file.download();
-      return JSON.parse(content.toString('utf-8')) as VisionShardResult;
-    })
-  );
-
-  const responses = shardResults.flatMap((shard) => shard.responses ?? []);
+  // Shards are parsed one at a time so peak memory is about one full shard
+  // plus the slimmed accumulator, not every shard's full annotation at once.
+  const responses: VisionShardResponse[] = [];
+  for (const { file } of shards) {
+    const [content] = await file.download();
+    const shard = JSON.parse(content.toString('utf-8')) as VisionShardResult;
+    for (const response of shard.responses ?? []) {
+      responses.push(slimVisionResponse(response));
+    }
+  }
 
   return { responses, shardFiles };
 }
