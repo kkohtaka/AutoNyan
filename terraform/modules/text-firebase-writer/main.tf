@@ -60,7 +60,7 @@ resource "google_cloudfunctions2_function" "text_firebase_writer" {
   service_config {
     max_instance_count = 10
     min_instance_count = 0
-    available_memory   = "512Mi"
+    available_memory   = "1Gi"
     timeout_seconds    = 300
     environment_variables = {
       PROJECT_ID            = var.project_id
