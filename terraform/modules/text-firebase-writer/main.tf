@@ -60,8 +60,11 @@ resource "google_cloudfunctions2_function" "text_firebase_writer" {
   service_config {
     max_instance_count = 10
     min_instance_count = 0
-    available_memory   = "1Gi"
-    timeout_seconds    = 300
+    # Cloud Run bounds memory by CPU, and an update keeps the CPU derived when
+    # the function was created, so a memory change must set the CPU with it.
+    available_memory = "1Gi"
+    available_cpu    = "1"
+    timeout_seconds  = 300
     environment_variables = {
       PROJECT_ID            = var.project_id
       ENVIRONMENT           = var.environment
