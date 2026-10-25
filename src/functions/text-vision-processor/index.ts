@@ -145,6 +145,16 @@ export const textVisionProcessor = async (
       contentType,
     } = parseStorageEvent(storageObjectData);
 
+    // Read the original file's identity before any check that can fail
+    // permanently: the failure notification needs it to reach the owner.
+    const storage = new Storage();
+    const file = storage.bucket(bucket).file(objectName);
+    const [metadata] = await file.getMetadata();
+
+    originalFileId = String(metadata.metadata?.originalFileId || '');
+    originalFileName = String(metadata.metadata?.originalFileName || '');
+    const contentHash = metadata.metadata?.contentHash;
+
     // Check if file type is supported for text extraction
     if (!contentType || !SUPPORTED_MIME_TYPES.includes(contentType)) {
       logger.info('Skipping text extraction for unsupported file type', {
@@ -155,17 +165,7 @@ export const textVisionProcessor = async (
       );
     }
 
-    // Initialize clients
-    const storage = new Storage();
     const vision = new ImageAnnotatorClient();
-
-    // Get the file metadata to extract contentHash
-    const file = storage.bucket(bucket).file(objectName);
-    const [metadata] = await file.getMetadata();
-
-    originalFileId = String(metadata.metadata?.originalFileId || '');
-    originalFileName = String(metadata.metadata?.originalFileName || '');
-    const contentHash = metadata.metadata?.contentHash;
 
     if (!originalFileId || !originalFileName || !contentHash) {
       throw new PermanentError('Missing required metadata from uploaded file');
