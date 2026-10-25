@@ -491,10 +491,24 @@ describe('textVisionProcessor', () => {
     );
   });
 
-  it('should ACK (skip) unsupported file types without retrying', async () => {
+  it('should ACK (skip) unsupported file types and notify the file owner', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+
     const cloudEvent = createCloudEvent({
       contentType: 'application/zip',
     });
+    mockStorage
+      .bucket()
+      .file()
+      .getMetadata.mockResolvedValue([
+        {
+          metadata: {
+            originalFileId: 'file123',
+            originalFileName: 'test.zip',
+            contentHash: 'abc123',
+          },
+        },
+      ]);
 
     const result = await textVisionProcessor(cloudEvent.data!);
 
@@ -504,6 +518,18 @@ describe('textVisionProcessor', () => {
       'Unsupported file type for text extraction: application/zip'
     );
     expect(mockVision.asyncBatchAnnotateFiles).not.toHaveBeenCalled();
+    expect(mockPublishMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        json: expect.objectContaining({
+          fileId: 'file123',
+          fileName: 'test.zip',
+        }),
+        attributes: expect.objectContaining({
+          operation: 'failure-notification',
+          fileId: 'file123',
+        }),
+      })
+    );
   });
 
   it('should ACK (skip) when PROJECT_ID environment variable is missing', async () => {
