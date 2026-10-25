@@ -26,7 +26,8 @@ export interface StorageObjectInfo {
  * @param storage - Storage client
  * @param bucketName - Bucket name
  * @param predicate - Function to test if file matches
- * @param options - Polling options
+ * @param options - Polling options; `prefix` limits the listing to objects
+ *   under it
  * @returns Storage object information
  */
 export async function pollForStorageObject(
@@ -36,14 +37,14 @@ export async function pollForStorageObject(
     fileName: string,
     metadata?: { [key: string]: string | number | boolean | null }
   ) => boolean,
-  options: Partial<PollOptions> = {}
+  options: Partial<PollOptions> & { prefix?: string } = {}
 ): Promise<StorageObjectInfo | null> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const startTime = Date.now();
 
   while (Date.now() - startTime < opts.timeout) {
     const bucket = storage.bucket(bucketName);
-    const [files] = await bucket.getFiles();
+    const [files] = await bucket.getFiles({ prefix: opts.prefix });
 
     for (const file of files) {
       const [metadata] = await file.getMetadata();

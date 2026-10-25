@@ -378,13 +378,19 @@ describe('AutoNyan E2E - Full Pipeline', () => {
         // ========================================
         logger.log('stage-3', 'Waiting for Vision API text extraction');
 
+        // Only the merged result under results/ marks completion. Vision's
+        // shards under raw/ are deleted once merged, so listing them races
+        // that deletion.
         const visionBucket = outputs.vision_results_bucket;
         const visionResult = await pollForStorageObject(
           storage,
           visionBucket,
-          (fileName) =>
-            fileName.includes(contentHash) && fileName.endsWith('.json'),
-          { timeout: 540000, interval: 10000 } // 9 minutes to match text-vision-processor Cloud Function timeout
+          (fileName) => fileName.endsWith('.json'),
+          {
+            prefix: `results/${contentHash}/`,
+            timeout: 540000, // 9 minutes to match text-vision-processor Cloud Function timeout
+            interval: 10000,
+          }
         );
 
         expect(visionResult).toBeDefined();
