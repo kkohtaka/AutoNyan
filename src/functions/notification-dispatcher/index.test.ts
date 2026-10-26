@@ -269,13 +269,13 @@ describe('notificationDispatcher', () => {
             { emailAddress: 'human@example.com', role: 'writer', type: 'user' },
             {
               emailAddress:
-                'staging-text-vision-proc@home-hack-388806.iam.gserviceaccount.com',
+                'staging-text-vision-proc@test-project.iam.gserviceaccount.com',
               role: 'writer',
               type: 'user',
             },
             {
               emailAddress:
-                'github-actions-terraform@home-hack-388806.iam.gserviceaccount.com',
+                'github-actions-terraform@test-project.iam.gserviceaccount.com',
               role: 'writer',
               type: 'user',
             },
@@ -394,7 +394,7 @@ describe('notificationDispatcher', () => {
             },
             {
               emailAddress:
-                'staging-doc-processor@home-hack-388806.iam.gserviceaccount.com',
+                'staging-doc-processor@test-project.iam.gserviceaccount.com',
               role: 'organizer',
               type: 'user',
             },
