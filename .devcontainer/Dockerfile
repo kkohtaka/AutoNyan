@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/devcontainers/base:bookworm
 ARG TARGETARCH
 # Kept at the version .github/workflows/test.yml installs so local lint
 # results match CI.
-ARG TFLINT_VERSION=v0.64.0
+ARG TFLINT_VERSION=v0.65.0
 
 # Copy .nvmrc to read Node.js version
 COPY .nvmrc /tmp/.nvmrc
