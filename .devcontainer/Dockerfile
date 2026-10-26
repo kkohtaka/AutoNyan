@@ -52,7 +52,7 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
     && rm -f "${TFLINT_ASSET}" checksums.txt
 
 # Install uv and uvx
-COPY --from=ghcr.io/astral-sh/uv:0.13.4 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /uvx /bin/
 
 # Switch back to vscode user
 USER vscode
