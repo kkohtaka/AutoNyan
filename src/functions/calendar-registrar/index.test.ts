@@ -308,9 +308,17 @@ describe('calendarRegistrar', () => {
 
     expect(result.skipped).toBe(true);
     expect(calendar.registerEvent).not.toHaveBeenCalled();
-    expect(mockPublishMessage.mock.calls[0][0].attributes.operation).toBe(
-      'failure-notification'
-    );
+    expect(mockPublishMessage).toHaveBeenCalledWith({
+      json: expect.objectContaining({
+        fileId: baseMessage.fileId,
+        fileName: baseMessage.fileName,
+        stageName: 'calendar-registrar',
+      }),
+      attributes: {
+        operation: 'failure-notification',
+        fileId: baseMessage.fileId,
+      },
+    });
   });
 
   it('should report truncation to the recipient', async () => {

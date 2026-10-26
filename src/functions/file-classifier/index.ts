@@ -57,6 +57,12 @@ interface Result {
 export const fileClassifier = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
+  // Kept outside the try block so a permanent failure can still tell the
+  // dispatcher which file it concerns; without an id it cannot resolve a
+  // recipient and drops the notification.
+  let fileId = '';
+  let fileName = '';
+
   try {
     logger.info('Received PubSub event', { cloudEvent });
 
@@ -71,6 +77,9 @@ export const fileClassifier = async (
       'fileName',
       'extractedText',
     ]);
+
+    fileId = eventData.fileId;
+    fileName = eventData.fileName;
 
     // Get environment variables
     const projectId = getProjectId();
@@ -327,12 +336,12 @@ export const fileClassifier = async (
           const pubsub = new PubSub();
           await pubsub.topic(notificationTopicName).publishMessage({
             json: {
-              fileId: '',
-              fileName: '',
+              fileId,
+              fileName,
               stageName: 'file-classifier',
               errorMessage: errorResponse.error,
             },
-            attributes: { operation: 'failure-notification' },
+            attributes: { operation: 'failure-notification', fileId },
           });
         } catch (notifyError) {
           logger.warn('Failed to publish failure notification', {

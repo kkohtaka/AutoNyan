@@ -113,6 +113,12 @@ export function parseCategoryCalendars(): CategoryCalendar[] {
 export const calendarRegistrar = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
+  // Kept outside the try block so a permanent failure can still tell the
+  // dispatcher which file it concerns; without an id it cannot resolve a
+  // recipient and drops the notification.
+  let fileId = '';
+  let fileName = '';
+
   try {
     logger.info('Received PubSub event', { cloudEvent });
 
@@ -125,6 +131,9 @@ export const calendarRegistrar = async (
       'fileName',
       'extractedText',
     ]);
+
+    fileId = eventData.fileId;
+    fileName = eventData.fileName;
 
     // Both checks run before any billable call, which is what lets
     // file-classifier publish every classified document without knowing which
@@ -310,7 +319,7 @@ export const calendarRegistrar = async (
         error: errorResponse.error,
       });
 
-      await publishFailureNotification(errorResponse.error);
+      await publishFailureNotification(errorResponse.error, fileId, fileName);
 
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
@@ -439,7 +448,11 @@ function toNotificationEvent(event: ExtractedEvent): Record<string, unknown> {
   };
 }
 
-async function publishFailureNotification(errorMessage: string): Promise<void> {
+async function publishFailureNotification(
+  errorMessage: string,
+  fileId: string,
+  fileName: string
+): Promise<void> {
   const notificationTopicName = process.env.NOTIFICATION_TOPIC;
   if (!notificationTopicName) {
     return;
@@ -449,12 +462,12 @@ async function publishFailureNotification(errorMessage: string): Promise<void> {
     const pubsub = new PubSub();
     await pubsub.topic(notificationTopicName).publishMessage({
       json: {
-        fileId: '',
-        fileName: '',
+        fileId,
+        fileName,
         stageName: 'calendar-registrar',
         errorMessage,
       },
-      attributes: { operation: 'failure-notification' },
+      attributes: { operation: 'failure-notification', fileId },
     });
   } catch (notifyError) {
     logger.warn('Failed to publish failure notification', {
