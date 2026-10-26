@@ -2,7 +2,7 @@ import { fileClassifier } from './index';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { PubSub } from '@google-cloud/pubsub';
-import { categoryFolderSetHash } from 'autonyan-shared';
+import { categoryFolderSetHash, PermanentError } from 'autonyan-shared';
 
 // Mock dependencies
 jest.mock('@google-cloud/firestore', () => ({
@@ -521,6 +521,34 @@ describe('fileClassifier', () => {
         }),
       })
     );
+  });
+
+  it('should name the file in a failure notification raised after validation', async () => {
+    process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+    mockListCategoryFolders.mockResolvedValue([]);
+    mockClassifyWithGemini.mockRejectedValue(
+      new PermanentError('Gemini rejected the document')
+    );
+
+    const result = await fileClassifier(
+      createPubSubEvent({
+        firestoreDocId: 'doc-123',
+        fileId: 'file-123',
+        fileName: 'document.pdf',
+        extractedText: 'Test',
+        confidence: 0.9,
+      })
+    );
+
+    expect(result.skipped).toBe(true);
+    expect(mockPublishMessage).toHaveBeenCalledWith({
+      json: expect.objectContaining({
+        fileId: 'file-123',
+        fileName: 'document.pdf',
+        stageName: 'file-classifier',
+      }),
+      attributes: { operation: 'failure-notification', fileId: 'file-123' },
+    });
   });
 
   it('should move to uncategorized folder if no category matched', async () => {
