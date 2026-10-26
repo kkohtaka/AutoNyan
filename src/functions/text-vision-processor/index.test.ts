@@ -675,6 +675,105 @@ describe('textVisionProcessor', () => {
     );
   });
 
+  describe('when Vision rejects a PDF-typed object', () => {
+    const invalidArgumentError = () =>
+      Object.assign(new Error('Unsupported input file format.'), { code: 3 });
+
+    beforeEach(() => {
+      process.env.NOTIFICATION_TOPIC = 'notification-trigger';
+      mockStorage.bucket().file().getMetadata.mockResolvedValue([pdfMetadata]);
+      mockVision.asyncBatchAnnotateFiles.mockResolvedValue([
+        {
+          name: 'operation123',
+          promise: jest.fn().mockRejectedValue(invalidArgumentError()),
+        },
+      ]);
+    });
+
+    it('should say so when the content is an HTML page', async () => {
+      mockStorage
+        .bucket()
+        .file()
+        .download.mockResolvedValue([
+          Buffer.from('\uFEFF\n  <!DOCTYPE html><html><body>404</body></html>'),
+        ]);
+
+      const result = await textVisionProcessor(
+        createCloudEvent({ contentType: 'application/pdf' }).data!
+      );
+
+      expect(result.skipped).toBe(true);
+      expect(result.message).toContain(
+        'Vision API rejected input: Unsupported input file format. (content is an HTML page, not a PDF'
+      );
+      expect(mockStorage.bucket().file().download).toHaveBeenCalledWith({
+        start: 0,
+        end: 511,
+      });
+      expect(mockPublishMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          json: expect.objectContaining({
+            errorMessage: expect.stringContaining('re-download the original'),
+          }),
+        })
+      );
+    });
+
+    it('should recognise a bare <html> root tag too', async () => {
+      mockStorage
+        .bucket()
+        .file()
+        .download.mockResolvedValue([Buffer.from('<HTML lang="en">')]);
+
+      const result = await textVisionProcessor(
+        createCloudEvent({ contentType: 'application/pdf' }).data!
+      );
+
+      expect(result.message).toContain('content is an HTML page');
+    });
+
+    it('should keep the original message when the content is not HTML', async () => {
+      mockStorage
+        .bucket()
+        .file()
+        .download.mockResolvedValue([Buffer.from('%PDF-1.7 garbage')]);
+
+      const result = await textVisionProcessor(
+        createCloudEvent({ contentType: 'application/pdf' }).data!
+      );
+
+      expect(result.skipped).toBe(true);
+      expect(result.message).toBe(
+        'Skipped (permanent failure): Vision API rejected input: Unsupported input file format.'
+      );
+    });
+
+    it('should keep the original message when the content cannot be read', async () => {
+      mockStorage
+        .bucket()
+        .file()
+        .download.mockRejectedValue(new Error('read failed'));
+
+      const result = await textVisionProcessor(
+        createCloudEvent({ contentType: 'application/pdf' }).data!
+      );
+
+      expect(result.skipped).toBe(true);
+      expect(result.message).toBe(
+        'Skipped (permanent failure): Vision API rejected input: Unsupported input file format.'
+      );
+    });
+
+    it('should not read the object when the declared type is not PDF', async () => {
+      const result = await textVisionProcessor(
+        createCloudEvent({ contentType: 'image/tiff' }).data!
+      );
+
+      expect(result.skipped).toBe(true);
+      expect(mockStorage.bucket().file().download).not.toHaveBeenCalled();
+    });
+  });
+
   it('should throw (retry) on transient Vision API failures', async () => {
     const cloudEvent = createCloudEvent({
       contentType: 'application/pdf',
