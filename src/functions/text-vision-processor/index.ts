@@ -129,6 +129,62 @@ async function mergeVisionShards(
   return { responses, shardFiles };
 }
 
+// How much of a rejected object is read to tell an HTML page from a PDF: the
+// doctype or root tag sits at the very start, after at most a BOM and
+// whitespace.
+const CONTENT_SNIFF_BYTES = 512;
+
+/**
+ * Whether a buffer starts the way an HTML document does, ignoring a UTF-8 BOM
+ * and leading whitespace.
+ * @param content Leading bytes of the object
+ * @returns true when the content opens with an HTML doctype or root tag
+ */
+function startsWithHtml(content: Buffer): boolean {
+  const head = content
+    .toString('utf-8')
+    .replace(/^\uFEFF/, '')
+    .trimStart()
+    .toLowerCase();
+  return head.startsWith('<!doctype html') || head.startsWith('<html');
+}
+
+/**
+ * Explain a Vision rejection whose cause is a PDF that is really an HTML page.
+ *
+ * A download that served an error page under a .pdf name is rejected with the
+ * same generic message as any other unreadable PDF, and the fix (re-download
+ * the original) is invisible from that message alone. The object is read only
+ * on this failure path, and a failed read leaves the message as it was.
+ * @param file The rejected object
+ * @param contentType Its declared content type
+ * @param message Vision's rejection message
+ * @returns The message, with a hint appended when the content is an HTML page
+ */
+async function describeRejectedInput(
+  file: File,
+  contentType: string,
+  message: string
+): Promise<string> {
+  if (contentType !== 'application/pdf') {
+    return message;
+  }
+  try {
+    const [head] = await file.download({
+      start: 0,
+      end: CONTENT_SNIFF_BYTES - 1,
+    });
+    if (startsWithHtml(head)) {
+      return `${message} (content is an HTML page, not a PDF — the source likely served an error page; re-download the original)`;
+    }
+  } catch (readError) {
+    logger.warn('Could not read the rejected object to describe its content', {
+      error: readError,
+    });
+  }
+  return message;
+}
+
 export const textVisionProcessor = async (
   storageObjectData: StorageObjectData
 ): Promise<Result> => {
@@ -347,10 +403,13 @@ export const textVisionProcessor = async (
       // (e.g. a non-PDF file uploaded under a .pdf name); retrying can never
       // succeed and every retry is a billable Vision call.
       if ((error as { code?: number }).code === 3) {
+        const rejection = await describeRejectedInput(
+          file,
+          contentType,
+          error instanceof Error ? error.message : String(error)
+        );
         throw new PermanentError(
-          `Vision API rejected input: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Vision API rejected input: ${rejection}`,
           error
         );
       }
