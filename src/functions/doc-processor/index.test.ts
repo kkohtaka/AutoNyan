@@ -311,10 +311,11 @@ describe('docProcessor', () => {
       ) as any,
     };
 
-    await docProcessor(cloudEvent);
+    await docProcessor(cloudEvent, { eventId: 'event-123' });
 
     expect(mockPublishMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        json: expect.objectContaining({ eventId: 'event-123' }),
         attributes: expect.objectContaining({
           operation: 'failure-notification',
           fileId: 'file123',

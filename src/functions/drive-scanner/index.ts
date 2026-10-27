@@ -8,7 +8,9 @@ import {
   isPermanentError,
   logger,
   parsePubSubEvent,
+  publishFailureNotification,
   validateRequiredFields,
+  withEventContext,
 } from 'autonyan-shared';
 import { createHash } from 'crypto';
 import { drive_v3, google } from 'googleapis';
@@ -62,7 +64,7 @@ interface Result {
   skipped?: boolean;
 }
 
-export const driveScanner = async (
+const driveScannerHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   let parsedFolderId = '';
@@ -226,24 +228,11 @@ export const driveScanner = async (
         error: errorResponse.error,
       });
 
-      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-      if (notificationTopicName) {
-        try {
-          const pubsub = new PubSub();
-          await pubsub.topic(notificationTopicName).publishMessage({
-            json: {
-              folderId: parsedFolderId,
-              stageName: 'drive-scanner',
-              errorMessage: errorResponse.error,
-            },
-            attributes: { operation: 'failure-notification' },
-          });
-        } catch (notifyError) {
-          logger.warn('Failed to publish failure notification', {
-            error: notifyError,
-          });
-        }
-      }
+      await publishFailureNotification(new PubSub(), {
+        stageName: 'drive-scanner',
+        errorMessage: errorResponse.error,
+        folderId: parsedFolderId,
+      });
 
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
@@ -262,3 +251,5 @@ export const driveScanner = async (
     });
   }
 };
+
+export const driveScanner = withEventContext(driveScannerHandler);

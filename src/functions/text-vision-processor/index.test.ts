@@ -594,10 +594,11 @@ describe('textVisionProcessor', () => {
         },
       ]);
 
-    await textVisionProcessor(cloudEvent.data!);
+    await textVisionProcessor(cloudEvent.data!, { eventId: 'event-123' });
 
     expect(mockPublishMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        json: expect.objectContaining({ eventId: 'event-123' }),
         attributes: expect.objectContaining({
           operation: 'failure-notification',
           fileId: 'file123',

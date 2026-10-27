@@ -1,6 +1,7 @@
 // Export all utilities from the shared library
 export * from './parameter-parser';
 export * from './logger';
+export * from './failure-notification';
 export * from './email-renderer';
 export * from './category-folders';
 export * from './drive-auth';

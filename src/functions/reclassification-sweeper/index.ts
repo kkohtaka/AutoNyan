@@ -7,6 +7,7 @@ import {
   createDriveAuth,
   createErrorResponse,
   logger,
+  withEventContext,
 } from 'autonyan-shared';
 import { getFileState, listCategoryFolders } from './drive-operations';
 
@@ -36,7 +37,7 @@ interface Result {
  * each document is retried exactly once per change to the category folders,
  * and not at all while they stay the same.
  */
-export const reclassificationSweeper = async (
+const reclassificationSweeperHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   try {
@@ -241,3 +242,7 @@ export const reclassificationSweeper = async (
     });
   }
 };
+
+export const reclassificationSweeper = withEventContext(
+  reclassificationSweeperHandler
+);

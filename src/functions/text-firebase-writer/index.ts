@@ -9,6 +9,8 @@ import {
   logger,
   parseStorageEvent,
   PermanentError,
+  publishFailureNotification,
+  withEventContext,
 } from 'autonyan-shared';
 
 // Firestore caps a document at 1 MiB and the classification prompt reads only
@@ -75,7 +77,7 @@ interface VisionApiResult {
   responses?: VisionApiResponse[];
 }
 
-export const textFirebaseWriter = async (
+const textFirebaseWriterHandler = async (
   storageObjectData: StorageObjectData
 ): Promise<Result> => {
   let originalFileId = '';
@@ -359,28 +361,12 @@ export const textFirebaseWriter = async (
         error: errorResponse.error,
       });
 
-      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-      if (notificationTopicName) {
-        try {
-          const pubsub = new PubSub();
-          await pubsub.topic(notificationTopicName).publishMessage({
-            json: {
-              fileId: originalFileId,
-              fileName: originalFileName,
-              stageName: 'text-firebase-writer',
-              errorMessage: errorResponse.error,
-            },
-            attributes: {
-              operation: 'failure-notification',
-              fileId: originalFileId,
-            },
-          });
-        } catch (notifyError) {
-          logger.warn('Failed to publish failure notification', {
-            error: notifyError,
-          });
-        }
-      }
+      await publishFailureNotification(new PubSub(), {
+        stageName: 'text-firebase-writer',
+        errorMessage: errorResponse.error,
+        fileId: originalFileId,
+        fileName: originalFileName,
+      });
 
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
@@ -400,3 +386,5 @@ export const textFirebaseWriter = async (
     });
   }
 };
+
+export const textFirebaseWriter = withEventContext(textFirebaseWriterHandler);

@@ -105,6 +105,7 @@ describe('notificationDispatcher', () => {
   afterEach(() => {
     delete process.env.NOTIFICATION_SA_KEY;
     delete process.env.NOTIFICATION_FROM_EMAIL;
+    delete process.env.PROJECT_ID;
   });
 
   describe('success notification', () => {
@@ -373,6 +374,45 @@ describe('notificationDispatcher', () => {
         mockGmailSend.mock.calls[0][0].requestBody.raw as string
       );
       expect(decoded).toContain('To: organizer@example.com');
+    });
+
+    it('should link the failure email to the Cloud Logging entries of its event', async () => {
+      process.env.PROJECT_ID = 'test-project';
+      const failureData = {
+        folderId: 'shared-drive-folder',
+        stageName: 'doc-processor',
+        errorMessage: 'Invalid file data',
+        eventId: 'event-123',
+      };
+
+      mockParsePubSubEvent.mockReturnValue({ data: failureData });
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            {
+              emailAddress: 'organizer@example.com',
+              role: 'organizer',
+              type: 'user',
+            },
+          ],
+        },
+      });
+
+      const event = buildEvent(failureData, {
+        operation: 'failure-notification',
+      });
+      await notificationDispatcher(event);
+
+      expect(mockGmailSend).toHaveBeenCalledTimes(1);
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      const html = extractMimePart(decoded, 'text/html');
+      expect(html).toContain('event-123');
+      expect(html).toContain(
+        'href="https://console.cloud.google.com/logs/query;query=labels.event_id%3D%22event-123%22%0Atimestamp%3E%3D%22'
+      );
+      expect(html).toContain('?project=test-project"');
     });
 
     it('should exclude service account organizers from failure notifications', async () => {

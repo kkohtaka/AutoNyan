@@ -10,6 +10,7 @@ import {
   renderCalendarEmail,
   CalendarEmailData,
   RenderedEmail,
+  withEventContext,
 } from 'autonyan-shared';
 import { google } from 'googleapis';
 
@@ -39,6 +40,7 @@ interface FailureNotificationData extends Record<string, unknown> {
   fileName?: string;
   stageName: string;
   errorMessage: string;
+  eventId?: string;
 }
 
 interface NotificationMessage extends Record<string, unknown> {
@@ -308,7 +310,7 @@ async function handleFailureNotification(
   });
 }
 
-export const notificationDispatcher = async (
+const notificationDispatcherHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<void> => {
   try {
@@ -350,3 +352,7 @@ export const notificationDispatcher = async (
     });
   }
 };
+
+export const notificationDispatcher = withEventContext(
+  notificationDispatcherHandler
+);

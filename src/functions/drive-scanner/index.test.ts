@@ -117,11 +117,12 @@ describe('driveScanner', () => {
 
       const cloudEvent = buildEvent({}); // missing folderId -> permanent failure
 
-      const result = await driveScanner(cloudEvent);
+      const result = await driveScanner(cloudEvent, { eventId: 'event-123' });
 
       expect(result.skipped).toBe(true);
       expect(mockPublishMessage).toHaveBeenCalledWith(
         expect.objectContaining({
+          json: expect.objectContaining({ eventId: 'event-123' }),
           attributes: expect.objectContaining({
             operation: 'failure-notification',
           }),
