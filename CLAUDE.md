@@ -140,7 +140,7 @@ interface MyEventData extends Record<string, unknown> {
   optionalField?: string;
 }
 
-export const myFunction = async (
+const myFunctionHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   // Parse PubSub event data
@@ -156,7 +156,23 @@ export const myFunction = async (
     // ...other result fields
   };
 };
+
+// The exported name is the Terraform entry point. The wrapper accepts the
+// framework's second `context` argument and makes the event ID available to
+// the logger and to failure notifications for the whole invocation.
+export const myFunction = withEventContext(myFunctionHandler);
 ```
+
+**Event context:** the handlers run with the framework's legacy event
+signature, which passes `(data, context)`; `cloudEvent.id` is *not* set in
+production even though test fixtures carry one. `withEventContext` stores
+`context.eventId` in an `AsyncLocalStorage` for the duration of the
+invocation, and every structured log line written inside it carries the ID
+under `logging.googleapis.com/labels.event_id`, next to the framework's own
+`execution_id`. The wrapper keeps an arity of 2 on purpose: the framework
+treats a legacy handler with more than two parameters as callback-style and
+never resolves it. Tests exercise the context by passing a second argument
+(`handler(event, { eventId: '...' })`).
 
 **For Storage-triggered functions:**
 
@@ -200,6 +216,16 @@ try {
 } catch (error) {
   throw createErrorResponse('Operation failed', error);
 }
+
+// Publish a failure notification for a permanent failure. The helper reads
+// NOTIFICATION_TOPIC, stamps the current event ID on the message, and
+// swallows publish errors with a warning; the Pub/Sub client is the caller's
+// because the shared code is copied into every function at build time.
+await publishFailureNotification(new PubSub(), {
+  stageName: 'my-function',
+  errorMessage: errorResponse.error,
+  fileId,
+});
 ```
 
 ### Testing Pattern

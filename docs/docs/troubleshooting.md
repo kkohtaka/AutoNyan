@@ -190,7 +190,9 @@ failure notification naming a stage that stopped. These are **operator concerns*
 AutoNyan instance.
 
 When you report one, it helps to include the **file name**, roughly **when** you
-added it, and anything the **notification email** said. The operator-facing
+added it, and anything the **notification email** said — in particular its
+**event ID** and **log link**, which take the operator straight to the failing
+run's log entries. The operator-facing
 troubleshooting steps live in the
 [developer documentation](https://github.com/kkohtaka/AutoNyan#readme), not on
 this site.

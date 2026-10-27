@@ -189,9 +189,11 @@ relevant folder.
 This is usually all you need to confirm a document was filed where you expected.
 
 **When something goes wrong**, AutoNyan sends a failure notification instead. It
-names the stage where processing stopped and includes the error, so the folder
-owner can look into it. If you receive one of these, or a document never seems to
-get processed, see [Troubleshooting & FAQ](./troubleshooting.md).
+names the stage where processing stopped and includes the error, together with an
+**event ID** and a **"ログを開く" link** that opens the matching log entries for
+whoever operates your AutoNyan instance. If you receive one of these, or a
+document never seems to get processed, see
+[Troubleshooting & FAQ](./troubleshooting.md).
 
 ## Next steps
 
