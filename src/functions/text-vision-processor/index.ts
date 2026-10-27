@@ -9,6 +9,8 @@ import {
   logger,
   parseStorageEvent,
   PermanentError,
+  publishFailureNotification,
+  withEventContext,
 } from 'autonyan-shared';
 
 interface Result {
@@ -185,7 +187,7 @@ async function describeRejectedInput(
   return message;
 }
 
-export const textVisionProcessor = async (
+const textVisionProcessorHandler = async (
   storageObjectData: StorageObjectData
 ): Promise<Result> => {
   let originalFileId = '';
@@ -483,28 +485,12 @@ export const textVisionProcessor = async (
         error: errorResponse.error,
       });
 
-      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-      if (notificationTopicName) {
-        try {
-          const pubsub = new PubSub();
-          await pubsub.topic(notificationTopicName).publishMessage({
-            json: {
-              fileId: originalFileId,
-              fileName: originalFileName,
-              stageName: 'text-vision-processor',
-              errorMessage: errorResponse.error,
-            },
-            attributes: {
-              operation: 'failure-notification',
-              fileId: originalFileId,
-            },
-          });
-        } catch (notifyError) {
-          logger.warn('Failed to publish failure notification', {
-            error: notifyError,
-          });
-        }
-      }
+      await publishFailureNotification(new PubSub(), {
+        stageName: 'text-vision-processor',
+        errorMessage: errorResponse.error,
+        fileId: originalFileId,
+        fileName: originalFileName,
+      });
 
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
@@ -522,3 +508,5 @@ export const textVisionProcessor = async (
     });
   }
 };
+
+export const textVisionProcessor = withEventContext(textVisionProcessorHandler);

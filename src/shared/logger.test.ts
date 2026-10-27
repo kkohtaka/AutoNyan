@@ -1,4 +1,4 @@
-import { logger } from './index';
+import { currentEventId, logger, withEventContext } from './index';
 
 describe('logger', () => {
   let stdoutSpy: jest.SpyInstance;
@@ -68,5 +68,62 @@ describe('logger', () => {
     expect(typeof (entry.error as Record<string, unknown>).stack).toBe(
       'string'
     );
+  });
+
+  describe('withEventContext', () => {
+    const labelsKey = 'logging.googleapis.com/labels';
+
+    it('labels every line written inside the handler with the event ID', async () => {
+      const handler = withEventContext(async (data: string) => {
+        logger.info('inside', { data });
+        await Promise.resolve();
+        logger.error('still inside');
+        return currentEventId();
+      });
+
+      const seen = await handler('payload', { eventId: 'event-123' });
+
+      expect(seen).toBe('event-123');
+      expect(lastEntry(stdoutSpy)).toEqual({
+        severity: 'INFO',
+        message: 'inside',
+        data: 'payload',
+        [labelsKey]: { event_id: 'event-123' },
+      });
+      expect(lastEntry(stderrSpy)[labelsKey]).toEqual({
+        event_id: 'event-123',
+      });
+    });
+
+    it('writes no label outside a handler or when the context carries no ID', async () => {
+      logger.info('outside');
+      expect(lastEntry(stdoutSpy)).not.toHaveProperty(labelsKey);
+      expect(currentEventId()).toBeUndefined();
+      stdoutSpy.mockClear();
+
+      const handler = withEventContext(async () => {
+        logger.info('no id');
+        return currentEventId();
+      });
+
+      expect(await handler(undefined)).toBeUndefined();
+      expect(lastEntry(stdoutSpy)).not.toHaveProperty(labelsKey);
+    });
+
+    it('keeps the framework on the promise path by taking exactly two parameters', () => {
+      expect(withEventContext(async () => undefined)).toHaveLength(2);
+    });
+
+    it('propagates the handler result and rejection', async () => {
+      const ok = withEventContext(async (n: number) => n * 2);
+      await expect(ok(21, { eventId: 'e' })).resolves.toBe(42);
+
+      const failing = withEventContext(async () => {
+        throw new Error('boom');
+      });
+      await expect(failing(undefined, { eventId: 'e' })).rejects.toThrow(
+        'boom'
+      );
+    });
   });
 });

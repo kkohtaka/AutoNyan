@@ -304,7 +304,9 @@ describe('calendarRegistrar', () => {
       truncated: false,
     });
 
-    const result = await calendarRegistrar(createPubSubEvent(baseMessage));
+    const result = await calendarRegistrar(createPubSubEvent(baseMessage), {
+      eventId: 'event-123',
+    });
 
     expect(result.skipped).toBe(true);
     expect(calendar.registerEvent).not.toHaveBeenCalled();
@@ -313,6 +315,7 @@ describe('calendarRegistrar', () => {
         fileId: baseMessage.fileId,
         fileName: baseMessage.fileName,
         stageName: 'calendar-registrar',
+        eventId: 'event-123',
       }),
       attributes: {
         operation: 'failure-notification',

@@ -2,6 +2,8 @@
 // share the same layout (header, footer, buttons) so the HTML lives here
 // instead of being duplicated per handler.
 
+import { getProjectId } from './parameter-parser';
+
 export interface RenderedEmail {
   subject: string;
   text: string;
@@ -60,6 +62,8 @@ export interface FailureEmailData {
   fileName?: string;
   stageName: string;
   errorMessage: string;
+  // Absent on a message published by a stage that predates the field.
+  eventId?: string;
 }
 
 // Below this confidence the badge switches to a warning style so recipients
@@ -98,6 +102,20 @@ function driveFileUrl(fileId: string): string {
 
 function driveFolderUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`;
+}
+
+// Logs Explorer ignores its time-range selector whenever the query itself
+// bounds the timestamp, so a link that carries a bound keeps opening the right
+// entries days after the mail was sent; without one it shows the last hour.
+const LOG_QUERY_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+function eventLogQuery(eventId: string): string {
+  const since = new Date(Date.now() - LOG_QUERY_LOOKBACK_MS).toISOString();
+  return `labels.event_id="${eventId}"\ntimestamp>="${since}"`;
+}
+
+function logsExplorerUrl(query: string): string {
+  return `https://console.cloud.google.com/logs/query;query=${encodeURIComponent(query)}?project=${encodeURIComponent(getProjectId())}`;
 }
 
 function renderButton(label: string, url: string, primary: boolean): string {
@@ -229,12 +247,26 @@ export function renderFailureEmail(data: FailureEmailData): RenderedEmail {
     textLines.push(`対象フォルダ: ${driveFolderUrl(data.folderId)}`);
   }
 
+  const logQuery = data.eventId ? eventLogQuery(data.eventId) : '';
+  const logUrl = logQuery ? logsExplorerUrl(logQuery) : '';
+  if (logUrl) {
+    textLines.push(
+      `イベント ID: ${data.eventId}`,
+      `ログを開く: ${logUrl}`,
+      'ログクエリ:',
+      logQuery
+    );
+  }
+
   const detailRows = [
     renderDetailRow('処理ステージ', escapeHtml(data.stageName)),
     renderDetailRow('エラー内容', toHtmlLines(data.errorMessage)),
   ];
   if (data.fileName) {
     detailRows.push(renderDetailRow('ファイル名', escapeHtml(data.fileName)));
+  }
+  if (data.eventId) {
+    detailRows.push(renderDetailRow('イベント ID', escapeHtml(data.eventId)));
   }
 
   const buttons: string[] = [];
@@ -251,6 +283,9 @@ export function renderFailureEmail(data: FailureEmailData): RenderedEmail {
         buttons.length === 0
       )
     );
+  }
+  if (logUrl) {
+    buttons.push(renderButton('ログを開く', logUrl, buttons.length === 0));
   }
 
   const html = renderLayout(

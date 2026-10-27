@@ -10,7 +10,9 @@ import {
   isPermanentError,
   logger,
   parsePubSubEvent,
+  publishFailureNotification,
   validateRequiredFields,
+  withEventContext,
 } from 'autonyan-shared';
 import { classifyWithGemini, ClassificationResult } from './classification';
 import {
@@ -54,7 +56,7 @@ interface Result {
  * Cloud Function triggered by PubSub message after Firestore document creation
  * Classifies documents using AI and moves them to appropriate folders in Google Drive
  */
-export const fileClassifier = async (
+const fileClassifierHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   // Kept outside the try block so a permanent failure can still tell the
@@ -330,25 +332,12 @@ export const fileClassifier = async (
         error: errorResponse.error,
       });
 
-      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-      if (notificationTopicName) {
-        try {
-          const pubsub = new PubSub();
-          await pubsub.topic(notificationTopicName).publishMessage({
-            json: {
-              fileId,
-              fileName,
-              stageName: 'file-classifier',
-              errorMessage: errorResponse.error,
-            },
-            attributes: { operation: 'failure-notification', fileId },
-          });
-        } catch (notifyError) {
-          logger.warn('Failed to publish failure notification', {
-            error: notifyError,
-          });
-        }
-      }
+      await publishFailureNotification(new PubSub(), {
+        stageName: 'file-classifier',
+        errorMessage: errorResponse.error,
+        fileId,
+        fileName,
+      });
 
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
@@ -366,6 +355,8 @@ export const fileClassifier = async (
     });
   }
 };
+
+export const fileClassifier = withEventContext(fileClassifierHandler);
 
 async function publishCalendarRegistration(
   eventData: ClassificationEventData,

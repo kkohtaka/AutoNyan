@@ -511,11 +511,12 @@ describe('fileClassifier', () => {
       } as unknown as MessagePublishedData,
     };
 
-    const result = await fileClassifier(event);
+    const result = await fileClassifier(event, { eventId: 'event-123' });
 
     expect(result.skipped).toBe(true);
     expect(mockPublishMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        json: expect.objectContaining({ eventId: 'event-123' }),
         attributes: expect.objectContaining({
           operation: 'failure-notification',
         }),

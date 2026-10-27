@@ -9,7 +9,9 @@ import {
   logger,
   parsePubSubEvent,
   PermanentError,
+  publishFailureNotification,
   validateRequiredFields,
+  withEventContext,
 } from 'autonyan-shared';
 import {
   buildCalendarEvent,
@@ -110,7 +112,7 @@ export function parseCategoryCalendars(): CategoryCalendar[] {
  * Extracts events from documents filed into a mapped category and registers
  * them on the calendar configured for that category.
  */
-export const calendarRegistrar = async (
+const calendarRegistrarHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   // Kept outside the try block so a permanent failure can still tell the
@@ -319,7 +321,12 @@ export const calendarRegistrar = async (
         error: errorResponse.error,
       });
 
-      await publishFailureNotification(errorResponse.error, fileId, fileName);
+      await publishFailureNotification(new PubSub(), {
+        stageName: 'calendar-registrar',
+        errorMessage: errorResponse.error,
+        fileId,
+        fileName,
+      });
 
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
@@ -341,6 +348,8 @@ export const calendarRegistrar = async (
     });
   }
 };
+
+export const calendarRegistrar = withEventContext(calendarRegistrarHandler);
 
 /**
  * Collapse the entries one extraction lists more than once for the same event
@@ -446,32 +455,4 @@ function toNotificationEvent(event: ExtractedEvent): Record<string, unknown> {
     ...(event.location ? { location: event.location } : {}),
     confidence: event.confidence,
   };
-}
-
-async function publishFailureNotification(
-  errorMessage: string,
-  fileId: string,
-  fileName: string
-): Promise<void> {
-  const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-  if (!notificationTopicName) {
-    return;
-  }
-
-  try {
-    const pubsub = new PubSub();
-    await pubsub.topic(notificationTopicName).publishMessage({
-      json: {
-        fileId,
-        fileName,
-        stageName: 'calendar-registrar',
-        errorMessage,
-      },
-      attributes: { operation: 'failure-notification', fileId },
-    });
-  } catch (notifyError) {
-    logger.warn('Failed to publish failure notification', {
-      error: notifyError,
-    });
-  }
 }

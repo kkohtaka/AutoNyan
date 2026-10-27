@@ -235,6 +235,79 @@ describe('renderFailureEmail', () => {
     expect(email.html).toContain('AutoNyan');
     expect(email.html).toContain('自動送信');
   });
+
+  describe('with an event ID', () => {
+    const originalProjectId = process.env.PROJECT_ID;
+
+    beforeEach(() => {
+      process.env.PROJECT_ID = 'test-project';
+      jest
+        .spyOn(Date, 'now')
+        .mockReturnValue(Date.parse('2026-10-27T12:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      if (originalProjectId === undefined) {
+        delete process.env.PROJECT_ID;
+      } else {
+        process.env.PROJECT_ID = originalProjectId;
+      }
+    });
+
+    const expectedQuery =
+      'labels.event_id="event-123"\ntimestamp>="2026-10-26T12:00:00.000Z"';
+    const expectedUrl =
+      'https://console.cloud.google.com/logs/query;query=' +
+      encodeURIComponent(expectedQuery) +
+      '?project=test-project';
+
+    it('renders the event ID row and a link that opens its log entries', () => {
+      const email = renderFailureEmail({ ...data, eventId: 'event-123' });
+
+      expect(email.html).toContain('イベント ID');
+      expect(email.html).toContain('event-123');
+      expect(email.html).toContain(`href="${expectedUrl}"`);
+      expect(email.html).toContain('ログを開く');
+    });
+
+    it('bounds the query a day before dispatch so the link outlives the default time range', () => {
+      expect(expectedUrl).toContain(
+        encodeURIComponent('timestamp>="2026-10-26T12:00:00.000Z"')
+      );
+      expect(
+        renderFailureEmail({ ...data, eventId: 'event-123' }).html
+      ).toContain('labels.event_id%3D%22event-123%22%0Atimestamp%3E%3D%22');
+    });
+
+    it('shows the raw query and the link in the plain-text part', () => {
+      const email = renderFailureEmail({ ...data, eventId: 'event-123' });
+
+      expect(email.text).toContain('イベント ID: event-123');
+      expect(email.text).toContain(`ログを開く: ${expectedUrl}`);
+      expect(email.text).toContain(`ログクエリ:\n${expectedQuery}`);
+    });
+
+    it('makes the log button secondary when a file button comes first', () => {
+      const email = renderFailureEmail({
+        ...data,
+        fileId: 'file-456',
+        eventId: 'event-123',
+      });
+
+      const fileButton = email.html.indexOf('対象ファイルを開く');
+      const logButton = email.html.indexOf('ログを開く');
+      expect(fileButton).toBeGreaterThan(-1);
+      expect(logButton).toBeGreaterThan(fileButton);
+    });
+
+    it('omits the row, the link, and the query when no event ID is present', () => {
+      const email = renderFailureEmail(data);
+      expect(email.html).not.toContain('イベント ID');
+      expect(email.html).not.toContain('logs/query');
+      expect(email.text).not.toContain('ログクエリ');
+    });
+  });
 });
 
 describe('renderCalendarEmail', () => {

@@ -10,7 +10,9 @@ import {
   logger,
   parsePubSubEvent,
   PermanentError,
+  publishFailureNotification,
   validateRequiredFields,
+  withEventContext,
 } from 'autonyan-shared';
 import { createHash } from 'crypto';
 import { google } from 'googleapis';
@@ -31,7 +33,7 @@ interface Result {
   skipped?: boolean;
 }
 
-export const docProcessor = async (
+const docProcessorHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
 ): Promise<Result> => {
   let parsedFileId = '';
@@ -175,28 +177,11 @@ export const docProcessor = async (
         error: errorResponse.error,
       });
 
-      const notificationTopicName = process.env.NOTIFICATION_TOPIC;
-      if (notificationTopicName) {
-        try {
-          const pubsub = new PubSub();
-          await pubsub.topic(notificationTopicName).publishMessage({
-            json: {
-              fileId: parsedFileId,
-              fileName: '',
-              stageName: 'doc-processor',
-              errorMessage: errorResponse.error,
-            },
-            attributes: {
-              operation: 'failure-notification',
-              fileId: parsedFileId,
-            },
-          });
-        } catch (notifyError) {
-          logger.warn('Failed to publish failure notification', {
-            error: notifyError,
-          });
-        }
-      }
+      await publishFailureNotification(new PubSub(), {
+        stageName: 'doc-processor',
+        errorMessage: errorResponse.error,
+        fileId: parsedFileId,
+      });
 
       return {
         message: `Skipped (permanent failure): ${errorResponse.error}`,
@@ -219,3 +204,5 @@ export const docProcessor = async (
     );
   }
 };
+
+export const docProcessor = withEventContext(docProcessorHandler);
