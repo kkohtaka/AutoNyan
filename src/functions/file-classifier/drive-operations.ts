@@ -4,6 +4,9 @@ import { DriveAuth } from 'autonyan-shared';
 export interface CategoryFolder {
   id: string;
   name: string;
+  // The folder's Drive description, when the user wrote one. It states the
+  // naming rule for files filed there and hints at what the category holds.
+  description?: string;
 }
 
 /**
@@ -20,7 +23,7 @@ export async function listCategoryFolders(
 
   const response = await drive.files.list({
     q: `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id, name)',
+    fields: 'files(id, name, description)',
     orderBy: 'name',
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
@@ -31,6 +34,7 @@ export async function listCategoryFolders(
   return files.map((file: drive_v3.Schema$File) => ({
     id: file.id!,
     name: file.name!,
+    ...(file.description ? { description: file.description } : {}),
   }));
 }
 

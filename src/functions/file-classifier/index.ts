@@ -173,7 +173,12 @@ const fileClassifierHandler = async (
           eventData.extractedText,
           eventData.fileName,
           existingFileNames,
-          pageInfo
+          {
+            pageInfo,
+            namingRule: categoryFolders.find(
+              (folder) => folder.id === classification.categoryFolderId
+            )?.description,
+          }
         );
 
         renameConfidence = generated.confidence;

@@ -5,6 +5,7 @@ import {
   RENAME_CONFIDENCE_THRESHOLD,
   FileNameGenerationResult,
 } from './rename';
+import { MAX_FOLDER_DESCRIPTION_LENGTH } from './folder-description';
 
 const mockGenerateContent = jest.fn();
 
@@ -87,8 +88,7 @@ describe('generateFileName', () => {
     );
 
     await generateFileName('test-project', '表紙', 'scan_0001.pdf', [], {
-      totalPages: 200,
-      includedPages: 20,
+      pageInfo: { totalPages: 200, includedPages: 20 },
     });
 
     const prompt = mockGenerateContent.mock.calls[0][0] as string;
@@ -111,12 +111,87 @@ describe('generateFileName', () => {
     );
 
     await generateFileName('test-project', '請求書', 'scan_0001.pdf', [], {
-      totalPages: 1,
-      includedPages: 1,
+      pageInfo: { totalPages: 1, includedPages: 1 },
     });
 
     const prompt = mockGenerateContent.mock.calls[0][0] as string;
     expect(prompt).not.toContain('テキストは一部のみ');
+  });
+
+  describe('naming rule from the folder description', () => {
+    beforeEach(() => {
+      mockGenerateContent.mockResolvedValue(
+        geminiResponse(
+          JSON.stringify({
+            fileName: '2024-01_サンプル商事',
+            confidence: 0.9,
+            reasoning: '命名規則に従いました',
+          })
+        )
+      );
+    });
+
+    it('should put the rule in the prompt and give it precedence over existing names', async () => {
+      await generateFileName(
+        'test-project',
+        '請求書',
+        'scan_0001.pdf',
+        ['請求書_ネコ商会_2024-01-15.pdf'],
+        { namingRule: 'YYYY-MM_発行元 の形式' }
+      );
+
+      const prompt = mockGenerateContent.mock.calls[0][0] as string;
+      expect(prompt).toContain(
+        '【移動先フォルダの命名規則】\nYYYY-MM_発行元 の形式'
+      );
+      expect(prompt).toContain('命名規則を優先してください');
+      expect(prompt).not.toContain(
+        '命名規則（日付の接頭辞、区切り文字、言語など）を推測'
+      );
+      // Existing names stay as examples.
+      expect(prompt).toContain('請求書_ネコ商会_2024-01-15.pdf');
+      expect(prompt.indexOf('【移動先フォルダの命名規則】')).toBeLessThan(
+        prompt.indexOf('【移動先フォルダの既存ファイル名')
+      );
+    });
+
+    it('should apply the rule even when the folder has no files yet', async () => {
+      await generateFileName('test-project', '請求書', 'scan_0001.pdf', [], {
+        namingRule: 'YYYY-MM_発行元',
+      });
+
+      const prompt = mockGenerateContent.mock.calls[0][0] as string;
+      expect(prompt).toContain('【移動先フォルダの命名規則】');
+      expect(prompt).not.toContain('まだファイルがない');
+    });
+
+    it('should leave the prompt unchanged for a blank rule', async () => {
+      await generateFileName(
+        'test-project',
+        '請求書',
+        'scan_0001.pdf',
+        ['2024-01-15_請求書_ネコ商会.pdf'],
+        { namingRule: '   ' }
+      );
+
+      const prompt = mockGenerateContent.mock.calls[0][0] as string;
+      expect(prompt).not.toContain('【移動先フォルダの命名規則】');
+      expect(prompt).toContain(
+        '命名規則（日付の接頭辞、区切り文字、言語など）を推測'
+      );
+    });
+
+    it('should truncate a rule longer than the cap', async () => {
+      await generateFileName('test-project', '請求書', 'scan_0001.pdf', [], {
+        namingRule: 'あ'.repeat(MAX_FOLDER_DESCRIPTION_LENGTH + 50),
+      });
+
+      const prompt = mockGenerateContent.mock.calls[0][0] as string;
+      expect(prompt).toContain('あ'.repeat(MAX_FOLDER_DESCRIPTION_LENGTH));
+      expect(prompt).not.toContain(
+        'あ'.repeat(MAX_FOLDER_DESCRIPTION_LENGTH + 1)
+      );
+    });
   });
 
   it('should parse JSON wrapped in a markdown code block', async () => {
