@@ -191,7 +191,7 @@ describe('fileClassifier', () => {
       '請求書 金額: 10000円 支払期限: 2024-01-31',
       'invoice.pdf',
       ['2024-01-15_請求書_ネコ商会.pdf'],
-      undefined
+      { pageInfo: undefined, namingRule: undefined }
     );
     expect(mockResolveRenamedFileName).toHaveBeenCalledWith(
       {
@@ -902,7 +902,41 @@ describe('fileClassifier', () => {
       '表紙のテキスト',
       'report.pdf',
       [],
-      pageInfo
+      { pageInfo, namingRule: undefined }
+    );
+  });
+
+  it('should hand the destination folder description to name generation as the naming rule', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書',
+      confidence: 1,
+    });
+
+    mockListCategoryFolders.mockResolvedValue([
+      { id: 'folder-contracts', name: '契約書', description: '契約書の規則' },
+      { id: 'folder-invoices', name: '請求書', description: 'YYYY-MM_発行元' },
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.9,
+      reasoning: 'invoice',
+      summary: '請求書',
+    });
+    mockMoveFileInDrive.mockResolvedValue(undefined);
+    mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+    await fileClassifier(event);
+
+    expect(mockGenerateFileName).toHaveBeenCalledWith(
+      'test-project',
+      '請求書',
+      'invoice.pdf',
+      [],
+      { pageInfo: undefined, namingRule: 'YYYY-MM_発行元' }
     );
   });
 });

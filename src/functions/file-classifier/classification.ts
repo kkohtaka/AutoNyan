@@ -1,5 +1,6 @@
 import { VertexAI } from '@google-cloud/vertexai';
 import { CategoryFolder } from './drive-operations';
+import { normalizeFolderDescription } from './folder-description';
 import { PageInfo, preparePromptInput } from './partial-input';
 
 export interface ClassificationResult {
@@ -45,8 +46,15 @@ export async function classifyWithGemini(
     model: 'gemini-2.5-flash',
   });
 
+  // The description sits on its own line so the name stays the only thing on
+  // the numbered line: the model answers with the name, and matching is by name.
   const categoriesList = categories
-    .map((c, i) => `${i + 1}. ${c.name}`)
+    .map((c, i) => {
+      const description = normalizeFolderDescription(c.description);
+      return description
+        ? `${i + 1}. ${c.name}\n   説明: ${description}`
+        : `${i + 1}. ${c.name}`;
+    })
     .join('\n');
 
   const { text: truncatedText, partialInputNote } = preparePromptInput(
@@ -65,6 +73,8 @@ ${truncatedText}
 
 【指示】
 - 上記のカテゴリーから最も適切なものを1つ選んでください
+- カテゴリーに「説明」がある場合は、そのカテゴリーに入る文書の手がかりとして参考にしてください
+- category にはカテゴリー名のみを記入してください（説明は含めないでください）
 - どのカテゴリーにも当てはまらない場合は "${UNCATEGORIZED}" と答えてください
 - 回答は以下のJSON形式で出力してください：
 
