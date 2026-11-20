@@ -40,7 +40,8 @@ decides where it belongs:
    `Contracts`). AutoNyan looks at the current list every time, so any folder
    you add or rename is taken into account on the next document.
 2. **It picks the best fit.** The document's text is matched against your
-   category names, and AutoNyan chooses the single category that fits best. It
+   category names — and against each folder's **description**, when you have
+   written one — and AutoNyan chooses the single category that fits best. It
    also produces a short summary of the document and a confidence figure for how
    sure it is about the category.
 3. **It files the document.** The file is **moved** out of the watched folder
@@ -70,6 +71,32 @@ A few things worth knowing:
   renamed at that point, and the email tells you the name it had before.
 - **You stay in control of categories.** To create a new category, add a folder;
   to retire one, remove it. AutoNyan never invents categories on its own.
+
+### Setting the naming rule for a folder
+
+By default AutoNyan infers a folder's naming style from the files already in
+it. Once a folder holds documents named in several different ways, the names
+it generates can drift between those styles. To state the rule yourself, write
+it in the folder's **description** in Drive: open the category folder's
+details pane (select the folder and press **i**, or choose *File information*
+→ *Details*) and type the rule into the **Description** field — for example:
+
+> `YYYY-MM_issuer`. Use the issue date, in English.
+
+The description is plain text that AutoNyan reads; there is no special syntax
+to learn. When a folder has one, it takes **precedence** over the style of the
+existing files, which are then used only as examples. A folder with an empty
+description behaves exactly as before. The same text is also shown to AutoNyan
+while it classifies, as a hint about what the folder is for, so a short
+sentence about what belongs there helps classification too.
+
+Two things to know:
+
+- The rule is read **each time a document is filed**, so editing it needs no
+  restart and applies to the next document. It does not rename the files that
+  are already in the folder.
+- Very long descriptions are **cut off** before AutoNyan reads them; keep the
+  rule to a few lines.
 
 ## Calendar registration
 
