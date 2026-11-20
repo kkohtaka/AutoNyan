@@ -1,4 +1,5 @@
 import { classifyWithGemini } from './classification';
+import { MAX_FOLDER_DESCRIPTION_LENGTH } from './folder-description';
 import { MAX_TEXT_LENGTH } from './partial-input';
 
 const mockGenerateContent = jest.fn();
@@ -94,6 +95,50 @@ describe('classifyWithGemini', () => {
     const prompt = mockGenerateContent.mock.calls[0][0] as string;
     expect(prompt).toContain(`冒頭${MAX_TEXT_LENGTH}文字のみで`);
     expect(prompt).not.toContain('あ'.repeat(MAX_TEXT_LENGTH + 1));
+  });
+
+  it('should list each category description next to its name, and a name alone without one', async () => {
+    await classifyWithGemini('test-project', '請求書', [
+      {
+        id: 'folder-invoices',
+        name: '請求書',
+        description: '取引先からの請求書',
+      },
+      { id: 'folder-contracts', name: '契約書' },
+    ]);
+
+    const prompt = mockGenerateContent.mock.calls[0][0] as string;
+    expect(prompt).toContain(
+      '1. 請求書\n   説明: 取引先からの請求書\n2. 契約書\n\n'
+    );
+  });
+
+  it('should truncate a description longer than the cap', async () => {
+    await classifyWithGemini('test-project', '請求書', [
+      {
+        id: 'folder-invoices',
+        name: '請求書',
+        description: 'あ'.repeat(MAX_FOLDER_DESCRIPTION_LENGTH + 50),
+      },
+    ]);
+
+    const prompt = mockGenerateContent.mock.calls[0][0] as string;
+    expect(prompt).toContain('あ'.repeat(MAX_FOLDER_DESCRIPTION_LENGTH));
+    expect(prompt).not.toContain(
+      'あ'.repeat(MAX_FOLDER_DESCRIPTION_LENGTH + 1)
+    );
+  });
+
+  it('should still match the chosen category by name when descriptions are present', async () => {
+    const result = await classifyWithGemini('test-project', '請求書', [
+      {
+        id: 'folder-invoices',
+        name: '請求書',
+        description: '取引先からの請求書',
+      },
+    ]);
+
+    expect(result.categoryFolderId).toBe('folder-invoices');
   });
 
   it('should return uncategorized when the model picks no category', async () => {

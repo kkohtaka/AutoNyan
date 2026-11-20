@@ -1,4 +1,5 @@
 import { VertexAI } from '@google-cloud/vertexai';
+import { normalizeFolderDescription } from './folder-description';
 import { PageInfo, preparePromptInput } from './partial-input';
 
 export interface FileNameGenerationResult {
@@ -11,6 +12,14 @@ interface GeminiFileNameResponse {
   fileName: string;
   confidence: number;
   reasoning: string;
+}
+
+export interface FileNameGenerationOptions {
+  // Page coverage of the text, when the writer recorded it.
+  pageInfo?: PageInfo;
+  // The destination folder's description. When set it is the naming rule and
+  // takes precedence over the convention inferred from existing names.
+  namingRule?: string;
 }
 
 // Below this confidence the generated name is discarded and the file keeps
@@ -26,7 +35,7 @@ const MAX_BASE_NAME_LENGTH = 100;
  * @param text Extracted text from document
  * @param originalFileName Current name of the file
  * @param existingFileNames File names already in the destination folder (most-recent first)
- * @param pageInfo Page coverage of the text, when the writer recorded it
+ * @param options Page coverage and the destination folder's naming rule
  * @returns Proposed base name (without extension), confidence, and reasoning
  */
 export async function generateFileName(
@@ -34,8 +43,10 @@ export async function generateFileName(
   text: string,
   originalFileName: string,
   existingFileNames: string[],
-  pageInfo?: PageInfo
+  options: FileNameGenerationOptions = {}
 ): Promise<FileNameGenerationResult> {
+  const { pageInfo } = options;
+  const namingRule = normalizeFolderDescription(options.namingRule);
   // Use region from environment variable, fallback to us-central1 if not set
   const location = process.env.VERTEX_AI_LOCATION || 'us-central1';
 
@@ -61,8 +72,16 @@ ${existingFileNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}
 `
       : '';
 
-  const namingInstruction =
-    existingFileNames.length > 0
+  const namingRuleSection = namingRule
+    ? `【移動先フォルダの命名規則】
+${namingRule}
+
+`
+    : '';
+
+  const namingInstruction = namingRule
+    ? '- 上記の命名規則に従って名前を提案してください。既存ファイル名は例として参考にできますが、命名規則と異なる場合は命名規則を優先してください'
+    : existingFileNames.length > 0
       ? '- 既存ファイル名から命名規則（日付の接頭辞、区切り文字、言語など）を推測し、それに合わせた名前を提案してください'
       : '- 移動先フォルダにはまだファイルがないため、文書の内容だけから簡潔な名前を提案してください';
 
@@ -72,7 +91,7 @@ ${existingFileNames.map((name, i) => `${i + 1}. ${name}`).join('\n')}
 【元のファイル名】
 ${originalFileName}
 
-${existingNamesSection}${partialInputNote}【文書テキスト】
+${namingRuleSection}${existingNamesSection}${partialInputNote}【文書テキスト】
 ${truncatedText}
 
 【指示】
