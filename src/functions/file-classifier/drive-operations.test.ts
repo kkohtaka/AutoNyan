@@ -1,6 +1,6 @@
 import { DriveAuth } from 'autonyan-shared';
 import { google } from 'googleapis';
-import { listCategoryFolders, listFileNamesInFolder } from './drive-operations';
+import { listFileNamesInFolder } from './drive-operations';
 
 jest.mock('googleapis', () => ({
   google: {
@@ -9,47 +9,6 @@ jest.mock('googleapis', () => ({
 }));
 
 const mockGoogle = google as jest.Mocked<typeof google>;
-
-describe('listCategoryFolders', () => {
-  const mockList = jest.fn();
-  const auth = {} as DriveAuth;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockGoogle.drive.mockReturnValue({
-      files: { list: mockList },
-    } as never);
-  });
-
-  it('should request the description with the same listing call', async () => {
-    mockList.mockResolvedValue({ data: { files: [] } });
-
-    await listCategoryFolders(auth, 'root-id');
-
-    expect(mockList).toHaveBeenCalledTimes(1);
-    expect(mockList).toHaveBeenCalledWith(
-      expect.objectContaining({ fields: 'files(id, name, description)' })
-    );
-  });
-
-  it('should carry a description only for folders that have one', async () => {
-    mockList.mockResolvedValue({
-      data: {
-        files: [
-          { id: 'a', name: '請求書', description: 'YYYY-MM_発行元' },
-          { id: 'b', name: '契約書', description: '' },
-          { id: 'c', name: '領収書' },
-        ],
-      },
-    });
-
-    await expect(listCategoryFolders(auth, 'root-id')).resolves.toEqual([
-      { id: 'a', name: '請求書', description: 'YYYY-MM_発行元' },
-      { id: 'b', name: '契約書' },
-      { id: 'c', name: '領収書' },
-    ]);
-  });
-});
 
 describe('listFileNamesInFolder', () => {
   const mockList = jest.fn();

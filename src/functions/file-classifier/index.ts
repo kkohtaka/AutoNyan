@@ -6,21 +6,21 @@ import {
   categoryFolderSetHash,
   createDriveAuth,
   createErrorResponse,
+  formatCategoryPath,
   getProjectId,
   isPermanentError,
+  listCategoryTree,
   logger,
   parsePubSubEvent,
   publishFailureNotification,
   validateRequiredFields,
   withEventContext,
 } from 'autonyan-shared';
+import { google } from 'googleapis';
 import { classifyWithGemini, ClassificationResult } from './classification';
-import {
-  listCategoryFolders,
-  listFileNamesInFolder,
-  moveFileInDrive,
-} from './drive-operations';
+import { listFileNamesInFolder, moveFileInDrive } from './drive-operations';
 import { updateDocumentWithClassification } from './firestore-operations';
+import { resolveNamingRule } from './folder-description';
 import { PageInfo } from './partial-input';
 import { generateFileName, resolveRenamedFileName } from './rename';
 
@@ -103,10 +103,9 @@ const fileClassifierHandler = async (
       'https://www.googleapis.com/auth/drive',
     ]);
 
-    // Get category folders from Google Drive
     logger.info('Fetching category folders', { categoryRootFolderId });
-    const categoryFolders = await listCategoryFolders(
-      auth,
+    const categoryFolders = await listCategoryTree(
+      google.drive({ version: 'v3', auth }),
       categoryRootFolderId
     );
 
@@ -117,7 +116,7 @@ const fileClassifierHandler = async (
     } else {
       logger.info('Found category folders', {
         count: categoryFolders.length,
-        folderNames: categoryFolders.map((f) => f.name),
+        folderPaths: categoryFolders.map((f) => formatCategoryPath(f.path)),
       });
     }
 
@@ -147,7 +146,9 @@ const fileClassifierHandler = async (
     // Determine target folder (category folder or uncategorized)
     const targetFolderId =
       classification.categoryFolderId || uncategorizedFolderId;
-    const targetFolderName = classification.categoryName || 'Uncategorized';
+    const targetFolderName = classification.categoryPath
+      ? formatCategoryPath(classification.categoryPath)
+      : 'Uncategorized';
 
     // Generate a content-derived file name, only when a category folder
     // matched (files routed to Uncategorized keep their original name).
@@ -175,9 +176,10 @@ const fileClassifierHandler = async (
           existingFileNames,
           {
             pageInfo,
-            namingRule: categoryFolders.find(
-              (folder) => folder.id === classification.categoryFolderId
-            )?.description,
+            namingRule: resolveNamingRule(
+              categoryFolders,
+              classification.categoryFolderId
+            ),
           }
         );
 
@@ -212,6 +214,7 @@ const fileClassifierHandler = async (
 
     await updateDocumentWithClassification(firestore, documentPath, {
       category: classification.categoryName,
+      categoryPath: classification.categoryPath,
       categoryFolderId: targetFolderId,
       categoryFolderSetHash: folderSetHash,
       classificationConfidence: classification.confidence,
@@ -290,6 +293,9 @@ const fileClassifierHandler = async (
           // its absence as "kept the original name".
           ...(renameApplied ? { originalFileName: eventData.fileName } : {}),
           category: classification.categoryName,
+          ...(classification.categoryPath
+            ? { categoryPath: classification.categoryPath }
+            : {}),
           confidence: classification.confidence,
           reasoning: classification.reasoning,
           summary: classification.summary,

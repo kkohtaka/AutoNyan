@@ -6,10 +6,12 @@ import {
   categoryFolderSetHash,
   createDriveAuth,
   createErrorResponse,
+  listCategoryTree,
   logger,
   withEventContext,
 } from 'autonyan-shared';
-import { getFileState, listCategoryFolders } from './drive-operations';
+import { google } from 'googleapis';
+import { getFileState } from './drive-operations';
 
 const EXTRACTED_TEXTS_COLLECTION = 'extracted_texts';
 
@@ -65,8 +67,8 @@ const reclassificationSweeperHandler = async (
       'https://www.googleapis.com/auth/drive.readonly',
     ]);
 
-    const categoryFolders = await listCategoryFolders(
-      auth,
+    const categoryFolders = await listCategoryTree(
+      google.drive({ version: 'v3', auth }),
       categoryRootFolderId
     );
     const currentFolderSetHash = categoryFolderSetHash(

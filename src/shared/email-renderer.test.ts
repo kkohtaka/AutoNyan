@@ -58,6 +58,22 @@ describe('renderSuccessEmail', () => {
     expect(email.text).toContain('カテゴリ: 未分類');
   });
 
+  it('shows the destination path for a document filed into a subfolder', () => {
+    const email = renderSuccessEmail({
+      ...data,
+      categoryPath: ['請求書', '取引先A'],
+    });
+    expect(email.subject).toBe('[AutoNyan][請求書] 処理完了: invoice.pdf');
+    expect(email.text).toContain('カテゴリ: 請求書/取引先A\n');
+    expect(email.html).toContain('請求書/取引先A');
+  });
+
+  it('shows the category name alone for a top-level destination', () => {
+    const email = renderSuccessEmail({ ...data, categoryPath: ['請求書'] });
+    expect(email.text).toContain('カテゴリ: 請求書\n');
+    expect(email.html).not.toContain('請求書/');
+  });
+
   it('links to the file and destination folder in both parts', () => {
     const email = renderSuccessEmail(data);
     expect(email.text).toContain(
