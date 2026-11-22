@@ -15,6 +15,11 @@ const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 jest.mock('autonyan-shared', () => ({
   ...jest.requireActual('autonyan-shared'),
   createDriveAuth: jest.fn().mockResolvedValue({ mockDriveAuth: true }),
+  listCategoryTree: jest.fn(),
+}));
+
+jest.mock('googleapis', () => ({
+  google: { drive: jest.fn(() => ({ mockDriveClient: true })) },
 }));
 
 jest.mock('./drive-operations');
@@ -22,10 +27,33 @@ jest.mock('./classification');
 jest.mock('./firestore-operations');
 jest.mock('./rename');
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-const { createDriveAuth: mockCreateDriveAuth } = require('autonyan-shared');
+const {
+  createDriveAuth: mockCreateDriveAuth,
+  listCategoryTree: mockListCategoryTree,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+} = require('autonyan-shared');
 
-const mockListCategoryFolders = jest.fn();
+const topLevel = (id: string, name: string, description?: string) => ({
+  id,
+  name,
+  path: [name],
+  parentId: 'root-folder-id',
+  ...(description ? { description } : {}),
+});
+
+const subfolder = (
+  id: string,
+  parent: { id: string; path: string[] },
+  name: string,
+  description?: string
+) => ({
+  id,
+  name,
+  path: [...parent.path, name],
+  parentId: parent.id,
+  ...(description ? { description } : {}),
+});
+
 const mockListFileNamesInFolder = jest.fn();
 const mockMoveFileInDrive = jest.fn();
 const mockClassifyWithGemini = jest.fn();
@@ -53,7 +81,6 @@ describe('fileClassifier', () => {
     // Set up mock implementations for imported functions
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const driveOps = require('./drive-operations');
-    driveOps.listCategoryFolders = mockListCategoryFolders;
     driveOps.listFileNamesInFolder = mockListFileNamesInFolder;
     driveOps.moveFileInDrive = mockMoveFileInDrive;
 
@@ -127,13 +154,14 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
-      { id: 'folder-contracts', name: '契約書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
+      topLevel('folder-contracts', '契約書'),
     ]);
 
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'Document contains invoice-related keywords',
@@ -166,16 +194,16 @@ describe('fileClassifier', () => {
     expect(mockCreateDriveAuth).toHaveBeenCalledWith([
       'https://www.googleapis.com/auth/drive',
     ]);
-    expect(mockListCategoryFolders).toHaveBeenCalledWith(
-      expect.objectContaining({ mockDriveAuth: true }),
+    expect(mockListCategoryTree).toHaveBeenCalledWith(
+      { mockDriveClient: true },
       'root-folder-id'
     );
     expect(mockClassifyWithGemini).toHaveBeenCalledWith(
       'test-project',
       '請求書 金額: 10000円 支払期限: 2024-01-31',
       [
-        { id: 'folder-invoices', name: '請求書' },
-        { id: 'folder-contracts', name: '契約書' },
+        topLevel('folder-invoices', '請求書'),
+        topLevel('folder-contracts', '契約書'),
       ],
       undefined
     );
@@ -213,6 +241,7 @@ describe('fileClassifier', () => {
       'extracted_texts/doc123',
       {
         category: '請求書',
+        categoryPath: ['請求書'],
         categoryFolderId: 'folder-invoices',
         categoryFolderSetHash: expect.any(String),
         classificationConfidence: 0.95,
@@ -236,11 +265,12 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'invoice',
@@ -280,11 +310,12 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'invoice',
@@ -325,11 +356,12 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'invoice',
@@ -359,11 +391,12 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'invoice',
@@ -383,6 +416,7 @@ describe('fileClassifier', () => {
         json: expect.objectContaining({
           fileName: 'invoice.pdf',
           category: '請求書',
+          categoryPath: ['請求書'],
           destinationFolderId: 'folder-invoices',
         }),
       })
@@ -404,11 +438,12 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'invoice',
@@ -441,11 +476,12 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'invoice',
@@ -476,11 +512,12 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: 'invoice',
@@ -526,7 +563,7 @@ describe('fileClassifier', () => {
 
   it('should name the file in a failure notification raised after validation', async () => {
     process.env.NOTIFICATION_TOPIC = 'notification-trigger';
-    mockListCategoryFolders.mockResolvedValue([]);
+    mockListCategoryTree.mockResolvedValue([]);
     mockClassifyWithGemini.mockRejectedValue(
       new PermanentError('Gemini rejected the document')
     );
@@ -561,12 +598,13 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
 
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: null,
+      categoryPath: null,
       categoryFolderId: null,
       confidence: 0.3,
       reasoning: 'Cannot determine category',
@@ -610,12 +648,13 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
 
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: null,
+      categoryPath: null,
       categoryFolderId: null,
       confidence: 0.3,
       reasoning: 'Cannot determine category',
@@ -648,12 +687,13 @@ describe('fileClassifier', () => {
       reclassification: true,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
 
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.95,
       reasoning: '請求書と判断',
@@ -696,12 +736,13 @@ describe('fileClassifier', () => {
       reclassification: true,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
 
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: null,
+      categoryPath: null,
       categoryFolderId: null,
       confidence: 0.3,
       reasoning: 'Cannot determine category',
@@ -764,11 +805,12 @@ describe('fileClassifier', () => {
 
   describe('calendar registration trigger', () => {
     const arrangeClassified = () => {
-      mockListCategoryFolders.mockResolvedValue([
-        { id: 'folder-school', name: '学校' },
+      mockListCategoryTree.mockResolvedValue([
+        topLevel('folder-school', '学校'),
       ]);
       mockClassifyWithGemini.mockResolvedValue({
         categoryName: '学校',
+        categoryPath: ['学校'],
         categoryFolderId: 'folder-school',
         confidence: 0.95,
         reasoning: 'newsletter',
@@ -826,9 +868,10 @@ describe('fileClassifier', () => {
 
     it('should publish an unmatched category as null so the registrar skips it', async () => {
       process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
-      mockListCategoryFolders.mockResolvedValue([]);
+      mockListCategoryTree.mockResolvedValue([]);
       mockClassifyWithGemini.mockResolvedValue({
         categoryName: null,
+        categoryPath: null,
         categoryFolderId: null,
         confidence: 0,
         reasoning: 'no match',
@@ -875,11 +918,12 @@ describe('fileClassifier', () => {
       includedPages: 20,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-invoices', name: '請求書' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.8,
       reasoning: '表紙から判断',
@@ -894,7 +938,7 @@ describe('fileClassifier', () => {
     expect(mockClassifyWithGemini).toHaveBeenCalledWith(
       'test-project',
       '表紙のテキスト',
-      [{ id: 'folder-invoices', name: '請求書' }],
+      [topLevel('folder-invoices', '請求書')],
       pageInfo
     );
     expect(mockGenerateFileName).toHaveBeenCalledWith(
@@ -915,12 +959,13 @@ describe('fileClassifier', () => {
       confidence: 1,
     });
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-contracts', name: '契約書', description: '契約書の規則' },
-      { id: 'folder-invoices', name: '請求書', description: 'YYYY-MM_発行元' },
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-contracts', '契約書', '契約書の規則'),
+      topLevel('folder-invoices', '請求書', 'YYYY-MM_発行元'),
     ]);
     mockClassifyWithGemini.mockResolvedValue({
       categoryName: '請求書',
+      categoryPath: ['請求書'],
       categoryFolderId: 'folder-invoices',
       confidence: 0.9,
       reasoning: 'invoice',
@@ -938,5 +983,164 @@ describe('fileClassifier', () => {
       [],
       { pageInfo: undefined, namingRule: 'YYYY-MM_発行元' }
     );
+  });
+
+  describe('nested category subfolders', () => {
+    const invoices = topLevel('folder-invoices', '請求書', 'YYYY-MM_発行元');
+    const vendor = subfolder('folder-vendor', invoices, '取引先A');
+    const vendorYear = subfolder('folder-vendor-2026', vendor, '2026');
+    const contracts = topLevel('folder-contracts', '契約書');
+    const tree = [invoices, vendor, vendorYear, contracts];
+
+    const invoiceEvent = () =>
+      createPubSubEvent({
+        firestoreDocId: 'doc123',
+        fileId: 'file-123',
+        fileName: 'invoice.pdf',
+        extractedText: '請求書',
+        confidence: 1,
+      });
+
+    const arrangeFiledInto = (folder: { id: string; path: string[] }) => {
+      mockListCategoryTree.mockResolvedValue(tree);
+      mockClassifyWithGemini.mockResolvedValue({
+        categoryName: folder.path[0],
+        categoryPath: folder.path,
+        categoryFolderId: folder.id,
+        confidence: 0.9,
+        reasoning: 'invoice',
+        summary: '請求書',
+      });
+      mockMoveFileInDrive.mockResolvedValue(undefined);
+      mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+    };
+
+    const publishedMessage = (operation: string) =>
+      mockPublishMessage.mock.calls.find(
+        (call) => call[0].attributes?.operation === operation
+      )?.[0];
+
+    it('should offer the whole tree to the classifier', async () => {
+      arrangeFiledInto(vendor);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(mockClassifyWithGemini).toHaveBeenCalledWith(
+        'test-project',
+        '請求書',
+        tree,
+        undefined
+      );
+    });
+
+    it('should move the file into the subfolder and take reference names from it', async () => {
+      arrangeFiledInto(vendor);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(mockListFileNamesInFolder).toHaveBeenCalledWith(
+        expect.objectContaining({ mockDriveAuth: true }),
+        'folder-vendor',
+        'file-123'
+      );
+      expect(mockMoveFileInDrive).toHaveBeenCalledWith(
+        expect.objectContaining({ mockDriveAuth: true }),
+        'file-123',
+        'folder-vendor',
+        undefined
+      );
+    });
+
+    it('should store the top-level name as the category and the full path beside it', async () => {
+      arrangeFiledInto(vendorYear);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
+        expect.any(Object),
+        'extracted_texts/doc123',
+        expect.objectContaining({
+          category: '請求書',
+          categoryPath: ['請求書', '取引先A', '2026'],
+          categoryFolderId: 'folder-vendor-2026',
+        })
+      );
+    });
+
+    it('should hash every folder of the tree, subfolders included', async () => {
+      arrangeFiledInto(vendor);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
+        expect.any(Object),
+        'extracted_texts/doc123',
+        expect.objectContaining({
+          categoryFolderSetHash: categoryFolderSetHash(
+            tree.map((folder) => folder.id)
+          ),
+        })
+      );
+    });
+
+    it('should name a file in a subfolder by the nearest rule above it', async () => {
+      arrangeFiledInto(vendorYear);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(mockGenerateFileName).toHaveBeenCalledWith(
+        'test-project',
+        '請求書',
+        'invoice.pdf',
+        [],
+        { pageInfo: undefined, namingRule: 'YYYY-MM_発行元' }
+      );
+    });
+
+    it('should register calendar events under the top-level category', async () => {
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      arrangeFiledInto(vendor);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(publishedMessage('calendar-registration').json).toMatchObject({
+        category: '請求書',
+        categoryFolderId: 'folder-vendor',
+      });
+    });
+
+    it('should carry the destination path on the success notification', async () => {
+      process.env.NOTIFICATION_TOPIC = 'notification-topic';
+      arrangeFiledInto(vendor);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(publishedMessage('success-notification').json).toMatchObject({
+        category: '請求書',
+        categoryPath: ['請求書', '取引先A'],
+        destinationFolderId: 'folder-vendor',
+      });
+    });
+
+    it('should leave the path off the notification for an uncategorized document', async () => {
+      process.env.NOTIFICATION_TOPIC = 'notification-topic';
+      mockListCategoryTree.mockResolvedValue(tree);
+      mockClassifyWithGemini.mockResolvedValue({
+        categoryName: null,
+        categoryPath: null,
+        categoryFolderId: null,
+        confidence: 0.2,
+        reasoning: 'no match',
+        summary: 'メモ',
+      });
+      mockMoveFileInDrive.mockResolvedValue(undefined);
+      mockUpdateDocumentWithClassification.mockResolvedValue(undefined);
+
+      await fileClassifier(invoiceEvent());
+
+      expect(publishedMessage('success-notification').json).not.toHaveProperty(
+        'categoryPath'
+      );
+    });
   });
 });

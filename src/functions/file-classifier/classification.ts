@@ -1,10 +1,13 @@
 import { VertexAI } from '@google-cloud/vertexai';
-import { CategoryFolder } from './drive-operations';
+import { CategoryFolder, formatCategoryPath } from 'autonyan-shared';
 import { normalizeFolderDescription } from './folder-description';
 import { PageInfo, preparePromptInput } from './partial-input';
 
 export interface ClassificationResult {
+  // Top-level category the destination sits under.
   categoryName: string | null;
+  // Folder names from the top-level category down to the destination.
+  categoryPath: string[] | null;
   categoryFolderId: string | null;
   confidence: number;
   reasoning: string;
@@ -24,7 +27,7 @@ const UNCATEGORIZED = 'UNCATEGORIZED';
  * Classify document text using Gemini AI
  * @param projectId GCP Project ID
  * @param text Extracted text from document
- * @param categories Available category folders
+ * @param categories Category folders, subfolders included
  * @param pageInfo Page coverage of the text, when the writer recorded it
  * @returns Classification result with category, confidence, and reasoning
  */
@@ -46,16 +49,26 @@ export async function classifyWithGemini(
     model: 'gemini-2.5-flash',
   });
 
-  // The description sits on its own line so the name stays the only thing on
-  // the numbered line: the model answers with the name, and matching is by name.
+  // The description sits on its own line so the path stays the only thing on
+  // the numbered line: the model answers with the path, and matching is by
+  // path. A top-level category's path is its name.
   const categoriesList = categories
     .map((c, i) => {
+      const label = formatCategoryPath(c.path);
       const description = normalizeFolderDescription(c.description);
       return description
-        ? `${i + 1}. ${c.name}\n   説明: ${description}`
-        : `${i + 1}. ${c.name}`;
+        ? `${i + 1}. ${label}\n   説明: ${description}`
+        : `${i + 1}. ${label}`;
     })
     .join('\n');
+
+  // Said only when a subfolder exists, so the prompt for a flat category root
+  // carries no instruction about paths it cannot contain.
+  const subfolderInstructions = categories.some((c) => c.path.length > 1)
+    ? `- 「/」で区切られたカテゴリーは、左側のカテゴリーの中にあるサブフォルダです。サブフォルダに当てはまる文書はそのサブフォルダを選び、どのサブフォルダにも当てはまらない文書は親のカテゴリー自体を選んでください
+- サブフォルダを選ぶ場合、category には一覧に書かれているとおりに「/」を含むパス全体を記入してください
+`
+    : '';
 
   const { text: truncatedText, partialInputNote } = preparePromptInput(
     text,
@@ -75,7 +88,7 @@ ${truncatedText}
 - 上記のカテゴリーから最も適切なものを1つ選んでください
 - カテゴリーに「説明」がある場合は、そのカテゴリーに入る文書の手がかりとして参考にしてください
 - category にはカテゴリー名のみを記入してください（説明は含めないでください）
-- どのカテゴリーにも当てはまらない場合は "${UNCATEGORIZED}" と答えてください
+${subfolderInstructions}- どのカテゴリーにも当てはまらない場合は "${UNCATEGORIZED}" と答えてください
 - 回答は以下のJSON形式で出力してください：
 
 {
@@ -98,13 +111,15 @@ ${truncatedText}
 
   const parsed = parseGeminiResponse(responseText);
 
-  // Find matching category folder
-  const categoryFolder = categories.find((c) => c.name === parsed.category);
+  const categoryFolder = categories.find(
+    (c) => formatCategoryPath(c.path) === parsed.category
+  );
 
   if (!categoryFolder && parsed.category !== UNCATEGORIZED) {
-    // Category name returned by Gemini doesn't match any folder
+    // The path returned by Gemini doesn't match any folder
     return {
       categoryName: null,
+      categoryPath: null,
       categoryFolderId: null,
       confidence: 0,
       reasoning: `Category "${parsed.category}" not found in available folders`,
@@ -113,7 +128,8 @@ ${truncatedText}
   }
 
   return {
-    categoryName: categoryFolder ? parsed.category : null,
+    categoryName: categoryFolder?.path[0] ?? null,
+    categoryPath: categoryFolder?.path ?? null,
     categoryFolderId: categoryFolder?.id || null,
     confidence: parsed.confidence,
     reasoning: parsed.reasoning,

@@ -14,14 +14,21 @@ const mockPubSub = PubSub as jest.MockedClass<typeof PubSub>;
 jest.mock('autonyan-shared', () => ({
   ...jest.requireActual('autonyan-shared'),
   createDriveAuth: jest.fn().mockResolvedValue({ mockDriveAuth: true }),
+  listCategoryTree: jest.fn(),
+}));
+
+jest.mock('googleapis', () => ({
+  google: { drive: jest.fn(() => ({ mockDriveClient: true })) },
 }));
 
 jest.mock('./drive-operations');
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
-const { createDriveAuth: mockCreateDriveAuth } = require('autonyan-shared');
+const {
+  createDriveAuth: mockCreateDriveAuth,
+  listCategoryTree: mockListCategoryTree,
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+} = require('autonyan-shared');
 
-const mockListCategoryFolders = jest.fn();
 const mockGetFileState = jest.fn();
 
 interface StoredDocument {
@@ -94,12 +101,11 @@ describe('reclassificationSweeper', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const driveOps = require('./drive-operations');
-    driveOps.listCategoryFolders = mockListCategoryFolders;
     driveOps.getFileState = mockGetFileState;
 
-    mockListCategoryFolders.mockResolvedValue([
-      { id: 'folder-a', name: '請求書' },
-      { id: 'folder-b', name: '契約書' },
+    mockListCategoryTree.mockResolvedValue([
+      { id: 'folder-a', name: '請求書', path: ['請求書'], parentId: 'root' },
+      { id: 'folder-b', name: '契約書', path: ['契約書'], parentId: 'root' },
     ]);
     mockGetFileState.mockResolvedValue({
       parents: ['uncategorized-folder-id'],
@@ -151,6 +157,43 @@ describe('reclassificationSweeper', () => {
     expect(mockCreateDriveAuth).toHaveBeenCalledWith([
       'https://www.googleapis.com/auth/drive.readonly',
     ]);
+    expect(mockListCategoryTree).toHaveBeenCalledWith(
+      { mockDriveClient: true },
+      'root-folder-id'
+    );
+  });
+
+  it('should republish a document once a subfolder is added under an existing category', async () => {
+    mockListCategoryTree.mockResolvedValue([
+      { id: 'folder-a', name: '請求書', path: ['請求書'], parentId: 'root' },
+      {
+        id: 'folder-a1',
+        name: '取引先A',
+        path: ['請求書', '取引先A'],
+        parentId: 'folder-a',
+      },
+      { id: 'folder-b', name: '契約書', path: ['契約書'], parentId: 'root' },
+    ]);
+    givenDocuments([
+      {
+        fileId: 'file-123',
+        fileName: 'invoice.pdf',
+        extractedText: '請求書',
+        confidence: 0.9,
+        categoryFolderSetHash: currentHash,
+      },
+    ]);
+
+    const result = await reclassificationSweeper(cloudEvent);
+
+    expect(result.republished).toBe(1);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      categoryFolderSetHash: categoryFolderSetHash([
+        'folder-a',
+        'folder-a1',
+        'folder-b',
+      ]),
+    });
   });
 
   it('should republish a document classified before the hash was recorded', async () => {
@@ -350,7 +393,7 @@ describe('reclassificationSweeper', () => {
   });
 
   it('should skip the sweep entirely when no category folder is visible', async () => {
-    mockListCategoryFolders.mockResolvedValue([]);
+    mockListCategoryTree.mockResolvedValue([]);
     givenDocuments([
       {
         fileId: 'file-123',

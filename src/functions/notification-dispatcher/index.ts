@@ -20,6 +20,7 @@ interface SuccessNotificationData extends Record<string, unknown> {
   fileName: string;
   originalFileName?: string;
   category: string | null;
+  categoryPath?: string[];
   confidence: number;
   reasoning: string;
   summary: string;

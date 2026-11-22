@@ -1,7 +1,11 @@
 import { Firestore } from '@google-cloud/firestore';
 
 export interface ClassificationUpdate {
+  // Top-level category name. It stays the top-level name for a document
+  // filed into a subfolder, because calendars are mapped by it.
   category: string | null;
+  // Folder names from the top-level category down to the destination.
+  categoryPath: string[] | null;
   categoryFolderId: string | null;
   // Fingerprint of the category folders that existed for this run. The
   // re-classification sweep compares it against the current set to decide
@@ -32,6 +36,7 @@ export async function updateDocumentWithClassification(
 
   await docRef.update({
     category: classification.category,
+    categoryPath: classification.categoryPath,
     categoryFolderId: classification.categoryFolderId,
     categoryFolderSetHash: classification.categoryFolderSetHash,
     classificationConfidence: classification.classificationConfidence,

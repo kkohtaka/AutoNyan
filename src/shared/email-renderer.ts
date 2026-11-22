@@ -2,6 +2,7 @@
 // share the same layout (header, footer, buttons) so the HTML lives here
 // instead of being duplicated per handler.
 
+import { formatCategoryPath } from './category-folders';
 import { getProjectId } from './parameter-parser';
 
 export interface RenderedEmail {
@@ -18,7 +19,11 @@ export interface SuccessEmailData {
   // Set only when the file was renamed; its absence means the file kept its
   // original name.
   originalFileName?: string;
+  // Top-level category name; the subject line shows it.
   category: string | null;
+  // Folder names from the top-level category down to the destination, when
+  // the document was filed into a category.
+  categoryPath?: string[];
   confidence: number;
   reasoning: string;
   summary: string;
@@ -172,6 +177,10 @@ function renderLayout(contentHtml: string): string {
 
 export function renderSuccessEmail(data: SuccessEmailData): RenderedEmail {
   const category = data.category || '未分類';
+  const destination =
+    Array.isArray(data.categoryPath) && data.categoryPath.length > 1
+      ? formatCategoryPath(data.categoryPath)
+      : category;
   const percent = Math.round(data.confidence * 100);
   const isLowConfidence = data.confidence < LOW_CONFIDENCE_THRESHOLD;
   const fileUrl = driveFileUrl(data.fileId);
@@ -191,7 +200,7 @@ export function renderSuccessEmail(data: SuccessEmailData): RenderedEmail {
 
   const text = `${leadText}
 
-${renamedLine}カテゴリ: ${category}
+${renamedLine}カテゴリ: ${destination}
 分類信頼度: ${percent}%${isLowConfidence ? '（要確認）' : ''}
 分類理由: ${data.reasoning}
 
@@ -213,7 +222,7 @@ Firestore ドキュメント ID: ${data.firestoreDocId}`;
       (data.originalFileName
         ? renderDetailRow('元のファイル名', escapeHtml(data.originalFileName))
         : '') +
-      renderDetailRow('カテゴリ', escapeHtml(category)) +
+      renderDetailRow('カテゴリ', escapeHtml(destination)) +
       renderDetailRow('分類信頼度', renderConfidenceBadge(data.confidence)) +
       renderDetailRow('分類理由', toHtmlLines(data.reasoning)) +
       renderDetailRow('要約', toHtmlLines(data.summary)) +
