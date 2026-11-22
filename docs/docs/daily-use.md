@@ -72,6 +72,33 @@ A few things worth knowing:
 - **You stay in control of categories.** To create a new category, add a folder;
   to retire one, remove it. AutoNyan never invents categories on its own.
 
+### Splitting a category with subfolders
+
+When a category collects documents from many sources, you can split it by
+creating **subfolders** inside it — for example `Invoices/Acme` and
+`Invoices/Globex`. AutoNyan then treats each subfolder as a destination of its
+own and files a document straight into the one that fits.
+
+- **The category itself stays a destination.** A document that belongs to the
+  category but fits none of its subfolders is filed in the category folder, as
+  before.
+- **Subfolders can go three levels deep**, counting the category as the first:
+  `Invoices`, `Invoices/Acme`, and `Invoices/Acme/2026` are all used. Folders
+  below that are ignored.
+- **A folder whose name starts with `_` is skipped**, together with everything
+  inside it. Use this for folders you keep for yourself — `_archive`, `_old` —
+  that AutoNyan should never file into. This applies to top-level folders in the
+  category area too.
+- **Adding a subfolder re-examines *Uncategorized*, once**, exactly like adding
+  a category does. It does **not** move the documents that are already in the
+  parent category; those stay where they are.
+- **The category is still the top-level folder.** The email subject and
+  [calendar registration](#calendar-registration) go by the top-level category
+  name, wherever below it the document landed. The email body shows the full
+  path, such as `Invoices/Acme`.
+- **AutoNyan never creates subfolders.** Like categories, they are yours to add
+  and remove.
+
 ### Setting the naming rule for a folder
 
 By default AutoNyan infers a folder's naming style from the files already in
@@ -89,6 +116,12 @@ existing files, which are then used only as examples. A folder with an empty
 description behaves exactly as before. The same text is also shown to AutoNyan
 while it classifies, as a hint about what the folder is for, so a short
 sentence about what belongs there helps classification too.
+
+A **subfolder** can have a rule of its own. One without a description follows
+the rule of the nearest folder above it that has one, so a rule written on a
+category covers all of its subfolders until you give one of them a different
+rule. The example names AutoNyan looks at always come from the folder the
+document is actually filed into.
 
 Two things to know:
 
@@ -201,14 +234,17 @@ language you are reading these docs in.
 
 **Who receives them.** Success notifications go to the people the **destination
 category folder** is shared with — so whoever can see a category folder is told
-when a new document lands in it. Failure notifications go to the **owner** of the
+when a new document lands in it. For a subfolder, that is everyone who can see
+the subfolder, which includes the people its parent category is shared with.
+Failure notifications go to the **owner** of the
 relevant folder.
 
 **When a document is processed successfully**, the email tells you:
 
 - the **file name** the document now has in Drive — and, when it was renamed,
   its **original name** as well, so you can tell which document it was,
-- the **category** it was filed under (or *Uncategorized* if nothing fit),
+- the **category** it was filed under (or *Uncategorized* if nothing fit) — as
+  a path such as `Invoices/Acme` when it went into a subfolder,
 - a **confidence** figure for that category,
 - the **reasoning** behind the choice, and
 - a short **summary** of the document's contents.
