@@ -6,13 +6,16 @@ import {
   categoryFolderSetHash,
   createDriveAuth,
   createErrorResponse,
+  folderOrganizationFingerprint,
   formatCategoryPath,
   getProjectId,
   isPermanentError,
   listCategoryTree,
   logger,
+  namingRuleHash,
   parsePubSubEvent,
   publishFailureNotification,
+  resolveNamingRule,
   validateRequiredFields,
   withEventContext,
 } from 'autonyan-shared';
@@ -20,9 +23,9 @@ import { google } from 'googleapis';
 import { classifyWithGemini, ClassificationResult } from './classification';
 import { listFileNamesInFolder, moveFileInDrive } from './drive-operations';
 import { updateDocumentWithClassification } from './firestore-operations';
-import { resolveNamingRule } from './folder-description';
 import { PageInfo } from './partial-input';
 import { generateFileName, resolveRenamedFileName } from './rename';
+import { reorganizeDocument } from './reorganization';
 
 interface ClassificationEventData extends Record<string, unknown> {
   firestoreDocId: string;
@@ -41,6 +44,15 @@ interface ClassificationEventData extends Record<string, unknown> {
   // Set by the re-classification sweep, so the notification can tell the
   // recipient this document was filed once before under Uncategorized.
   reclassification?: boolean;
+  // Set by the sweep for a document that is already filed, when its folder's
+  // naming rule or subfolders have changed. The remaining fields accompany
+  // it: where the sweep found the file, under which name, in which batch, and
+  // the hash of the rule its current name was generated under.
+  reorganization?: boolean;
+  reorganizationBatchId?: string;
+  currentFolderId?: string;
+  currentFileName?: string;
+  namingRuleHash?: string;
 }
 
 interface Result {
@@ -133,6 +145,51 @@ const fileClassifierHandler = async (
           }
         : undefined;
 
+    if (eventData.reorganization === true) {
+      validateRequiredFields(eventData, [
+        'reorganizationBatchId',
+        'currentFolderId',
+        'currentFileName',
+      ]);
+
+      // No success notification and no calendar registration: the reporter
+      // sends one summary per folder, and the document's events were
+      // registered when it was first filed.
+      const outcome = await reorganizeDocument(
+        {
+          projectId,
+          auth,
+          firestore: new Firestore({
+            databaseId: process.env.FIRESTORE_DATABASE_ID || '(default)',
+          }),
+          categoryFolders,
+          pageInfo,
+        },
+        {
+          firestoreDocId: eventData.firestoreDocId,
+          fileId: eventData.fileId,
+          fileName: eventData.fileName,
+          extractedText: eventData.extractedText,
+          reorganizationBatchId: eventData.reorganizationBatchId!,
+          currentFolderId: eventData.currentFolderId!,
+          currentFileName: eventData.currentFileName!,
+          namingRuleHash: eventData.namingRuleHash,
+        }
+      );
+
+      const result = {
+        message: `Re-organization ${outcome.status}: ${eventData.fileName}`,
+        category: null,
+        confidence: 0,
+        fileId: eventData.fileId,
+        fileName: eventData.fileName,
+      };
+
+      logger.info('Re-organization completed', { result, outcome });
+
+      return result;
+    }
+
     logger.info('Classifying document with Gemini AI', { pageInfo });
     const classification = await classifyWithGemini(
       projectId,
@@ -217,6 +274,17 @@ const fileClassifierHandler = async (
       categoryPath: classification.categoryPath,
       categoryFolderId: targetFolderId,
       categoryFolderSetHash: folderSetHash,
+      organizationFingerprint: classification.categoryFolderId
+        ? folderOrganizationFingerprint(
+            categoryFolders,
+            classification.categoryFolderId
+          )
+        : null,
+      namingRuleHash: classification.categoryFolderId
+        ? namingRuleHash(
+            resolveNamingRule(categoryFolders, classification.categoryFolderId)
+          )
+        : null,
       classificationConfidence: classification.confidence,
       classificationReasoning: classification.reasoning,
       classifiedAt: new Date().toISOString(),

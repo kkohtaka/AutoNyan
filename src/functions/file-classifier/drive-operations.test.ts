@@ -1,6 +1,6 @@
 import { DriveAuth } from 'autonyan-shared';
 import { google } from 'googleapis';
-import { listFileNamesInFolder } from './drive-operations';
+import { listFileNamesInFolder, moveFileInDrive } from './drive-operations';
 
 jest.mock('googleapis', () => ({
   google: {
@@ -85,5 +85,82 @@ describe('listFileNamesInFolder', () => {
     await expect(
       listFileNamesInFolder(auth, 'folder-id', 'processed-file')
     ).resolves.toEqual([]);
+  });
+});
+
+describe('moveFileInDrive', () => {
+  const mockGet = jest.fn();
+  const mockUpdate = jest.fn();
+  const auth = {} as DriveAuth;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGoogle.drive.mockReturnValue({
+      files: { get: mockGet, update: mockUpdate },
+    } as never);
+    mockUpdate.mockResolvedValue({ data: {} });
+  });
+
+  it('should re-parent and rename in a single update', async () => {
+    mockGet.mockResolvedValue({ data: { parents: ['watched-folder'] } });
+
+    await moveFileInDrive(auth, 'file-123', 'target-folder', 'new.pdf');
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).toHaveBeenCalledWith({
+      fileId: 'file-123',
+      addParents: 'target-folder',
+      removeParents: 'watched-folder',
+      requestBody: { name: 'new.pdf' },
+      fields: 'id, parents',
+      supportsAllDrives: true,
+    });
+  });
+
+  it('should keep the name when none is given', async () => {
+    mockGet.mockResolvedValue({ data: { parents: ['watched-folder'] } });
+
+    await moveFileInDrive(auth, 'file-123', 'target-folder');
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        addParents: 'target-folder',
+        requestBody: {},
+      })
+    );
+  });
+
+  it('should only rename a file that already sits in the destination', async () => {
+    mockGet.mockResolvedValue({ data: { parents: ['target-folder'] } });
+
+    await moveFileInDrive(auth, 'file-123', 'target-folder', 'new.pdf');
+
+    expect(mockUpdate).toHaveBeenCalledWith({
+      fileId: 'file-123',
+      requestBody: { name: 'new.pdf' },
+      fields: 'id, parents',
+      supportsAllDrives: true,
+    });
+  });
+
+  it('should make no update when the file is in place and keeps its name', async () => {
+    mockGet.mockResolvedValue({ data: { parents: ['target-folder'] } });
+
+    await moveFileInDrive(auth, 'file-123', 'target-folder');
+
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('should add the destination to a file Drive reports no parents for', async () => {
+    mockGet.mockResolvedValue({ data: {} });
+
+    await moveFileInDrive(auth, 'file-123', 'target-folder');
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        addParents: 'target-folder',
+        removeParents: undefined,
+      })
+    );
   });
 });

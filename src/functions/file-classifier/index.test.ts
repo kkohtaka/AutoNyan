@@ -2,7 +2,12 @@ import { fileClassifier } from './index';
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { MessagePublishedData } from '@google/events/cloud/pubsub/v1/MessagePublishedData';
 import { PubSub } from '@google-cloud/pubsub';
-import { categoryFolderSetHash, PermanentError } from 'autonyan-shared';
+import {
+  categoryFolderSetHash,
+  folderOrganizationFingerprint,
+  namingRuleHash,
+  PermanentError,
+} from 'autonyan-shared';
 
 // Mock dependencies
 jest.mock('@google-cloud/firestore', () => ({
@@ -26,6 +31,7 @@ jest.mock('./drive-operations');
 jest.mock('./classification');
 jest.mock('./firestore-operations');
 jest.mock('./rename');
+jest.mock('./reorganization');
 
 const {
   createDriveAuth: mockCreateDriveAuth,
@@ -60,6 +66,7 @@ const mockClassifyWithGemini = jest.fn();
 const mockUpdateDocumentWithClassification = jest.fn();
 const mockGenerateFileName = jest.fn();
 const mockResolveRenamedFileName = jest.fn();
+const mockReorganizeDocument = jest.fn();
 
 describe('fileClassifier', () => {
   let mockPublishMessage: jest.Mock;
@@ -98,6 +105,10 @@ describe('fileClassifier', () => {
     rename.generateFileName = mockGenerateFileName;
     rename.resolveRenamedFileName = mockResolveRenamedFileName;
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+    const reorganization = require('./reorganization');
+    reorganization.reorganizeDocument = mockReorganizeDocument;
+
     // Defaults: name generation succeeds but the guards keep the original name
     mockListFileNamesInFolder.mockResolvedValue([]);
     mockGenerateFileName.mockResolvedValue({
@@ -132,6 +143,11 @@ describe('fileClassifier', () => {
     totalPages?: number;
     includedPages?: number;
     reclassification?: boolean;
+    reorganization?: boolean;
+    reorganizationBatchId?: string;
+    currentFolderId?: string;
+    currentFileName?: string;
+    namingRuleHash?: string;
   }): CloudEvent<MessagePublishedData> => ({
     specversion: '1.0',
     id: 'test-event-id',
@@ -244,6 +260,8 @@ describe('fileClassifier', () => {
         categoryPath: ['請求書'],
         categoryFolderId: 'folder-invoices',
         categoryFolderSetHash: expect.any(String),
+        organizationFingerprint: expect.any(String),
+        namingRuleHash: expect.any(String),
         classificationConfidence: 0.95,
         classificationReasoning: 'Document contains invoice-related keywords',
         classifiedAt: expect.any(String),
@@ -673,6 +691,164 @@ describe('fileClassifier', () => {
         categoryFolderSetHash: categoryFolderSetHash(['folder-invoices']),
       })
     );
+  });
+
+  it('should record the organization state of the folder the document was filed into', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc123',
+      fileId: 'file-123',
+      fileName: 'invoice.pdf',
+      extractedText: '請求書',
+      confidence: 1,
+    });
+
+    const invoices = topLevel('folder-invoices', '請求書', 'YYYY-MM_発行元');
+    const tree = [invoices, subfolder('folder-acme', invoices, '取引先A')];
+    mockListCategoryTree.mockResolvedValue(tree);
+
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: '請求書',
+      categoryPath: ['請求書'],
+      categoryFolderId: 'folder-invoices',
+      confidence: 0.95,
+      reasoning: 'Invoice',
+      summary: '請求書です。',
+    });
+
+    await fileClassifier(event);
+
+    expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
+      expect.any(Object),
+      'extracted_texts/doc123',
+      expect.objectContaining({
+        organizationFingerprint: folderOrganizationFingerprint(
+          tree,
+          'folder-invoices'
+        ),
+        namingRuleHash: namingRuleHash('YYYY-MM_発行元'),
+      })
+    );
+  });
+
+  it('should record no organization state for an uncategorized document', async () => {
+    const event = createPubSubEvent({
+      firestoreDocId: 'doc456',
+      fileId: 'file-456',
+      fileName: 'unknown.pdf',
+      extractedText: 'Some random text',
+      confidence: 1,
+    });
+
+    mockListCategoryTree.mockResolvedValue([
+      topLevel('folder-invoices', '請求書'),
+    ]);
+    mockClassifyWithGemini.mockResolvedValue({
+      categoryName: null,
+      categoryPath: null,
+      categoryFolderId: null,
+      confidence: 0.3,
+      reasoning: 'Cannot determine category',
+      summary: '不明なカテゴリの文書です。',
+    });
+
+    await fileClassifier(event);
+
+    expect(mockUpdateDocumentWithClassification).toHaveBeenCalledWith(
+      expect.any(Object),
+      'extracted_texts/doc456',
+      expect.objectContaining({
+        organizationFingerprint: null,
+        namingRuleHash: null,
+      })
+    );
+  });
+
+  describe('re-organization of a filed document', () => {
+    const tree = [topLevel('folder-invoices', '請求書')];
+
+    const reorganizationEvent = (
+      overrides: { currentFileName?: string } = { currentFileName: 'old.pdf' }
+    ) =>
+      createPubSubEvent({
+        firestoreDocId: 'doc123',
+        fileId: 'file-123',
+        fileName: 'invoice.pdf',
+        extractedText: '請求書',
+        confidence: 1,
+        totalPages: 12,
+        includedPages: 5,
+        reorganization: true,
+        reorganizationBatchId: 'batch-1',
+        currentFolderId: 'folder-invoices',
+        namingRuleHash: 'stored-rule-hash',
+        ...overrides,
+      });
+
+    beforeEach(() => {
+      process.env.NOTIFICATION_TOPIC = 'notification-topic';
+      process.env.CALENDAR_REGISTRAR_TOPIC = 'calendar-registration-trigger';
+      mockListCategoryTree.mockResolvedValue(tree);
+      mockReorganizeDocument.mockResolvedValue({
+        status: 'changed',
+        previousFileName: 'old.pdf',
+        newFileName: 'new.pdf',
+      });
+    });
+
+    it('should hand the request to the re-organization path with the listed tree', async () => {
+      const result = await fileClassifier(reorganizationEvent());
+
+      expect(mockReorganizeDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'test-project',
+          auth: { mockDriveAuth: true },
+          categoryFolders: tree,
+          pageInfo: { totalPages: 12, includedPages: 5 },
+        }),
+        {
+          firestoreDocId: 'doc123',
+          fileId: 'file-123',
+          fileName: 'invoice.pdf',
+          extractedText: '請求書',
+          reorganizationBatchId: 'batch-1',
+          currentFolderId: 'folder-invoices',
+          currentFileName: 'old.pdf',
+          namingRuleHash: 'stored-rule-hash',
+        }
+      );
+      expect(result.message).toContain('Re-organization changed');
+    });
+
+    it('should not run the first-filing path', async () => {
+      await fileClassifier(reorganizationEvent());
+
+      expect(mockClassifyWithGemini).not.toHaveBeenCalled();
+      expect(mockUpdateDocumentWithClassification).not.toHaveBeenCalled();
+      expect(mockMoveFileInDrive).not.toHaveBeenCalled();
+    });
+
+    it('should publish neither a success notification nor a calendar registration', async () => {
+      await fileClassifier(reorganizationEvent());
+
+      expect(mockPublishMessage).not.toHaveBeenCalled();
+    });
+
+    it('should ACK a request that does not say where the file is', async () => {
+      const result = await fileClassifier(
+        reorganizationEvent({ currentFileName: undefined })
+      );
+
+      expect(result.skipped).toBe(true);
+      expect(mockReorganizeDocument).not.toHaveBeenCalled();
+    });
+
+    it('should throw so the message is retried when the re-organization fails transiently', async () => {
+      mockReorganizeDocument.mockRejectedValue(new Error('Vertex unavailable'));
+
+      await expect(fileClassifier(reorganizationEvent())).rejects.toThrow(
+        'File classification failed'
+      );
+    });
   });
 
   it('should mark the notification as a re-classification when a category now matches', async () => {

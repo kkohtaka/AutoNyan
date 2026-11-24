@@ -53,6 +53,11 @@ export async function listFileNamesInFolder(
  * non-transient 403. That role is granted by the share-drive-folders setup
  * script; do not retry 403s here, they never resolve on their own.
  *
+ * A file that already sits in the destination is only renamed, and left
+ * alone entirely when there is no new name either: naming the same folder as
+ * both the parent to add and the parent to remove is not a no-op Drive can be
+ * relied on to accept.
+ *
  * @param auth Drive identity credentials
  * @param fileId File ID to move
  * @param targetFolderId Destination folder ID
@@ -72,12 +77,21 @@ export async function moveFileInDrive(
     supportsAllDrives: true,
   });
 
-  const previousParents = file.data.parents?.join(',');
+  const previousParents = file.data.parents ?? [];
+  const alreadyInTarget = previousParents.includes(targetFolderId);
+
+  if (alreadyInTarget && !newName) {
+    return;
+  }
 
   await drive.files.update({
     fileId: fileId,
-    addParents: targetFolderId,
-    removeParents: previousParents,
+    ...(alreadyInTarget
+      ? {}
+      : {
+          addParents: targetFolderId,
+          removeParents: previousParents.join(',') || undefined,
+        }),
     requestBody: newName ? { name: newName } : {},
     fields: 'id, parents',
     supportsAllDrives: true,

@@ -1,6 +1,9 @@
 import { VertexAI } from '@google-cloud/vertexai';
-import { CategoryFolder, formatCategoryPath } from 'autonyan-shared';
-import { normalizeFolderDescription } from './folder-description';
+import {
+  CategoryFolder,
+  formatCategoryPath,
+  normalizeFolderDescription,
+} from 'autonyan-shared';
 import { PageInfo, preparePromptInput } from './partial-input';
 
 export interface ClassificationResult {
