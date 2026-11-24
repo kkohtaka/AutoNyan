@@ -6,7 +6,7 @@ A Google Cloud Functions project demonstrating serverless document processing wi
 
 ## Architecture Overview
 
-AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with a 7-stage pipeline:
+AutoNyan uses an event-driven, serverless architecture on Google Cloud Platform with an 8-stage pipeline:
 
 ```mermaid
 graph LR
@@ -19,12 +19,16 @@ graph LR
     E --> F[Firestore]
     A --> R[7. Re-classification Sweep]
     R --> G
+    A --> O[8. Re-organization Report]
+    G --> F
+    F --> O
     B -.-> N[Notifications]
     C -.-> N
     D -.-> N
     E -.-> N
     G -.-> N
     H -.-> N
+    O -.-> N
 ```
 
 **Event Flow:** Scheduled trigger → PubSub → Storage events → Storage events → Database → Classification → Calendar Registration, with each stage publishing success/failure events to a notification dispatcher.
@@ -37,7 +41,8 @@ graph LR
 4. **Data Persistence**: Stores extracted text and metadata in Firestore database
 5. **Classification**: Classifies documents with AI and moves them to categorized Drive folders
 6. **Calendar Registration**: Extracts events from documents the classifier filed into a mapped category and registers them on the calendar configured for that category
-7. **Re-classification Sweep**: Scheduled re-submission of documents left in the Uncategorized folder, once the set of category folders has changed
+7. **Re-classification Sweep**: Scheduled re-submission of documents to the classifier — those left in the Uncategorized folder once the set of category folders has changed, and those already filed in a folder once its naming rule or subfolders have changed
+8. **Re-organization Report**: Scheduled summary of finished re-organizations, one notification per folder per sweep batch
 
 Calendar registration runs downstream of classification: the category the
 classifier decided on is what selects the calendar, so no separate intake folder
@@ -52,13 +57,24 @@ documents that were waiting for it without paying for OCR a second time. A
 document is reconsidered only when the category folders have changed since it
 was last classified.
 
+The same sweep re-organizes documents that are already filed. Each document
+stores a fingerprint of its folder's effective naming rule and direct
+subfolders; when the folder's fingerprint moves on, the sweep republishes the
+document and the classifier renames it under the new rule or moves it into a
+subfolder that now fits — never across top-level categories, and never a file
+whose name or location no longer matches what the pipeline recorded. The
+previous name and folder are appended to the document's history before Drive is
+touched. No per-document email is sent: the classifier records each outcome on
+the Firestore document, and the report stage publishes one summary per folder
+once every outcome of a batch is in.
+
 **Notifications (cross-cutting):** A notification dispatcher consumes success and
 failure events published by the pipeline stages and emails summaries to the
 relevant Drive folder owner via the Gmail API.
 
 ### Event Triggers
 
-- **Scheduled Triggers**: Cloud Scheduler initiates periodic Drive scans and the re-classification sweep
+- **Scheduled Triggers**: Cloud Scheduler initiates periodic Drive scans, the re-classification sweep, and the re-organization report
 - **PubSub Triggers**: Message-based communication between discovery and preparation stages
 - **Storage Triggers**: New file uploads automatically trigger processing stages
 
@@ -364,6 +380,7 @@ The project uses GitHub Actions for automated testing and validation. See [GitHu
 │   │   ├── file-classifier/
 │   │   ├── calendar-registrar/
 │   │   ├── reclassification-sweeper/
+│   │   ├── reorganization-reporter/
 │   │   └── notification-dispatcher/
 │   └── shared/             # Shared utilities across functions
 ├── terraform/              # Infrastructure as Code
