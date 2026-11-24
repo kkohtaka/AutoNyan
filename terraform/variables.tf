@@ -30,9 +30,15 @@ variable "drive_scanner_schedule" {
 }
 
 variable "reclassification_sweep_schedule" {
-  description = "Cron schedule for the re-classification sweep of the Uncategorized folder"
+  description = "Cron schedule for the sweep that re-classifies the Uncategorized folder and re-organizes filed documents"
   type        = string
   default     = "30 * * * *"
+}
+
+variable "reorganization_report_schedule" {
+  description = "Cron schedule for reporting finished re-organization batches"
+  type        = string
+  default     = "*/15 * * * *"
 }
 
 variable "category_root_folder_id" {

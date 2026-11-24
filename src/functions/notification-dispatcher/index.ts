@@ -8,7 +8,9 @@ import {
   renderSuccessEmail,
   renderFailureEmail,
   renderCalendarEmail,
+  renderReorganizationEmail,
   CalendarEmailData,
+  ReorganizationEmailData,
   RenderedEmail,
   withEventContext,
 } from 'autonyan-shared';
@@ -244,6 +246,47 @@ async function handleCalendarNotification(
   });
 }
 
+async function handleReorganizationNotification(
+  data: ReorganizationEmailData
+): Promise<void> {
+  const saKeyJson = process.env.NOTIFICATION_SA_KEY;
+  if (!saKeyJson) {
+    logger.warn(
+      'NOTIFICATION_SA_KEY is not set, skipping re-organization notification email'
+    );
+    return;
+  }
+
+  const fromEmail = process.env.NOTIFICATION_FROM_EMAIL || '';
+  const saKey = JSON.parse(saKeyJson) as ServiceAccountKey;
+
+  // Addressed by the folder whose rule or subfolders changed, so one batch
+  // is one mail even when its files ended up in several subfolders.
+  const emailAddresses = await listFolderRecipients(
+    data.folderId,
+    NOTIFY_VIEWER_ROLES
+  );
+
+  if (emailAddresses.length === 0) {
+    logger.warn('No email addresses found for re-organized folder', {
+      folderId: data.folderId,
+    });
+    return;
+  }
+
+  const email = renderReorganizationEmail(data);
+
+  for (const toEmail of emailAddresses) {
+    await sendEmail(toEmail, email, fromEmail, saKey);
+  }
+
+  logger.info('Sent re-organization notification', {
+    recipientCount: emailAddresses.length,
+    fileCount: data.items.length,
+    subject: email.subject,
+  });
+}
+
 async function handleFailureNotification(
   data: FailureNotificationData
 ): Promise<void> {
@@ -337,6 +380,10 @@ const notificationDispatcherHandler = async (
     } else if (operation === 'calendar-notification') {
       await handleCalendarNotification(
         messageData as unknown as CalendarNotificationData
+      );
+    } else if (operation === 'reorganization-notification') {
+      await handleReorganizationNotification(
+        messageData as unknown as ReorganizationEmailData
       );
     } else if (operation === 'failure-notification') {
       await handleFailureNotification(

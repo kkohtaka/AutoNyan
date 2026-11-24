@@ -5,9 +5,12 @@ project_id = "your-project-id"
 region = "us-central1"
 drive_folder_id = "your-google-drive-folder-id"
 drive_scanner_schedule = "0 * * * *"
-# How often documents left in the Uncategorized folder are reconsidered after
-# the category folders change
+# How often documents are reconsidered after the category folders change:
+# those left in the Uncategorized folder, and those already filed in a folder
+# whose naming rule or subfolders changed
 reclassification_sweep_schedule = "30 * * * *"
+# How often finished re-organization batches are checked for and reported
+reorganization_report_schedule = "*/15 * * * *"
 
 # File classification configuration
 # category_root_folder_id: Google Drive folder containing category subfolders (e.g., "請求書", "契約書")
