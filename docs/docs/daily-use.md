@@ -90,8 +90,9 @@ own and files a document straight into the one that fits.
   that AutoNyan should never file into. This applies to top-level folders in the
   category area too.
 - **Adding a subfolder re-examines *Uncategorized*, once**, exactly like adding
-  a category does. It does **not** move the documents that are already in the
-  parent category; those stay where they are.
+  a category does. It also re-examines the documents that are already in the
+  parent folder and moves the ones that fit the new subfolder — see
+  [Re-organizing documents that are already filed](#re-organizing).
 - **The category is still the top-level folder.** The email subject and
   [calendar registration](#calendar-registration) go by the top-level category
   name, wherever below it the document landed. The email body shows the full
@@ -126,10 +127,62 @@ document is actually filed into.
 Two things to know:
 
 - The rule is read **each time a document is filed**, so editing it needs no
-  restart and applies to the next document. It does not rename the files that
-  are already in the folder.
+  restart and applies to the next document. The documents AutoNyan already
+  filed in the folder are renamed to match within about an hour — see
+  [Re-organizing documents that are already filed](#re-organizing).
 - Very long descriptions are **cut off** before AutoNyan reads them; keep the
   rule to a few lines.
+
+### Re-organizing documents that are already filed {#re-organizing}
+
+A document is named and placed when it is filed, but that is not final. When
+you **change a folder's naming rule** or **add or remove a subfolder** directly
+inside it, AutoNyan goes back over the documents it filed in that folder and
+brings them in line. This runs about once an hour, together with the
+re-examination of *Uncategorized*.
+
+- **A changed naming rule renames.** Editing a folder's description gives the
+  documents in it new names under the new rule. This reaches the subfolders
+  that follow the same rule, and stops at any subfolder with a rule of its own.
+  The same care applies as on first filing: the extension is kept, and a
+  document keeps its current name when AutoNyan is not confident about a better
+  one.
+- **A new subfolder moves.** Adding a subfolder re-examines the documents in
+  its parent folder, and the ones that fit are moved into it. A document keeps
+  its name when it moves, unless the subfolder has a naming rule of its own.
+- **It happens once per change.** While a folder's description and subfolders
+  stay as they are, nothing in it is looked at again.
+- **Changes are applied directly.** There is no preview step: an edited
+  description takes effect on the next hourly run, so read it over before you
+  leave it.
+- **A document never changes category this way.** Only its current folder and
+  the folders below it are considered. It is never moved up, into another
+  category, or back to *Uncategorized*.
+- **A large folder takes several runs.** Up to 50 documents are re-examined per
+  run, counting the ones from *Uncategorized*; the rest follow in the next
+  runs.
+
+**Which files it leaves alone:**
+
+- **Files you renamed or moved yourself.** If a file's name or folder is no
+  longer the one AutoNyan gave it, the file is treated as yours and is not
+  touched.
+- **Files AutoNyan did not file.** A file you put into a category folder
+  directly was never read, so there is nothing to re-organize it by.
+- **Arrangements that were already in place when this feature arrived.**
+  Documents filed before it existed are re-organized from the *next* change to
+  their folder onward. A rule or subfolder you had set up earlier does not
+  trigger anything by itself; edit the description to have it applied.
+
+**What you are told.** A re-organization sends no email per document. You get
+**one summary email per folder** for each run, listing every file that was
+renamed (old name → new name) or moved (and where to), and nothing at all when
+no file changed. It goes to the people the folder you changed is shared with.
+
+**Calendar events are not registered again**, and there is no command to undo a
+re-organization. The summary email is your record of the old names; the
+previous name and folder of every file are also kept on AutoNyan's side, so
+whoever operates your instance can look them up.
 
 ## Calendar registration
 
@@ -223,7 +276,9 @@ After AutoNyan finishes with a document, it sends a **notification email** so
 you know what happened without having to go and look. You get one email per
 document. This section describes the email about
 **classification and filing**; the separate email about calendar events is
-described in [Calendar registration](#calendar-registration) above.
+described in [Calendar registration](#calendar-registration) above, and the
+summary email sent after a naming rule or subfolder change in
+[Re-organizing documents that are already filed](#re-organizing).
 
 :::note
 
