@@ -6,19 +6,23 @@ import {
   categoryFolderSetHash,
   createDriveAuth,
   createErrorResponse,
+  EXTRACTED_TEXTS_COLLECTION,
   listCategoryTree,
   logger,
   withEventContext,
 } from 'autonyan-shared';
 import { google } from 'googleapis';
 import { getFileState } from './drive-operations';
+import {
+  ReorganizationSweepResult,
+  sweepFiledDocuments,
+} from './reorganization';
 
-const EXTRACTED_TEXTS_COLLECTION = 'extracted_texts';
-
-// Upper bound on documents republished in a single sweep. The folder-set hash
-// is written back per document as it is published, so a backlog drains over
-// consecutive sweeps rather than turning one schedule tick into an unbounded
-// burst of billable classification calls.
+// Upper bound on documents republished in a single sweep, shared by both
+// passes. The fingerprint a pass compares is written back per document as it
+// is published, so a backlog drains over consecutive sweeps rather than
+// turning one schedule tick into an unbounded burst of billable
+// classification calls.
 const MAX_DOCUMENTS_PER_SWEEP = 50;
 
 interface Result {
@@ -26,18 +30,21 @@ interface Result {
   candidates: number;
   republished: number;
   skipped: number;
+  reorganization: ReorganizationSweepResult;
 }
 
 /**
- * Cloud Function triggered on a schedule that sends documents left in the
- * Uncategorized folder back through classification once the set of category
- * folders has changed.
+ * Cloud Function triggered on a schedule that sends documents back through
+ * the classifier after the category folders have changed. It makes two passes:
+ * documents left in the Uncategorized folder are retried once the set of
+ * folders has changed, and documents already filed in a folder are
+ * re-organized once that folder's naming rule or subfolders have changed.
  *
- * Documents are matched on `category: null`, which only the classifier writes
- * — a document still in flight has no `category` field at all, so the sweep
- * cannot race the live pipeline. The stored folder-set hash bounds the work:
- * each document is retried exactly once per change to the category folders,
- * and not at all while they stay the same.
+ * The first pass matches on `category: null`, which only the classifier
+ * writes — a document still in flight has no `category` field at all, so the
+ * sweep cannot race the live pipeline. The stored folder-set hash bounds the
+ * work: each document is retried exactly once per change to the category
+ * folders, and not at all while they stay the same.
  */
 const reclassificationSweeperHandler = async (
   cloudEvent: CloudEvent<MessagePublishedData>
@@ -62,7 +69,7 @@ const reclassificationSweeperHandler = async (
     }
 
     // The sweep only inspects Drive: it lists the category folders and reads a
-    // file's parents. Moving the file is the classifier's job.
+    // file's name and parents. Moving or renaming it is the classifier's job.
     const auth = await createDriveAuth([
       'https://www.googleapis.com/auth/drive.readonly',
     ]);
@@ -95,6 +102,7 @@ const reclassificationSweeperHandler = async (
         candidates: 0,
         republished: 0,
         skipped: 0,
+        reorganization: { candidates: 0, republished: 0, skipped: 0 },
       };
     }
 
@@ -221,11 +229,22 @@ const reclassificationSweeperHandler = async (
       });
     }
 
+    const reorganization = await sweepFiledDocuments({
+      firestore,
+      topic,
+      auth,
+      categoryFolders,
+      limit: MAX_DOCUMENTS_PER_SWEEP - republished,
+      // One per sweep: the reporter sends one summary per folder per batch.
+      batchId: new Date().toISOString(),
+    });
+
     const result = {
-      message: `Re-classification sweep republished ${republished} of ${snapshot.size} uncategorized documents`,
+      message: `Re-classification sweep republished ${republished} of ${snapshot.size} uncategorized documents and ${reorganization.republished} of ${reorganization.candidates} filed documents due for re-organization`,
       candidates: snapshot.size,
       republished,
       skipped,
+      reorganization,
     };
 
     logger.info('Re-classification sweep completed', { result });

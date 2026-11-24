@@ -1,5 +1,5 @@
 import { classifyWithGemini } from './classification';
-import { MAX_FOLDER_DESCRIPTION_LENGTH } from './folder-description';
+import { MAX_FOLDER_DESCRIPTION_LENGTH } from 'autonyan-shared';
 import { MAX_TEXT_LENGTH } from './partial-input';
 
 const mockGenerateContent = jest.fn();

@@ -1,5 +1,5 @@
 import { VertexAI } from '@google-cloud/vertexai';
-import { normalizeFolderDescription } from './folder-description';
+import { normalizeFolderDescription } from 'autonyan-shared';
 import { PageInfo, preparePromptInput } from './partial-input';
 
 export interface FileNameGenerationResult {
@@ -173,19 +173,22 @@ export function sanitizeFileName(name: string): string {
 /**
  * Apply the rename guards to a generated name and produce the final file name
  *
- * Returns null when the file should keep its original name: confidence below
- * threshold, name empty after sanitization, or name identical to the original.
- * Collisions with existing names get a numeric suffix.
+ * Returns null when the file should keep the name it has: confidence below
+ * threshold, name empty after sanitization, or name identical to the current
+ * one. Collisions with existing names get a numeric suffix.
  *
  * @param generated Result of generateFileName
- * @param originalFileName Current name of the file (extension source)
+ * @param originalFileName Name the file had at ingestion (extension source)
  * @param existingFileNames File names already in the destination folder
- * @returns Final file name with extension, or null to keep the original name
+ * @param currentFileName Name the file has now, when an earlier rename has
+ *   already replaced the original one
+ * @returns Final file name with extension, or null to keep the current name
  */
 export function resolveRenamedFileName(
   generated: FileNameGenerationResult,
   originalFileName: string,
-  existingFileNames: string[]
+  existingFileNames: string[],
+  currentFileName: string = originalFileName
 ): string | null {
   if (generated.confidence < RENAME_CONFIDENCE_THRESHOLD) {
     return null;
@@ -213,5 +216,5 @@ export function resolveRenamedFileName(
     candidate = `${baseName}-${suffix}${extension}`;
   }
 
-  return candidate === originalFileName ? null : candidate;
+  return candidate === currentFileName ? null : candidate;
 }

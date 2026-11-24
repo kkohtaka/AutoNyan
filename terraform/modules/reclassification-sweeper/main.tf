@@ -7,16 +7,16 @@ resource "google_service_account" "reclassification_sweeper" {
   description  = "Service account for reclassification-sweeper Cloud Function"
 }
 
-# IAM binding for Firestore access. The sweep reads uncategorized documents and
-# writes back only the folder-set fingerprint, so document-level access is
-# enough — it never administers the database itself.
+# IAM binding for Firestore access. The sweep reads documents and writes back
+# only its own bookkeeping fields on them, so document-level access is enough
+# — it never administers the database itself.
 resource "google_project_iam_member" "reclassification_sweeper_firestore" {
   project = var.project_id
   role    = "roles/datastore.user"
   member  = "serviceAccount:${google_service_account.reclassification_sweeper.email}"
 }
 
-# IAM binding for PubSub publisher (to republish classification events)
+# IAM binding for PubSub publisher (to republish documents to the classifier)
 resource "google_project_iam_member" "reclassification_sweeper_pubsub_publisher" {
   project = var.project_id
   role    = "roles/pubsub.publisher"
@@ -35,11 +35,11 @@ resource "google_storage_bucket_object" "reclassification_sweeper_zip" {
   source = "../dist/functions/reclassification-sweeper.zip"
 }
 
-# Cloud Function that re-submits uncategorized documents for classification
+# Cloud Function that re-submits documents to the classifier
 resource "google_cloudfunctions2_function" "reclassification_sweeper" {
   name        = "${var.environment}-reclassification-sweeper"
   location    = var.region
-  description = "Re-submit documents left in the Uncategorized folder for classification after the category folders change (${var.environment})"
+  description = "Re-submit documents to the classifier after the category folders, a naming rule, or the subfolders change (${var.environment})"
 
   build_config {
     runtime     = "nodejs24"
@@ -55,7 +55,7 @@ resource "google_cloudfunctions2_function" "reclassification_sweeper" {
 
   service_config {
     # Single instance on purpose: two sweeps running at once would both read
-    # the same not-yet-updated folder-set hashes and republish every document
+    # the same not-yet-updated fingerprints and republish every document
     # twice.
     max_instance_count = 1
     min_instance_count = 0

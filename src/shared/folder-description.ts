@@ -1,4 +1,4 @@
-import { CategoryFolder } from 'autonyan-shared';
+import { CategoryFolder } from './category-folders';
 
 // A folder description is free text anyone who can edit the folder may write,
 // so it is bounded before it enters a prompt. The cap is generous enough for

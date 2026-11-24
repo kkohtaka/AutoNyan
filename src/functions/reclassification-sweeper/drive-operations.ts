@@ -2,19 +2,20 @@ import { google } from 'googleapis';
 import { DriveAuth } from 'autonyan-shared';
 
 export interface FileState {
+  name: string;
   parents: string[];
   // RFC 3339, absent when Drive reports none.
   modifiedTime?: string;
 }
 
 /**
- * Read a file's parent folder IDs and its last-modified time
+ * Read a file's name, parent folder IDs and last-modified time
  *
- * Used to confirm a document still sits in the Uncategorized folder before it
- * is sent back through classification: a file the user has already filed by
- * hand must not be moved again. The modified time rides along in the same
- * call as the reference date for a document whose stored one predates the
- * field.
+ * Used to confirm a document is still where the pipeline left it, under the
+ * name the pipeline gave it, before it is sent back through classification: a
+ * file the user has since moved or renamed by hand must not be touched again.
+ * The modified time rides along in the same call as the reference date for a
+ * document whose stored one predates the field.
  *
  * A file the user has deleted or trashed is reported as gone rather than as
  * an error: its Firestore document outlives it, and a sweep that threw here
@@ -22,8 +23,8 @@ export interface FileState {
  *
  * @param auth Drive identity credentials
  * @param fileId File ID to inspect
- * @returns Parent folder IDs (empty when the file has none) and modified time,
- *   null when the file is no longer reachable
+ * @returns Name, parent folder IDs (empty when the file has none) and modified
+ *   time, null when the file is no longer reachable
  */
 export async function getFileState(
   auth: DriveAuth,
@@ -34,11 +35,12 @@ export async function getFileState(
   try {
     const response = await drive.files.get({
       fileId,
-      fields: 'parents,modifiedTime',
+      fields: 'name,parents,modifiedTime',
       supportsAllDrives: true,
     });
 
     return {
+      name: response.data.name || '',
       parents: response.data.parents || [],
       ...(response.data.modifiedTime
         ? { modifiedTime: response.data.modifiedTime }

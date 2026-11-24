@@ -22,6 +22,7 @@ jest.mock('googleapis', () => ({
 }));
 
 jest.mock('./drive-operations');
+jest.mock('./reorganization');
 
 const {
   createDriveAuth: mockCreateDriveAuth,
@@ -30,6 +31,7 @@ const {
 } = require('autonyan-shared');
 
 const mockGetFileState = jest.fn();
+const mockSweepFiledDocuments = jest.fn();
 
 interface StoredDocument {
   fileId?: string;
@@ -102,6 +104,15 @@ describe('reclassificationSweeper', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
     const driveOps = require('./drive-operations');
     driveOps.getFileState = mockGetFileState;
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef
+    const reorganization = require('./reorganization');
+    reorganization.sweepFiledDocuments = mockSweepFiledDocuments;
+    mockSweepFiledDocuments.mockResolvedValue({
+      candidates: 0,
+      republished: 0,
+      skipped: 0,
+    });
 
     mockListCategoryTree.mockResolvedValue([
       { id: 'folder-a', name: '請求書', path: ['請求書'], parentId: 'root' },
@@ -453,5 +464,61 @@ describe('reclassificationSweeper', () => {
 
     expect(result.republished).toBe(50);
     expect(mockPublishMessage).toHaveBeenCalledTimes(50);
+  });
+
+  describe('re-organization pass', () => {
+    it('should sweep the filed documents against the listed tree', async () => {
+      givenDocuments([]);
+      mockSweepFiledDocuments.mockResolvedValue({
+        candidates: 3,
+        republished: 2,
+        skipped: 1,
+      });
+
+      const result = await reclassificationSweeper(cloudEvent);
+
+      expect(mockSweepFiledDocuments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: { mockDriveAuth: true },
+          categoryFolders: [
+            expect.objectContaining({ id: 'folder-a' }),
+            expect.objectContaining({ id: 'folder-b' }),
+          ],
+          limit: 50,
+          batchId: expect.any(String),
+        })
+      );
+      expect(result.reorganization).toEqual({
+        candidates: 3,
+        republished: 2,
+        skipped: 1,
+      });
+    });
+
+    it('should leave it only what the Uncategorized pass did not use of the limit', async () => {
+      givenDocuments(
+        Array.from({ length: 20 }, (_, index) => ({
+          fileId: `file-${index}`,
+          fileName: `doc-${index}.pdf`,
+          extractedText: '本文',
+          confidence: 0.8,
+          categoryFolderSetHash: previousHash,
+        }))
+      );
+
+      await reclassificationSweeper(cloudEvent);
+
+      expect(mockSweepFiledDocuments).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 30 })
+      );
+    });
+
+    it('should not run when no category folder is visible', async () => {
+      mockListCategoryTree.mockResolvedValue([]);
+
+      await reclassificationSweeper(cloudEvent);
+
+      expect(mockSweepFiledDocuments).not.toHaveBeenCalled();
+    });
   });
 });

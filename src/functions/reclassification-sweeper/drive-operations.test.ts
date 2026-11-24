@@ -16,17 +16,22 @@ describe('getFileState', () => {
     jest.clearAllMocks();
   });
 
-  it('should return the parent folder IDs and the modified time', async () => {
+  it('should return the name, the parent folder IDs and the modified time', async () => {
     mockFilesGet.mockResolvedValue({
-      data: { parents: ['folder-a'], modifiedTime: '2026-09-01T00:00:00.000Z' },
+      data: {
+        name: 'invoice.pdf',
+        parents: ['folder-a'],
+        modifiedTime: '2026-09-01T00:00:00.000Z',
+      },
     });
 
     await expect(getFileState(auth, 'file-123')).resolves.toEqual({
+      name: 'invoice.pdf',
       parents: ['folder-a'],
       modifiedTime: '2026-09-01T00:00:00.000Z',
     });
     expect(mockFilesGet).toHaveBeenCalledWith(
-      expect.objectContaining({ fields: 'parents,modifiedTime' })
+      expect.objectContaining({ fields: 'name,parents,modifiedTime' })
     );
   });
 
@@ -34,6 +39,7 @@ describe('getFileState', () => {
     mockFilesGet.mockResolvedValue({ data: {} });
 
     await expect(getFileState(auth, 'file-123')).resolves.toEqual({
+      name: '',
       parents: [],
     });
   });

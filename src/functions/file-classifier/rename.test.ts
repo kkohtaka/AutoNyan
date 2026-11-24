@@ -5,7 +5,7 @@ import {
   RENAME_CONFIDENCE_THRESHOLD,
   FileNameGenerationResult,
 } from './rename';
-import { MAX_FOLDER_DESCRIPTION_LENGTH } from './folder-description';
+import { MAX_FOLDER_DESCRIPTION_LENGTH } from 'autonyan-shared';
 
 const mockGenerateContent = jest.fn();
 
@@ -322,6 +322,23 @@ describe('resolveRenamedFileName', () => {
         '請求書-2.pdf',
       ])
     ).toBe('請求書-3.pdf');
+  });
+
+  it('should compare against the current name of a file that was renamed before', () => {
+    expect(
+      resolveRenamedFileName(
+        generated('2026-01_請求書'),
+        'scan.pdf',
+        [],
+        '2026-01_請求書.pdf'
+      )
+    ).toBeNull();
+  });
+
+  it('should rename a previously renamed file back to its original name when that is what was generated', () => {
+    expect(
+      resolveRenamedFileName(generated('scan'), 'scan.pdf', [], '請求書.pdf')
+    ).toBe('scan.pdf');
   });
 
   it('should keep the name of a file already in the folder, given a list that excludes it', () => {

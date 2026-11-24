@@ -4,4 +4,6 @@ export * from './logger';
 export * from './failure-notification';
 export * from './email-renderer';
 export * from './category-folders';
+export * from './folder-description';
+export * from './folder-organization';
 export * from './drive-auth';
