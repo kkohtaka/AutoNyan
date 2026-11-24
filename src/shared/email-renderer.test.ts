@@ -2,7 +2,9 @@ import {
   renderSuccessEmail,
   renderFailureEmail,
   renderCalendarEmail,
+  renderReorganizationEmail,
   CalendarEmailData,
+  ReorganizationEmailData,
   SuccessEmailData,
 } from './email-renderer';
 
@@ -474,5 +476,94 @@ describe('renderCalendarEmail', () => {
   it('should apply the configured subject prefix', () => {
     process.env.EMAIL_SUBJECT_PREFIX = '[AutoNyan E2E]';
     expect(renderCalendarEmail(data).subject).toContain('[AutoNyan E2E]');
+  });
+});
+
+describe('renderReorganizationEmail', () => {
+  const data: ReorganizationEmailData = {
+    folderId: 'changed-folder-id',
+    folderPath: ['請求書', '取引先A'],
+    items: [
+      {
+        fileId: 'file-1',
+        previousFileName: '20260115_ネコ商会.pdf',
+        fileName: '2026-01_ネコ商会.pdf',
+      },
+      {
+        fileId: 'file-2',
+        previousFileName: '2026-02_イヌ商事.pdf',
+        fileName: '2026-02_イヌ商事.pdf',
+        movedToPath: ['請求書', '取引先A', '2026'],
+      },
+      {
+        fileId: 'file-3',
+        previousFileName: 'scan<3>.pdf',
+        fileName: '2026-03_トリ物産.pdf',
+        movedToPath: ['請求書', '取引先A', '2026'],
+      },
+    ],
+    failedCount: 0,
+  };
+
+  it('should put the top-level category, the count and the folder path in the subject', () => {
+    expect(renderReorganizationEmail(data).subject).toBe(
+      '[AutoNyan][請求書] 3件のファイルを整理し直しました: 請求書/取引先A'
+    );
+  });
+
+  it('should honour the configured subject prefix', () => {
+    process.env.EMAIL_SUBJECT_PREFIX = '[AutoNyan-staging]';
+
+    expect(renderReorganizationEmail(data).subject).toMatch(
+      /^\[AutoNyan-staging\]\[請求書\]/
+    );
+  });
+
+  it('should show a rename as the old name and the new one', () => {
+    expect(renderReorganizationEmail(data).text).toContain(
+      '- 20260115_ネコ商会.pdf → 2026-01_ネコ商会.pdf\n'
+    );
+  });
+
+  it('should show a move with the unchanged name and the destination path', () => {
+    expect(renderReorganizationEmail(data).text).toContain(
+      '- 2026-02_イヌ商事.pdf（「請求書/取引先A/2026」へ移動）'
+    );
+  });
+
+  it('should show a rename and a move together on one line', () => {
+    expect(renderReorganizationEmail(data).text).toContain(
+      '- scan<3>.pdf → 2026-03_トリ物産.pdf（「請求書/取引先A/2026」へ移動）'
+    );
+  });
+
+  it('should link to the folder that changed', () => {
+    const { text, html } = renderReorganizationEmail(data);
+    const url = 'https://drive.google.com/drive/folders/changed-folder-id';
+
+    expect(text).toContain(`フォルダを開く: ${url}`);
+    expect(html).toContain(`href="${url}"`);
+  });
+
+  it('should escape file names in the HTML body', () => {
+    const { html } = renderReorganizationEmail(data);
+
+    expect(html).toContain('scan&lt;3&gt;.pdf');
+    expect(html).not.toContain('scan<3>.pdf');
+  });
+
+  it('should mention files that could not be changed only when there are any', () => {
+    expect(renderReorganizationEmail(data).text).not.toContain(
+      '変更できませんでした'
+    );
+
+    const withFailures = renderReorganizationEmail({ ...data, failedCount: 2 });
+
+    expect(withFailures.text).toContain(
+      '2 件のファイルは変更できませんでした。'
+    );
+    expect(withFailures.html).toContain(
+      '2 件のファイルは変更できませんでした。'
+    );
   });
 });

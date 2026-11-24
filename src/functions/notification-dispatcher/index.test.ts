@@ -744,6 +744,100 @@ describe('notificationDispatcher', () => {
     });
   });
 
+  describe('re-organization notification', () => {
+    const reorganizationData = {
+      folderId: 'changed-folder-id',
+      folderPath: ['請求書'],
+      items: [
+        {
+          fileId: 'file-1',
+          previousFileName: '20260115_ネコ商会.pdf',
+          fileName: '2026-01_ネコ商会.pdf',
+        },
+        {
+          fileId: 'file-2',
+          previousFileName: '2026-02_イヌ商事.pdf',
+          fileName: '2026-02_イヌ商事.pdf',
+          movedToPath: ['請求書', '取引先A'],
+        },
+      ],
+      failedCount: 0,
+    };
+
+    it('should send one mail listing every file to the members of the changed folder', async () => {
+      mockParsePubSubEvent.mockReturnValue({ data: reorganizationData });
+
+      mockPermissionsList.mockResolvedValue({
+        data: {
+          permissions: [
+            {
+              emailAddress: 'member@example.com',
+              role: 'writer',
+              type: 'user',
+            },
+            {
+              emailAddress: 'sa@test-project.iam.gserviceaccount.com',
+              role: 'fileOrganizer',
+              type: 'user',
+            },
+          ],
+        },
+      });
+
+      await notificationDispatcher(
+        buildEvent(reorganizationData, {
+          operation: 'reorganization-notification',
+          folderId: 'changed-folder-id',
+        })
+      );
+
+      expect(mockPermissionsList).toHaveBeenCalledWith({
+        fileId: 'changed-folder-id',
+        fields: 'permissions(emailAddress,role,type)',
+        supportsAllDrives: true,
+      });
+
+      // Two files, one mail.
+      expect(mockGmailSend).toHaveBeenCalledTimes(1);
+
+      const decoded = decodeRawEmail(
+        mockGmailSend.mock.calls[0][0].requestBody.raw as string
+      );
+      expect(decoded).toContain('To: member@example.com');
+
+      const text = extractMimePart(decoded, 'text/plain');
+      expect(text).toContain('20260115_ネコ商会.pdf → 2026-01_ネコ商会.pdf');
+      expect(text).toContain('請求書/取引先A');
+    });
+
+    it('should send nothing when the folder has no human members', async () => {
+      mockParsePubSubEvent.mockReturnValue({ data: reorganizationData });
+      mockPermissionsList.mockResolvedValue({ data: { permissions: [] } });
+
+      await notificationDispatcher(
+        buildEvent(reorganizationData, {
+          operation: 'reorganization-notification',
+        })
+      );
+
+      expect(mockGmailSend).not.toHaveBeenCalled();
+    });
+
+    it('should skip sending when no service account key is configured', async () => {
+      delete process.env.NOTIFICATION_SA_KEY;
+      mockParsePubSubEvent.mockReturnValue({ data: reorganizationData });
+
+      await notificationDispatcher(
+        buildEvent(reorganizationData, {
+          operation: 'reorganization-notification',
+        })
+      );
+
+      expect(mockPermissionsList).not.toHaveBeenCalled();
+      expect(mockGmailSend).not.toHaveBeenCalled();
+    });
+  });
+
   describe('unknown operation', () => {
     it('should treat an event without attributes as an unknown operation', async () => {
       const data = { someField: 'value' };

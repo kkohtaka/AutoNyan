@@ -202,6 +202,23 @@ resource "google_cloud_scheduler_job" "reclassification_sweep_schedule" {
   }
 }
 
+# Cloud Scheduler job for the re-organization report
+# Runs more often than the sweep it follows: a run with nothing to report is a
+# single empty query, and a batch is only reported once every outcome is in, so
+# the cadence sets how long a finished batch waits for its summary email.
+resource "google_cloud_scheduler_job" "reorganization_report_schedule" {
+  name        = "${var.environment}-reorganization-report-schedule"
+  description = "Report finished re-organization batches (${var.environment})"
+  schedule    = var.reorganization_report_schedule
+  time_zone   = "UTC"
+  region      = var.region
+
+  pubsub_target {
+    topic_name = module.reorganization_reporter.topic_id
+    data       = base64encode(jsonencode({}))
+  }
+}
+
 # Drive Access Module
 # The two environment-scoped identities that hold Drive folder access; the
 # function modules below bind token-creator on the one they need
@@ -325,8 +342,10 @@ module "calendar_registrar" {
 }
 
 # Reclassification Sweeper Module
-# Re-submits documents left in the Uncategorized folder for classification once
-# the set of category folders has changed
+# Re-submits documents to the classifier after the category folders change:
+# those left in the Uncategorized folder once the set of folders has changed,
+# and those already filed once their folder's naming rule or subfolders have
+# changed
 module "reclassification_sweeper" {
   source = "./modules/reclassification-sweeper"
 
@@ -339,6 +358,21 @@ module "reclassification_sweeper" {
   category_root_folder_id              = var.category_root_folder_id
   uncategorized_folder_id              = var.uncategorized_folder_id
   file_classifier_trigger_topic        = module.file_classifier.topic_name
+
+  depends_on = [google_firestore_database.default]
+}
+
+# Reorganization Reporter Module
+# Turns the outcomes the classifier records for a re-organization batch into
+# one summary notification per folder
+module "reorganization_reporter" {
+  source = "./modules/reorganization-reporter"
+
+  project_id              = var.project_id
+  environment             = var.environment
+  region                  = var.region
+  function_bucket_name    = google_storage_bucket.function_bucket.name
+  notification_topic_name = module.notification_dispatcher.topic_name
 
   depends_on = [google_firestore_database.default]
 }

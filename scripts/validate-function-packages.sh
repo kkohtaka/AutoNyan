@@ -150,6 +150,9 @@ for FUNCTION in "${FUNCTIONS[@]}"; do
 	"reclassification-sweeper")
 		ENTRY_POINT="reclassificationSweeper"
 		;;
+	"reorganization-reporter")
+		ENTRY_POINT="reorganizationReporter"
+		;;
 	*)
 		echo -e "${YELLOW}  ⚠️  Warning: Unknown function $FUNCTION, skipping entry point validation${NC}"
 		ENTRY_POINT=""

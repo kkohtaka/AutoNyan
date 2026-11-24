@@ -71,6 +71,26 @@ export interface FailureEmailData {
   eventId?: string;
 }
 
+export interface ReorganizedFileSummary {
+  fileId: string;
+  previousFileName: string;
+  // Name the file has after the re-organization; equal to the previous name
+  // when it was only moved.
+  fileName: string;
+  // Folder names down to the subfolder the file was moved into. Absent when
+  // the file stayed in its folder.
+  movedToPath?: string[];
+}
+
+export interface ReorganizationEmailData {
+  // The folder whose naming rule or subfolders changed.
+  folderId: string;
+  folderPath: string[];
+  items: ReorganizedFileSummary[];
+  // Files of the same batch whose change could not be applied in Drive.
+  failedCount: number;
+}
+
 // Below this confidence the badge switches to a warning style so recipients
 // know to double-check the classification.
 const LOW_CONFIDENCE_THRESHOLD = 0.7;
@@ -404,6 +424,57 @@ export function renderCalendarEmail(data: CalendarEmailData): RenderedEmail {
         ? '<p style="margin:20px 0 0;color:#c5221f;">文書が長いため一部のみを解析しました。登録されていない予定がある可能性があります。</p>'
         : '') +
       renderButtonRow([renderButton('ファイルを開く', fileUrl, true)])
+  );
+
+  return { subject, text: textLines.join('\n'), html };
+}
+
+function formatReorganizedLine(item: ReorganizedFileSummary): string {
+  const renamed = item.fileName !== item.previousFileName;
+  const name = renamed
+    ? `${item.previousFileName} → ${item.fileName}`
+    : item.fileName;
+  return item.movedToPath
+    ? `${name}（「${formatCategoryPath(item.movedToPath)}」へ移動）`
+    : name;
+}
+
+export function renderReorganizationEmail(
+  data: ReorganizationEmailData
+): RenderedEmail {
+  const folder = formatCategoryPath(data.folderPath);
+  const folderUrl = driveFolderUrl(data.folderId);
+  const count = data.items.length;
+
+  const subject = `${subjectPrefix()}[${data.folderPath[0]}] ${count}件のファイルを整理し直しました: ${folder}`;
+
+  const lines = data.items.map(formatReorganizedLine);
+  const failedNote =
+    data.failedCount > 0
+      ? `${data.failedCount} 件のファイルは変更できませんでした。`
+      : '';
+
+  const textLines = [
+    `フォルダ「${folder}」の命名規則またはサブフォルダの変更に合わせて、${count} 件のファイルを整理し直しました。`,
+    '',
+    '整理し直したファイル:',
+    ...lines.map((line) => `- ${line}`),
+  ];
+
+  if (failedNote) {
+    textLines.push('', failedNote);
+  }
+
+  textLines.push('', `フォルダを開く: ${folderUrl}`);
+
+  const html = renderLayout(
+    `<p style="margin:0 0 20px;">フォルダ「<strong>${escapeHtml(folder)}</strong>」の命名規則またはサブフォルダの変更に合わせて、<strong>${count}</strong> 件のファイルを整理し直しました。</p>` +
+      '<p style="margin:0 0 8px;font-weight:bold;">整理し直したファイル</p>' +
+      renderEventList(lines) +
+      (failedNote
+        ? `<p style="margin:20px 0 0;color:#c5221f;">${escapeHtml(failedNote)}</p>`
+        : '') +
+      renderButtonRow([renderButton('フォルダを開く', folderUrl, true)])
   );
 
   return { subject, text: textLines.join('\n'), html };

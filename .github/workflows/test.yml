@@ -100,6 +100,7 @@ jobs:
             file-classifier,
             notification-dispatcher,
             reclassification-sweeper,
+            reorganization-reporter,
             text-firebase-writer,
             text-vision-processor,
           ]
@@ -216,6 +217,7 @@ jobs:
             file-classifier,
             notification-dispatcher,
             reclassification-sweeper,
+            reorganization-reporter,
             text-firebase-writer,
             text-vision-processor,
           ]
